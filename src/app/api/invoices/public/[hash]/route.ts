@@ -4,10 +4,10 @@ import { prisma } from '@/lib/prisma';
 // GET /api/invoices/public/:hash - Get invoice by hash (customer portal)
 export async function GET(
   request: Request,
-  { params }: { params: { hash: string } }
+  { params }: { params: Promise<{ hash: string }> }
 ) {
   try {
-    const { hash } = params;
+    const { hash } = await params;
 
     const invoice = await prisma.invoice.findUnique({
       where: { hash },

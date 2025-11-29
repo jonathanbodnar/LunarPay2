@@ -35,7 +35,7 @@ interface PaymentLink {
 
 export default function PaymentLinkPage() {
   const params = useParams();
-  const hash = params.hash as string;
+  const hash = params?.hash as string;
   const [paymentLink, setPaymentLink] = useState<PaymentLink | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

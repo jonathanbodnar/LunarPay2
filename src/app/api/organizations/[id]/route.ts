@@ -5,11 +5,12 @@ import { prisma } from '@/lib/prisma';
 // GET /api/organizations/:id - Get single organization
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const currentUser = await requireAuth();
-    const organizationId = parseInt(params.id);
+    const { id } = await params;
+    const organizationId = parseInt(id);
 
     const organization = await prisma.organization.findFirst({
       where: {
@@ -64,11 +65,12 @@ export async function GET(
 // PUT /api/organizations/:id - Update organization
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const currentUser = await requireAuth();
-    const organizationId = parseInt(params.id);
+    const { id } = await params;
+    const organizationId = parseInt(id);
     const body = await request.json();
 
     // Verify ownership
@@ -125,11 +127,12 @@ export async function PUT(
 // DELETE /api/organizations/:id - Delete organization
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const currentUser = await requireAuth();
-    const organizationId = parseInt(params.id);
+    const { id } = await params;
+    const organizationId = parseInt(id);
 
     // Verify ownership
     const existing = await prisma.organization.findFirst({

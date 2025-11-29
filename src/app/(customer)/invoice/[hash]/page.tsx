@@ -36,7 +36,7 @@ interface Invoice {
 
 export default function InvoicePage() {
   const params = useParams();
-  const hash = params.hash as string;
+  const hash = params?.hash as string;
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

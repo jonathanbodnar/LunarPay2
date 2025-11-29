@@ -4,10 +4,10 @@ import { prisma } from '@/lib/prisma';
 // GET /api/payment-links/public/:hash - Get payment link by hash (customer access)
 export async function GET(
   request: Request,
-  { params }: { params: { hash: string } }
+  { params }: { params: Promise<{ hash: string }> }
 ) {
   try {
-    const { hash } = params;
+    const { hash } = await params;
 
     const paymentLink = await prisma.paymentLink.findUnique({
       where: { hash },
