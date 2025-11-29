@@ -1,0 +1,705 @@
+// This is your Prisma schema file for LunarPay 2.0
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USERS & AUTHENTICATION
+// ============================================
+
+model User {
+  id                    Int       @id @default(autoincrement())
+  email                 String    @unique @db.VarChar(254)
+  username              String?   @db.VarChar(100)
+  password              String    @db.VarChar(255)
+  firstName             String?   @map("first_name") @db.VarChar(100)
+  lastName              String?   @map("last_name") @db.VarChar(100)
+  phone                 String?   @db.VarChar(50)
+  ipAddress             String?   @map("ip_address") @db.VarChar(45)
+  paymentProcessor      String    @default("FTS") @map("payment_processor") @db.VarChar(10)
+  active                Boolean   @default(true)
+  createdOn             DateTime  @default(now()) @map("created_on")
+  lastLogin             DateTime? @map("last_login")
+  starterStep           Int?      @default(1) @map("starter_step")
+  
+  // OAuth tokens
+  stripeOauth           String?   @map("stripe_oauth") @db.Text
+  quickbooksOauth       String?   @map("quickbooks_oauth") @db.Text
+  freshbooksOauth       String?   @map("freshbooks_oauth") @db.Text
+  slackOauth            String?   @map("slack_oauth") @db.Text
+  slackChannel          String?   @map("slack_channel")
+  stateSlack            String?   @map("state_slack") @db.VarChar(50)
+  
+  organizations         Organization[]
+  
+  @@map("users")
+}
+
+model Group {
+  id          Int    @id @default(autoincrement())
+  name        String @db.VarChar(100)
+  description String @db.VarChar(255)
+  
+  @@map("groups")
+}
+
+// ============================================
+// ORGANIZATIONS
+// ============================================
+
+model Organization {
+  id                    Int       @id @default(autoincrement()) @map("ch_id")
+  userId                Int       @map("client_id")
+  name                  String    @map("church_name") @db.VarChar(255)
+  legalName             String?   @map("legal_name") @db.VarChar(255)
+  phoneNumber           String?   @map("phone_no") @db.VarChar(50)
+  website               String?   @db.VarChar(255)
+  email                 String?   @db.VarChar(255)
+  streetAddress         String?   @map("street_address") @db.VarChar(255)
+  streetAddressSuite    String?   @map("street_address_suite") @db.VarChar(100)
+  city                  String?   @db.VarChar(100)
+  state                 String?   @db.VarChar(50)
+  country               String?   @db.VarChar(50)
+  postal                String?   @db.VarChar(20)
+  taxId                 String?   @map("tax_id") @db.VarChar(50)
+  token                 String    @unique @db.VarChar(255)
+  slug                  String?   @unique @db.VarChar(255)
+  logo                  String?   @db.VarChar(500)
+  fortisTemplate        String?   @map("fortis_template") @db.VarChar(50)
+  
+  // Twilio/Text-to-Give
+  twilioAccountSid      String?   @map("twilio_accountsid") @db.VarChar(100)
+  twilioPhoneSid        String?   @map("twilio_phonesid") @db.VarChar(100)
+  twilioPhoneNo         String?   @map("twilio_phoneno") @db.VarChar(20)
+  twilioCountryCode     String?   @map("twilio_country_code") @db.VarChar(5)
+  twilioCountryNumber   String?   @map("twilio_country_number") @db.VarChar(10)
+  twilioToken           String?   @map("twilio_token") @db.VarChar(255)
+  
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  
+  user                  User      @relation(fields: [userId], references: [id])
+  subOrganizations      SubOrganization[]
+  funds                 Fund[]
+  invoices              Invoice[]
+  paymentLinks          PaymentLink[]
+  donors                Donor[]
+  products              Product[]
+  chatSettings          ChatSetting[]
+  fortisOnboarding      FortisOnboarding?
+  
+  @@map("church_detail")
+}
+
+model SubOrganization {
+  id              Int       @id @default(autoincrement())
+  organizationId  Int       @map("church_id")
+  name            String    @db.VarChar(255)
+  address         String?   @db.Text
+  phone           String?   @db.VarChar(50)
+  pastor          String?   @db.VarChar(255)
+  description     String?   @db.Text
+  slug            String?   @unique @db.VarChar(255)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  funds           Fund[]
+  
+  @@map("campuses")
+}
+
+// ============================================
+// FORTIS ONBOARDING
+// ============================================
+
+model FortisOnboarding {
+  id                    Int       @id @default(autoincrement())
+  userId                Int       @map("user_id")
+  organizationId        Int       @unique @map("church_id")
+  
+  // Signer Information
+  signFirstName         String?   @map("sign_first_name") @db.VarChar(100)
+  signLastName          String?   @map("sign_last_name") @db.VarChar(100)
+  signPhoneNumber       String?   @map("sign_phone_number") @db.VarChar(50)
+  email                 String?   @db.VarChar(255)
+  
+  // Merchant Address
+  merchantAddressLine1  String?   @map("merchant_address_line_1") @db.VarChar(255)
+  merchantState         String?   @map("merchant_state") @db.VarChar(50)
+  merchantCity          String?   @map("merchant_city") @db.VarChar(100)
+  merchantPostalCode    String?   @map("merchant_postal_code") @db.VarChar(20)
+  
+  // Bank Account Information (Last 4 digits only)
+  accountNumberLast4    String?   @map("account_number_last4") @db.VarChar(4)
+  routingNumberLast4    String?   @map("routing_number_last4") @db.VarChar(4)
+  accountHolderName     String?   @map("account_holder_name") @db.VarChar(255)
+  account2NumberLast4   String?   @map("account2_number_last4") @db.VarChar(4)
+  routing2NumberLast4   String?   @map("routing2_number_last4") @db.VarChar(4)
+  account2HolderName    String?   @map("account2_holder_name") @db.VarChar(255)
+  
+  // Fortis Application Status
+  appStatus             String?   @map("app_status") @db.VarChar(50)
+  mpaLink               String?   @map("mpa_link") @db.Text
+  
+  // API Credentials (from webhook)
+  locationId            String?   @map("location_id") @db.VarChar(255)
+  productTransactionId  String?   @map("product_transaction_id") @db.VarChar(255)
+  authUserId            String?   @map("auth_user_id") @db.VarChar(255)
+  authUserApiKey        String?   @map("auth_user_api_key") @db.VarChar(255)
+  
+  // Audit
+  processorResponse     String?   @map("processor_response") @db.Text
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime? @updatedAt @map("updated_at")
+  
+  organization          Organization @relation(fields: [organizationId], references: [id])
+  
+  @@map("church_onboard_fortis")
+}
+
+// ============================================
+// FUNDS
+// ============================================
+
+model Fund {
+  id                Int              @id @default(autoincrement())
+  userId            Int              @map("user_id")
+  organizationId    Int              @map("church_id")
+  subOrganizationId Int?             @map("campus_id")
+  name              String           @db.VarChar(255)
+  description       String?          @db.Text
+  isActive          Boolean          @default(true) @map("is_active")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  
+  organization      Organization     @relation(fields: [organizationId], references: [id])
+  subOrganization   SubOrganization? @relation(fields: [subOrganizationId], references: [id])
+  transactionFunds  TransactionFund[]
+  
+  @@map("fund")
+}
+
+// ============================================
+// CUSTOMERS/DONORS
+// ============================================
+
+model Donor {
+  id                    Int       @id @default(autoincrement())
+  userId                Int       @map("client_id")
+  organizationId        Int       @map("id_church")
+  subOrganizationId     Int?      @map("campus_id")
+  firstName             String?   @map("first_name") @db.VarChar(100)
+  lastName              String?   @map("last_name") @db.VarChar(100)
+  email                 String?   @db.VarChar(254)
+  phone                 String?   @db.VarChar(50)
+  phoneCode             String?   @map("phone_code") @db.VarChar(10)
+  address               String?   @db.Text
+  city                  String?   @db.VarChar(100)
+  state                 String?   @db.VarChar(50)
+  zip                   String?   @db.VarChar(20)
+  country               String?   @db.VarChar(50)
+  createdFrom           String?   @map("created_from") @db.VarChar(50)
+  
+  // Totals
+  amountAcum            Decimal?  @default(0) @map("amount_acum") @db.Decimal(10, 2)
+  feeAcum               Decimal?  @default(0) @map("fee_acum") @db.Decimal(10, 2)
+  netAcum               Decimal?  @default(0) @map("net_acum") @db.Decimal(10, 2)
+  firstDate             DateTime? @map("first_date")
+  
+  // Integration IDs
+  stripeCustomerId      String?   @map("stripe_customer_id") @db.VarChar(255)
+  quickbooksId          String?   @map("quickbooks_id") @db.VarChar(255)
+  freshbooksId          String?   @map("freshbooks_id") @db.VarChar(255)
+  
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  
+  organization          Organization @relation(fields: [organizationId], references: [id])
+  transactions          Transaction[]
+  sources               Source[]
+  subscriptions         Subscription[]
+  invoices              Invoice[]
+  
+  @@map("account_donor")
+}
+
+model Source {
+  id                    Int       @id @default(autoincrement())
+  donorId               Int       @map("account_donor_id")
+  organizationId        Int       @map("church_id")
+  sourceType            String    @map("source_type") @db.VarChar(10)
+  bankType              String?   @map("bank_type") @db.VarChar(20)
+  lastDigits            String?   @map("last_digits") @db.VarChar(4)
+  nameHolder            String?   @map("name_holder") @db.VarChar(255)
+  fortisWalletId        String    @map("epicpay_wallet_id") @db.VarChar(255)
+  fortisCustomerId      String    @map("epicpay_customer_id") @db.VarChar(255)
+  isActive              Boolean   @default(true) @map("is_active")
+  isSaved               Boolean   @default(false) @map("is_saved")
+  status                String    @default("P") @db.Char(1)
+  expMonth              String?   @map("exp_month") @db.VarChar(2)
+  expYear               String?   @map("exp_year") @db.VarChar(4)
+  postalCode            String?   @map("postal_code") @db.VarChar(20)
+  requestResponse       String?   @map("request_response") @db.Text
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  
+  donor                 Donor     @relation(fields: [donorId], references: [id])
+  
+  @@map("epicpay_customer_sources")
+}
+
+// ============================================
+// TRANSACTIONS
+// ============================================
+
+model Transaction {
+  id                    BigInt    @id @default(autoincrement())
+  userId                Int       @map("user_id")
+  donorId               Int       @map("account_donor_id")
+  organizationId        Int       @map("church_id")
+  subOrganizationId     Int?      @map("campus_id")
+  
+  // Amounts
+  totalAmount           Decimal   @map("total_amount") @db.Decimal(10, 2)
+  subTotalAmount        Decimal   @map("sub_total_amount") @db.Decimal(10, 2)
+  fee                   Decimal   @db.Decimal(10, 2)
+  
+  // Customer Info
+  firstName             String    @map("first_name") @db.VarChar(100)
+  lastName              String    @map("last_name") @db.VarChar(100)
+  email                 String    @db.VarChar(254)
+  phone                 String?   @db.VarChar(50)
+  zip                   String?   @db.VarChar(20)
+  
+  // Transaction Details
+  source                String    @map("src") @db.VarChar(10) // CC or BNK
+  bankType              String?   @map("bank_type") @db.VarChar(20)
+  status                String    @db.Char(1) // P=Success, N=Failed, R=Refunded
+  statusAch             String?   @map("status_ach") @db.VarChar(10) // W=Waiting, P=Processed
+  transactionType       String?   @map("trx_type") @db.VarChar(50)
+  givingSource          String    @map("giving_source") @db.VarChar(50)
+  template              String?   @db.VarChar(50)
+  isFeeCovered          Boolean   @default(false) @map("is_fee_covered")
+  manualFailed          Boolean   @default(false) @map("manual_failed")
+  manualTrxType         String?   @map("manual_trx_type") @db.VarChar(50)
+  
+  // Processor Details
+  fortisTransactionId   String?   @map("epicpay_transaction_id") @db.VarChar(255)
+  requestData           String?   @map("request_data") @db.Text
+  requestResponse       String?   @map("request_response") @db.Text
+  
+  // Related Records
+  invoiceId             Int?      @map("invoice_id")
+  paymentLinkId         Int?      @map("payment_link_id")
+  subscriptionId        Int?      @map("subscription_id")
+  batchId               Int?      @map("batch_id")
+  
+  // Refund Tracking
+  trxRetId              BigInt?   @map("trx_ret_id")
+  trxRetOriginId        BigInt?   @map("trx_retorigin_id")
+  
+  // Receipts
+  receiptFileUri        String?   @map("receipt_file_uri") @db.VarChar(500)
+  receiptFileUriHash    String?   @map("receipt_file_uri_hash") @db.VarChar(255)
+  
+  // Integration Tracking
+  quickbooksPushed      Boolean   @default(false) @map("quickbooks_pushed")
+  quickbooksLastUpdate  DateTime? @map("quickbooks_last_update")
+  freshbooksPushed      Boolean   @default(false) @map("freshbooks_pushed")
+  freshbooksLastUpdate  DateTime? @map("freshbooks_last_update")
+  
+  // Audit
+  donorIp               String?   @map("donor_ip") @db.VarChar(45)
+  fromDomain            String?   @map("from_domain") @db.VarChar(255)
+  date                  DateTime  @default(now())
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  
+  donor                 Donor     @relation(fields: [donorId], references: [id])
+  transactionFunds      TransactionFund[]
+  
+  @@map("epicpay_customer_transactions")
+}
+
+model TransactionFund {
+  id              Int      @id @default(autoincrement())
+  transactionId   BigInt?  @map("transaction_id")
+  subscriptionId  Int?     @map("subscription_id")
+  fundId          Int      @map("fund_id")
+  amount          Decimal  @db.Decimal(10, 2)
+  fee             Decimal  @db.Decimal(10, 2)
+  net             Decimal  @db.Decimal(10, 2)
+  
+  transaction     Transaction? @relation(fields: [transactionId], references: [id])
+  fund            Fund         @relation(fields: [fundId], references: [id])
+  
+  @@map("transactions_funds")
+}
+
+// ============================================
+// SUBSCRIPTIONS
+// ============================================
+
+model Subscription {
+  id                    Int       @id @default(autoincrement())
+  donorId               Int       @map("account_donor_id")
+  organizationId        Int       @map("church_id")
+  subOrganizationId     Int?      @map("campus_id")
+  sourceId              Int       @map("customer_source_id")
+  
+  amount                Decimal   @db.Decimal(10, 2)
+  frequency             String    @db.VarChar(20) // weekly, monthly, quarterly, yearly, Custom
+  status                String    @default("A") @db.Char(1) // A=Active, D=Cancelled
+  
+  firstName             String    @map("first_name") @db.VarChar(100)
+  lastName              String    @map("last_name") @db.VarChar(100)
+  email                 String    @db.VarChar(254)
+  
+  givingSource          String    @map("giving_source") @db.VarChar(50)
+  source                String    @map("src") @db.VarChar(10)
+  isFeeCovered          Boolean   @default(false) @map("is_fee_covered")
+  template              String?   @map("epicpay_template") @db.VarChar(50)
+  
+  // Fortis IDs
+  fortisCustomerId      String?   @map("epicpay_customer_id") @db.VarChar(255)
+  fortisWalletId        String?   @map("epicpay_wallet_id") @db.VarChar(255)
+  fortisSubscriptionId  String?   @map("epicpay_subscription_id") @db.VarChar(255)
+  
+  // Scheduling
+  startOn               DateTime  @map("start_on")
+  nextPaymentOn         DateTime  @map("next_payment_on")
+  lastPaymentOn         DateTime? @map("last_payment_on")
+  
+  // Tracking
+  successTrxns          Int?      @default(0) @map("success_trxns")
+  failTrxns             Int?      @default(0) @map("fail_trxns")
+  
+  // Payment Link Integration
+  paymentLinkProductsId Int?      @map("payment_link_products_id")
+  
+  // Audit
+  isPaysafe             Boolean   @default(true) @map("ispaysafe")
+  whiteLabelTag         String?   @map("white_label_tag") @db.VarChar(50)
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  cancelledAt           DateTime? @map("cancelled_at")
+  
+  donor                 Donor     @relation(fields: [donorId], references: [id])
+  
+  @@map("epicpay_customer_subscriptions")
+}
+
+// ============================================
+// PRODUCTS
+// ============================================
+
+model Product {
+  id                        Int       @id @default(autoincrement())
+  userId                    Int       @map("user_id")
+  organizationId            Int       @map("church_id")
+  subOrganizationId         Int?      @map("campus_id")
+  name                      String    @db.VarChar(255)
+  description               String?   @db.Text
+  price                     Decimal   @db.Decimal(10, 2)
+  qty                       Int?      // NULL = unlimited
+  slug                      String?   @unique @db.VarChar(255)
+  reference                 String?   @db.VarChar(100)
+  trash                     Boolean   @default(false)
+  
+  // Digital Content
+  fileHash                  String?   @map("file_hash") @db.VarChar(500)
+  
+  // Subscription Fields
+  isSubscription            Boolean   @default(false) @map("is_subscription")
+  subscriptionInterval      String?   @map("subscription_interval") @db.VarChar(20)
+  subscriptionIntervalCount Int?      @map("subscription_interval_count")
+  subscriptionTrialDays     Int?      @map("subscription_trial_days")
+  startSubscriptionCustomDate DateTime? @map("start_subscription_custom_date") @db.Date
+  customDate                Boolean   @default(false) @map("custom_date")
+  
+  // Integration IDs
+  stripeId                  String?   @map("id_stripe") @db.VarChar(255)
+  quickbooksId              String?   @map("id_quickbooks") @db.VarChar(255)
+  
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  
+  organization              Organization @relation(fields: [organizationId], references: [id])
+  invoiceProducts           InvoiceProduct[]
+  paymentLinkProducts       PaymentLinkProduct[]
+  
+  @@map("products")
+}
+
+// ============================================
+// INVOICES
+// ============================================
+
+model Invoice {
+  id              Int       @id @default(autoincrement())
+  organizationId  Int       @map("church_id")
+  subOrganizationId Int?    @map("campus_id")
+  donorId         Int       @map("donor_id")
+  
+  status          String    @db.VarChar(20) // draft, finalized, sent, paid, partial, overdue, archived
+  totalAmount     Decimal   @map("total_amount") @db.Decimal(10, 2)
+  paidAmount      Decimal   @default(0) @map("paid_amount") @db.Decimal(10, 2)
+  dueDate         DateTime? @map("due_date") @db.Date
+  reference       String?   @db.VarChar(100)
+  memo            String?   @db.Text
+  footer          String?   @db.Text
+  comment         String?   @db.Text
+  paymentOptions  String?   @map("payment_options") @db.VarChar(20) // cc, ach, both
+  coverFee        Boolean   @default(false) @map("cover_fee")
+  hash            String    @unique @db.VarChar(255)
+  pdfUrl          String?   @map("pdf_url") @db.VarChar(500)
+  postPurchaseLink String?  @map("post_purchase_link") @db.Text
+  
+  // Integration IDs
+  stripeId        String?   @map("stripe_id") @db.VarChar(255)
+  quickbooksId    String?   @map("quickbooks_id") @db.VarChar(255)
+  freshbooksId    String?   @map("freshbooks_id") @db.VarChar(255)
+  
+  createdAt       DateTime  @default(now()) @map("created_at")
+  finalizedAt     DateTime? @map("finalized_at")
+  
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  donor           Donor        @relation(fields: [donorId], references: [id])
+  products        InvoiceProduct[]
+  
+  @@map("invoices")
+}
+
+model InvoiceProduct {
+  id          Int      @id @default(autoincrement())
+  invoiceId   Int      @map("invoice_id")
+  productId   Int?     @map("product_id")
+  productName String   @map("product_name") @db.VarChar(255)
+  qty         Int
+  price       Decimal  @db.Decimal(10, 2)
+  subtotal    Decimal  @db.Decimal(10, 2)
+  
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product     Product? @relation(fields: [productId], references: [id])
+  
+  @@map("invoice_products")
+}
+
+// ============================================
+// PAYMENT LINKS
+// ============================================
+
+model PaymentLink {
+  id              Int       @id @default(autoincrement())
+  organizationId  Int       @map("church_id")
+  subOrganizationId Int?    @map("campus_id")
+  name            String    @db.VarChar(255)
+  description     String?   @db.Text
+  status          String    @db.VarChar(20) // active, inactive
+  hash            String    @unique @db.VarChar(255)
+  paymentMethods  String?   @map("payment_methods") @db.VarChar(20) // cc, ach, both
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  products        PaymentLinkProduct[]
+  productsPaid    PaymentLinkProductPaid[]
+  
+  @@map("payment_links")
+}
+
+model PaymentLinkProduct {
+  id              Int       @id @default(autoincrement())
+  paymentLinkId   Int       @map("payment_link_id")
+  productId       Int       @map("product_id")
+  qty             Int?      // NULL = unlimited
+  unlimitedQty    Boolean   @default(false) @map("unlimited_qty")
+  
+  paymentLink     PaymentLink @relation(fields: [paymentLinkId], references: [id], onDelete: Cascade)
+  product         Product     @relation(fields: [productId], references: [id])
+  productsPaid    PaymentLinkProductPaid[]
+  
+  @@map("payment_link_products")
+}
+
+model PaymentLinkProductPaid {
+  id                      Int       @id @default(autoincrement())
+  paymentLinkProductId    Int       @map("payment_link_product_id")
+  paymentLinkId           Int       @map("payment_link_id")
+  productId               Int       @map("product_id")
+  productName             String    @map("product_name") @db.VarChar(255)
+  productPrice            Decimal   @map("product_price") @db.Decimal(10, 2)
+  qtyReq                  Int       @map("qty_req")
+  transactionId           BigInt?   @map("transaction_id")
+  subscriptionId          Int?      @map("subscription_id")
+  paidAt                  DateTime  @default(now()) @map("paid_at")
+  
+  paymentLinkProduct      PaymentLinkProduct @relation(fields: [paymentLinkProductId], references: [id])
+  paymentLink             PaymentLink        @relation(fields: [paymentLinkId], references: [id])
+  
+  @@map("payment_link_products_paid")
+}
+
+// ============================================
+// BATCHES & TAGS
+// ============================================
+
+model Batch {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @map("client_id")
+  organizationId  Int       @map("church_id")
+  subOrganizationId Int?    @map("campus_id")
+  status          String    @db.VarChar(20) // draft, committed
+  committedAt     DateTime? @map("committed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  tags            BatchTag[]
+  
+  @@map("batches")
+}
+
+model Tag {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("client_id")
+  name      String    @db.VarChar(100)
+  createdAt DateTime  @default(now()) @map("created_at")
+  
+  batchTags BatchTag[]
+  
+  @@map("tags")
+}
+
+model BatchTag {
+  id      Int @id @default(autoincrement())
+  batchId Int @map("batch_id")
+  tagId   Int @map("tag_id")
+  userId  Int @map("client_id")
+  
+  batch   Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  tag     Tag   @relation(fields: [tagId], references: [id])
+  
+  @@map("batch_tags")
+}
+
+// ============================================
+// STATEMENTS
+// ============================================
+
+model Statement {
+  id              Int       @id @default(autoincrement())
+  type            String    @db.VarChar(20) // EPIC, PSF, FTS
+  userId          Int       @map("client_id")
+  organizationId  Int       @map("church_id")
+  createdBy       String    @db.Char(1) // A=Admin, D=Donor
+  dateFrom        DateTime  @map("date_from") @db.Date
+  dateTo          DateTime  @map("date_to") @db.Date
+  fileName        String    @map("file_name") @db.VarChar(500)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  statementDonors StatementDonor[]
+  
+  @@map("statements")
+}
+
+model StatementDonor {
+  id          Int      @id @default(autoincrement())
+  statementId Int      @map("statement_id")
+  donorId     Int      @map("donor_id")
+  fileName    String   @map("file_name") @db.VarChar(500)
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  statement   Statement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  
+  @@map("statement_donor")
+}
+
+// ============================================
+// CHAT & MESSAGING
+// ============================================
+
+model ChatSetting {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @map("client_id")
+  organizationId  Int      @map("church_id")
+  subOrganizationId Int?   @map("campus_id")
+  logo            String?  @db.VarChar(500)
+  domain          String?  @db.VarChar(255)
+  primaryColor    String?  @map("primary_color") @db.VarChar(20)
+  secondaryColor  String?  @map("secondary_color") @db.VarChar(20)
+  themeColor      String?  @map("theme_color") @db.VarChar(20)
+  buttonTextColor String?  @map("button_text_color") @db.VarChar(20)
+  triggerText     String?  @map("trigger_text") @db.VarChar(255)
+  debugMessage    String?  @map("debug_message") @db.Text
+  typeWidget      String?  @map("type_widget") @db.VarChar(20)
+  conduitFunds    String?  @map("conduit_funds") @db.Text
+  suggestedAmounts String? @map("suggested_amounts") @db.Text
+  widgetPosition  String?  @map("widget_position") @db.VarChar(20)
+  widgetLocation  String?  @map("widget_location") @db.VarChar(20)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  
+  @@unique([organizationId, subOrganizationId])
+  @@map("chat_settings")
+}
+
+// ============================================
+// WEBHOOKS
+// ============================================
+
+model FortisWebhook {
+  id        BigInt   @id @default(autoincrement())
+  eventJson String   @map("event_json") @db.Text
+  system    String?  @db.VarChar(50) // lunarpay, chatgive
+  mode      String?  @db.VarChar(20) // sandbox, production
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@map("fortis_webhooks")
+}
+
+// ============================================
+// SETTINGS
+// ============================================
+
+model Setting {
+  id        Int      @id @default(autoincrement())
+  keyName   String   @unique @map("key_name") @db.VarChar(100)
+  value     String?  @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("settings")
+}
+
+// ============================================
+// API SESSIONS
+// ============================================
+
+model ApiSession {
+  id        String   @id @db.VarChar(128)
+  data      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("api_session")
+}
+
+// ============================================
+// REFERRALS
+// ============================================
+
+model Referral {
+  id              Int      @id @default(autoincrement())
+  referrerUserId  Int      @map("referrer_user_id")
+  referredUserId  Int?     @map("referred_user_id")
+  shareCode       String   @unique @map("share_code") @db.VarChar(100)
+  status          String   @db.VarChar(20) // pending, completed
+  monthDate       DateTime? @map("month_date") @db.Date
+  createdAt       DateTime @default(now()) @map("created_at")
+  
+  @@map("referrals")
+}
