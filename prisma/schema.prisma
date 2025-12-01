@@ -449,11 +449,13 @@ model Invoice {
   status          String    @db.VarChar(20) // draft, finalized, sent, paid, partial, overdue, archived
   totalAmount     Decimal   @map("total_amount") @db.Decimal(10, 2)
   paidAmount      Decimal   @default(0) @map("paid_amount") @db.Decimal(10, 2)
+  fee             Decimal?  @default(0) @db.Decimal(10, 2) // Processing fee
   dueDate         DateTime? @map("due_date") @db.Date
   reference       String?   @db.VarChar(100)
   memo            String?   @db.Text
   footer          String?   @db.Text
   comment         String?   @db.Text
+  tags            String?   @db.VarChar(255) // Comma-separated tags
   paymentOptions  String?   @map("payment_options") @db.VarChar(20) // cc, ach, both
   coverFee        Boolean   @default(false) @map("cover_fee")
   hash            String    @unique @db.VarChar(255)
@@ -464,6 +466,7 @@ model Invoice {
   stripeId        String?   @map("stripe_id") @db.VarChar(255)
   quickbooksId    String?   @map("quickbooks_id") @db.VarChar(255)
   freshbooksId    String?   @map("freshbooks_id") @db.VarChar(255)
+  stripeTags      String?   @map("stripe_tags") @db.Text
   
   createdAt       DateTime  @default(now()) @map("created_at")
   finalizedAt     DateTime? @map("finalized_at")
