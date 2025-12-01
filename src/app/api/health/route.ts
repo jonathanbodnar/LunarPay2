@@ -14,6 +14,7 @@ export async function GET() {
       timestamp: new Date().toISOString(),
       service: 'lunarpay2',
       database: 'connected',
+      version: '1.0.0',
     });
   } catch (error) {
     return NextResponse.json(
