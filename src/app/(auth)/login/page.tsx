@@ -56,11 +56,19 @@ export default function LoginPage() {
         console.log('[FRONTEND] Token stored in localStorage');
       }
 
-      console.log('[FRONTEND] Login successful! Redirecting...');
+      console.log('[FRONTEND] Login successful!');
+      console.log('[FRONTEND] Token:', data.token);
+      console.log('[FRONTEND] User:', data.user);
+      
       setIsRedirecting(true);
       
-      // Force a hard redirect to ensure cookies are recognized
-      window.location.href = '/organizations';
+      // Try multiple redirect methods
+      console.log('[FRONTEND] Attempting redirect...');
+      
+      setTimeout(() => {
+        console.log('[FRONTEND] Redirecting now...');
+        window.location.replace('/dashboard');
+      }, 500);
     } catch (err) {
       console.error('[FRONTEND] Login error:', err);
       setError('An error occurred. Please try again.');
