@@ -138,9 +138,8 @@ export default function LoginPage() {
         </CardFooter>
       </Card>
 
-      {/* Test Credentials - Development Only */}
-      {process.env.NODE_ENV === 'development' && (
-        <Card className="w-full max-w-md mt-6 bg-blue-50 border-blue-200">
+      {/* Test Credentials - Always show for now */}
+      <Card className="w-full max-w-md mt-6 bg-blue-50 border-blue-200">
           <CardHeader>
             <CardTitle className="text-lg">🧪 Test Credentials</CardTitle>
             <CardDescription>
@@ -197,7 +196,6 @@ export default function LoginPage() {
             </p>
           </CardContent>
         </Card>
-      )}
     </div>
   );
 }
