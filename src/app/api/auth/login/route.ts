@@ -82,8 +82,7 @@ export async function POST(request: Request) {
       expiresIn
     );
 
-    // Set cookie
-    await setAuthCookie(token);
+    console.log('[LOGIN] Token generated successfully');
 
     // Get user's organizations
     const organizations = await prisma.organization.findMany({
@@ -97,14 +96,30 @@ export async function POST(request: Request) {
       orderBy: { id: 'asc' },
     });
 
+    console.log('[LOGIN] Organizations fetched:', organizations.length);
+
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
 
-    return NextResponse.json({
+    // Create response with cookie
+    const response = NextResponse.json({
       user: userWithoutPassword,
       organizations,
       token,
     });
+
+    // Set cookie in response
+    response.cookies.set('lunarpay_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: validatedData.remember ? 60 * 60 * 24 * 30 : 60 * 60 * 24 * 7,
+      path: '/',
+    });
+
+    console.log('[LOGIN] Login successful for:', user.email);
+
+    return response;
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
