@@ -40,9 +40,18 @@ export function generateToken(payload: JWTPayload, expiresIn: string = '7d'): st
  */
 export function verifyToken(token: string): JWTPayload | null {
   try {
+    console.log('[VERIFY] Attempting to verify token');
+    console.log('[VERIFY] JWT_SECRET exists:', !!JWT_SECRET);
+    console.log('[VERIFY] JWT_SECRET length:', JWT_SECRET?.length);
+    console.log('[VERIFY] Token preview:', token?.substring(0, 20) + '...');
+    
     const decoded = verify(token, JWT_SECRET) as JWTPayload;
+    
+    console.log('[VERIFY] Token verified successfully');
     return decoded;
   } catch (error) {
+    console.error('[VERIFY] Token verification failed:', error);
+    console.error('[VERIFY] Error message:', (error as Error).message);
     return null;
   }
 }
