@@ -15,6 +15,7 @@ interface Invoice {
   dueDate: string | null;
   reference: string | null;
   memo: string | null;
+  pdfUrl: string | null;
   organization: {
     name: string;
     logo: string | null;
