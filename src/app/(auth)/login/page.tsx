@@ -14,9 +14,17 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent multiple submissions
+    if (loading || isRedirecting) {
+      console.log('[FRONTEND] Already processing login, ignoring...');
+      return;
+    }
+    
     setLoading(true);
     setError('');
 
@@ -48,10 +56,8 @@ export default function LoginPage() {
         console.log('[FRONTEND] Token stored in localStorage');
       }
 
-      // Small delay to ensure cookie is set
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      console.log('[FRONTEND] Redirecting to /organizations');
+      console.log('[FRONTEND] Login successful! Redirecting...');
+      setIsRedirecting(true);
       
       // Force a hard redirect to ensure cookies are recognized
       window.location.href = '/organizations';
@@ -136,9 +142,9 @@ export default function LoginPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={loading}
+              disabled={loading || isRedirecting}
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {isRedirecting ? 'Redirecting...' : loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
         </CardContent>
