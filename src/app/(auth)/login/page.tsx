@@ -21,15 +21,22 @@ export default function LoginPage() {
     setError('');
 
     try {
+      console.log('[FRONTEND] Submitting login...');
+      
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, remember }),
+        credentials: 'include', // Important for cookies!
       });
 
+      console.log('[FRONTEND] Response status:', response.status);
+
       const data = await response.json();
+      console.log('[FRONTEND] Response data:', data);
 
       if (!response.ok) {
+        console.log('[FRONTEND] Login failed:', data.error);
         setError(data.error || 'Login failed');
         setLoading(false);
         return;
@@ -38,11 +45,18 @@ export default function LoginPage() {
       // Store token in localStorage for client-side access
       if (data.token) {
         localStorage.setItem('lunarpay_token', data.token);
+        console.log('[FRONTEND] Token stored in localStorage');
       }
 
-      // Redirect to dashboard
-      router.push('/organizations');
+      // Small delay to ensure cookie is set
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      console.log('[FRONTEND] Redirecting to /organizations');
+      
+      // Force a hard redirect to ensure cookies are recognized
+      window.location.href = '/organizations';
     } catch (err) {
+      console.error('[FRONTEND] Login error:', err);
       setError('An error occurred. Please try again.');
       setLoading(false);
     }
