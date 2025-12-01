@@ -35,12 +35,20 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Define protected routes
+  const protectedRoutes = ['/dashboard', '/organizations', '/invoices', '/customers', '/transactions', '/subscriptions', '/funds', '/settings', '/payment-links'];
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
+  const isProtectedApi = pathname.startsWith('/api') && !publicApiRoutes.some(route => pathname.startsWith(route));
+
   // Check for auth token in cookies
   const token = request.cookies.get('lunarpay_token');
 
+  console.log('[MIDDLEWARE]', pathname, 'Token:', token ? 'Present' : 'Missing');
+
   // If no token and trying to access protected route, redirect to login
-  if (!token && (pathname.startsWith('/api') || pathname.startsWith('/(dashboard)'))) {
-    if (pathname.startsWith('/api')) {
+  if (!token && (isProtectedRoute || isProtectedApi)) {
+    console.log('[MIDDLEWARE] No token, redirecting to login');
+    if (isProtectedApi) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -49,16 +57,19 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Verify token
-  if (token) {
+  // Verify token if present
+  if (token && (isProtectedRoute || isProtectedApi)) {
     const payload = verifyToken(token.value);
     
     if (!payload) {
+      console.log('[MIDDLEWARE] Invalid token, redirecting to login');
       // Invalid token - clear it and redirect
       const response = NextResponse.redirect(new URL('/login', request.url));
       response.cookies.delete('lunarpay_token');
       return response;
     }
+    
+    console.log('[MIDDLEWARE] Token valid, allowing access');
   }
 
   return NextResponse.next();
