@@ -32,7 +32,7 @@ export async function verifyPassword(password: string, hashedPassword: string): 
  * Generate JWT token
  */
 export function generateToken(payload: JWTPayload, expiresIn: string = '7d'): string {
-  return sign(payload, JWT_SECRET, { expiresIn });
+  return sign(payload, JWT_SECRET, { expiresIn } as any);
 }
 
 /**
