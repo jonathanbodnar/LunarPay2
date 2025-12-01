@@ -16,6 +16,8 @@ export async function POST(request: Request) {
     // Validate input
     const validatedData = loginSchema.parse(body);
 
+    console.log('[LOGIN] Attempting login for:', validatedData.email);
+
     // Find user
     const user = await prisma.user.findUnique({
       where: { email: validatedData.email },
@@ -32,7 +34,10 @@ export async function POST(request: Request) {
       },
     });
 
+    console.log('[LOGIN] User found:', user ? 'Yes' : 'No');
+
     if (!user) {
+      console.log('[LOGIN] User not found');
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
@@ -41,6 +46,7 @@ export async function POST(request: Request) {
 
     // Check if user is active
     if (!user.active) {
+      console.log('[LOGIN] User inactive');
       return NextResponse.json(
         { error: 'Account is deactivated. Please contact support.' },
         { status: 403 }
@@ -48,9 +54,12 @@ export async function POST(request: Request) {
     }
 
     // Verify password
+    console.log('[LOGIN] Verifying password...');
     const validPassword = await verifyPassword(validatedData.password, user.password);
+    console.log('[LOGIN] Password valid:', validPassword);
 
     if (!validPassword) {
+      console.log('[LOGIN] Password verification failed');
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
