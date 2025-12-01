@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 
+// Force Node.js runtime (Edge runtime doesn't support crypto module)
+export const runtime = 'nodejs';
+
 // Routes that don't require authentication
 const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
 
