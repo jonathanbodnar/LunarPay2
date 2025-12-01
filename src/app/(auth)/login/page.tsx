@@ -137,6 +137,67 @@ export default function LoginPage() {
           </p>
         </CardFooter>
       </Card>
+
+      {/* Test Credentials - Development Only */}
+      {process.env.NODE_ENV === 'development' && (
+        <Card className="w-full max-w-md mt-6 bg-blue-50 border-blue-200">
+          <CardHeader>
+            <CardTitle className="text-lg">🧪 Test Credentials</CardTitle>
+            <CardDescription>
+              Use these accounts for testing (development only)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-2 bg-white rounded border border-blue-100 hover:border-blue-300 cursor-pointer"
+                   onClick={() => {
+                     setEmail('admin@lunarpay.io');
+                     setPassword('Admin123456!');
+                   }}>
+                <div>
+                  <p className="text-sm font-medium">Admin Account</p>
+                  <p className="text-xs text-gray-500">admin@lunarpay.io</p>
+                </div>
+                <button className="text-xs text-blue-600 hover:text-blue-800">
+                  Use →
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-2 bg-white rounded border border-blue-100 hover:border-blue-300 cursor-pointer"
+                   onClick={() => {
+                     setEmail('merchant@test.com');
+                     setPassword('Merchant123!');
+                   }}>
+                <div>
+                  <p className="text-sm font-medium">Merchant Account</p>
+                  <p className="text-xs text-gray-500">merchant@test.com</p>
+                </div>
+                <button className="text-xs text-blue-600 hover:text-blue-800">
+                  Use →
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-2 bg-white rounded border border-blue-100 hover:border-blue-300 cursor-pointer"
+                   onClick={() => {
+                     setEmail('demo@lunarpay.io');
+                     setPassword('Demo123456!');
+                   }}>
+                <div>
+                  <p className="text-sm font-medium">Demo Account</p>
+                  <p className="text-xs text-gray-500">demo@lunarpay.io</p>
+                </div>
+                <button className="text-xs text-blue-600 hover:text-blue-800">
+                  Use →
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-500 italic text-center mt-2">
+              Click any account to auto-fill credentials
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
