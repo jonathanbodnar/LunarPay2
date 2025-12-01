@@ -6,7 +6,16 @@ import { verifyToken } from '@/lib/auth';
 const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
 
 // Routes that are public APIs (invoices, payment links by hash)
-const publicApiRoutes = ['/api/invoices/public', '/api/payment-links/public', '/api/fortis/webhooks', '/api/health', '/api/cron'];
+const publicApiRoutes = [
+  '/api/auth/login',
+  '/api/auth/register', 
+  '/api/auth/logout',
+  '/api/invoices/public',
+  '/api/payment-links/public',
+  '/api/fortis/webhooks',
+  '/api/health',
+  '/api/cron'
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
