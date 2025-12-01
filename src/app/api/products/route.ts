@@ -13,6 +13,35 @@ const createProductSchema = z.object({
   subscriptionInterval: z.string().optional(),
 });
 
+export async function GET() {
+  try {
+    const currentUser = await requireAuth();
+
+    const products = await prisma.product.findMany({
+      where: {
+        userId: currentUser.userId,
+      },
+      include: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: { id: 'desc' },
+    });
+
+    return NextResponse.json({ products });
+  } catch (error) {
+    console.error('Get products error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const currentUser = await requireAuth();
@@ -48,4 +77,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
