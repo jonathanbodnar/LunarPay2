@@ -93,7 +93,7 @@ export async function GET() {
       // Active subscriptions
       prisma.subscription.count({
         where: {
-          userId: currentUser.userId,
+          organization: { userId: currentUser.userId },
           status: 'active',
         },
       }),
