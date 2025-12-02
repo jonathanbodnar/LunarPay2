@@ -31,10 +31,10 @@ export async function GET() {
       // Total revenue
       prisma.transaction.aggregate({
         where: {
-          organization: { userId: currentUser.userId },
-          status: 'succeeded',
+          userId: currentUser.userId,
+          status: 'P',
         },
-        _sum: { amount: true, fee: true },
+        _sum: { totalAmount: true, fee: true },
       }),
       
       // Monthly revenue
