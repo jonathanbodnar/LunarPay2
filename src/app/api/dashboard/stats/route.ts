@@ -44,7 +44,7 @@ export async function GET() {
           status: 'P',
           createdAt: { gte: startOfMonth },
         },
-        _sum: { amount: true, fee: true },
+        _sum: { totalAmount: true, fee: true },
       }),
       
       // Yearly revenue
@@ -54,7 +54,7 @@ export async function GET() {
           status: 'P',
           createdAt: { gte: startOfYear },
         },
-        _sum: { amount: true, fee: true },
+        _sum: { totalAmount: true, fee: true },
       }),
       
       // Last 30 days revenue
@@ -64,7 +64,7 @@ export async function GET() {
           status: 'P',
           createdAt: { gte: thirtyDaysAgo },
         },
-        _sum: { amount: true, fee: true },
+        _sum: { totalAmount: true, fee: true },
       }),
       
       // Total transactions
@@ -135,7 +135,7 @@ export async function GET() {
           userId: currentUser.userId,
         },
         _count: true,
-        _sum: { amount: true },
+        _sum: { totalAmount: true },
       }),
       
       // Payment method breakdown
@@ -146,7 +146,7 @@ export async function GET() {
           status: 'P',
         },
         _count: true,
-        _sum: { amount: true },
+        _sum: { totalAmount: true },
       }),
     ]);
 
