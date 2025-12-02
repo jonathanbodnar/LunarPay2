@@ -93,6 +93,7 @@ model Organization {
   donors                Donor[]
   products              Product[]
   chatSettings          ChatSetting[]
+  subscriptions         Subscription[]
   fortisOnboarding      FortisOnboarding?
   
   @@map("church_detail")
@@ -392,7 +393,8 @@ model Subscription {
   updatedAt             DateTime  @updatedAt @map("updated_at")
   cancelledAt           DateTime? @map("cancelled_at")
   
-  donor                 Donor     @relation(fields: [donorId], references: [id])
+  donor                 Donor         @relation(fields: [donorId], references: [id])
+  organization          Organization  @relation(fields: [organizationId], references: [id])
   
   @@map("epicpay_customer_subscriptions")
 }
