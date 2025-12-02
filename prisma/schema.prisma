@@ -241,6 +241,7 @@ model Source {
   fortisCustomerId      String    @map("epicpay_customer_id") @db.VarChar(255)
   isActive              Boolean   @default(true) @map("is_active")
   isSaved               Boolean   @default(false) @map("is_saved")
+  isDefault             Boolean   @default(false) @map("is_default")
   status                String    @default("P") @db.Char(1)
   expMonth              String?   @map("exp_month") @db.VarChar(2)
   expYear               String?   @map("exp_year") @db.VarChar(4)
