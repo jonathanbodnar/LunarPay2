@@ -26,7 +26,7 @@ export default function NewInvoicePage() {
     postPurchaseUrl: '',
   });
 
-  const [lineItems, setLineItems] = useState([
+  const [lineItems, setLineItems] = useState<Array<{productId: number | null, productName: string, qty: number, price: number}>>([
     { productId: null, productName: '', qty: 1, price: 0 }
   ]);
 
