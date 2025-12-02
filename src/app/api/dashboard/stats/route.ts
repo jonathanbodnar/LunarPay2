@@ -40,8 +40,8 @@ export async function GET() {
       // Monthly revenue
       prisma.transaction.aggregate({
         where: {
-          organization: { userId: currentUser.userId },
-          status: 'succeeded',
+          userId: currentUser.userId,
+          status: 'P',
           createdAt: { gte: startOfMonth },
         },
         _sum: { amount: true, fee: true },
@@ -50,8 +50,8 @@ export async function GET() {
       // Yearly revenue
       prisma.transaction.aggregate({
         where: {
-          organization: { userId: currentUser.userId },
-          status: 'succeeded',
+          userId: currentUser.userId,
+          status: 'P',
           createdAt: { gte: startOfYear },
         },
         _sum: { amount: true, fee: true },
@@ -60,8 +60,8 @@ export async function GET() {
       // Last 30 days revenue
       prisma.transaction.aggregate({
         where: {
-          organization: { userId: currentUser.userId },
-          status: 'succeeded',
+          userId: currentUser.userId,
+          status: 'P',
           createdAt: { gte: thirtyDaysAgo },
         },
         _sum: { amount: true, fee: true },
@@ -70,14 +70,14 @@ export async function GET() {
       // Total transactions
       prisma.transaction.count({
         where: {
-          organization: { userId: currentUser.userId },
+          userId: currentUser.userId,
         },
       }),
       
       // Monthly transactions
       prisma.transaction.count({
         where: {
-          organization: { userId: currentUser.userId },
+          userId: currentUser.userId,
           createdAt: { gte: startOfMonth },
         },
       }),
@@ -85,7 +85,7 @@ export async function GET() {
       // Pending invoices
       prisma.invoice.count({
         where: {
-          organization: { userId: currentUser.userId },
+          userId: currentUser.userId,
           status: { in: ['finalized', 'sent'] },
         },
       }),
@@ -93,7 +93,7 @@ export async function GET() {
       // Active subscriptions
       prisma.subscription.count({
         where: {
-          organization: { userId: currentUser.userId },
+          userId: currentUser.userId,
           status: 'active',
         },
       }),
@@ -132,7 +132,7 @@ export async function GET() {
       prisma.transaction.groupBy({
         by: ['status'],
         where: {
-          organization: { userId: currentUser.userId },
+          userId: currentUser.userId,
         },
         _count: true,
         _sum: { amount: true },
@@ -142,8 +142,8 @@ export async function GET() {
       prisma.transaction.groupBy({
         by: ['paymentMethod'],
         where: {
-          organization: { userId: currentUser.userId },
-          status: 'succeeded',
+          userId: currentUser.userId,
+          status: 'P',
         },
         _count: true,
         _sum: { amount: true },
