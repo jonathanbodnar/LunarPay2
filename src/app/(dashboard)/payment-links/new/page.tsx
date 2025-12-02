@@ -5,12 +5,19 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+
+interface Product {
+  id: number;
+  name: string;
+  price: number;
+}
 
 export default function NewPaymentLinkPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [organizations, setOrganizations] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   
   const [formData, setFormData] = useState({
     organizationId: '',
@@ -20,29 +27,82 @@ export default function NewPaymentLinkPage() {
     status: 'active',
   });
 
-  const [selectedProducts, setSelectedProducts] = useState<Array<{productId: number, qty: number | null, unlimitedQty: boolean}>>([]);
+  const [selectedProducts, setSelectedProducts] = useState<Array<{
+    productId: number | null;
+    qty: number | null;
+    unlimitedQty: boolean;
+    productName?: string;
+    price?: number;
+  }>>([]);
 
   useEffect(() => {
-    fetchOrganizations();
+    fetchData();
   }, []);
 
-  const fetchOrganizations = async () => {
+  const fetchData = async () => {
     try {
-      const response = await fetch('/api/organizations');
-      if (response.ok) {
-        const data = await response.json();
+      const [orgsRes, productsRes] = await Promise.all([
+        fetch('/api/organizations'),
+        fetch('/api/products')
+      ]);
+
+      if (orgsRes.ok) {
+        const data = await orgsRes.json();
         setOrganizations(data.organizations || []);
         if (data.organizations?.length > 0) {
           setFormData(prev => ({ ...prev, organizationId: data.organizations[0].id.toString() }));
         }
       }
+
+      if (productsRes.ok) {
+        const data = await productsRes.json();
+        setProducts(data.products || []);
+      }
     } catch (error) {
-      console.error('Failed to fetch organizations:', error);
+      console.error('Failed to fetch data:', error);
     }
+  };
+
+  const addProduct = () => {
+    setSelectedProducts([...selectedProducts, {
+      productId: null,
+      qty: 1,
+      unlimitedQty: false,
+    }]);
+  };
+
+  const removeProduct = (index: number) => {
+    setSelectedProducts(selectedProducts.filter((_, i) => i !== index));
+  };
+
+  const updateProduct = (index: number, field: string, value: any) => {
+    const updated = [...selectedProducts];
+    
+    if (field === 'productId') {
+      const product = products.find(p => p.id === parseInt(value));
+      if (product) {
+        updated[index] = {
+          ...updated[index],
+          productId: product.id,
+          productName: product.name,
+          price: product.price,
+        };
+      }
+    } else {
+      updated[index] = { ...updated[index], [field]: value };
+    }
+    
+    setSelectedProducts(updated);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (selectedProducts.length === 0 || selectedProducts.every(p => !p.productId)) {
+      alert('Please add at least one product to the payment link');
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -52,16 +112,16 @@ export default function NewPaymentLinkPage() {
         body: JSON.stringify({
           ...formData,
           organizationId: parseInt(formData.organizationId),
-          products: selectedProducts,
+          products: selectedProducts.filter(p => p.productId !== null),
         }),
         credentials: 'include',
       });
 
       if (response.ok) {
-        const data = await response.json();
         router.push(`/payment-links`);
       } else {
-        alert('Failed to create payment link');
+        const errorData = await response.json();
+        alert(errorData.error || 'Failed to create payment link');
       }
     } catch (error) {
       alert('Error creating payment link');
@@ -155,19 +215,91 @@ export default function NewPaymentLinkPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Products (Optional)</CardTitle>
-              <p className="text-sm text-gray-500">Add products later in edit mode</p>
+              <CardTitle>Products *</CardTitle>
+              <Button type="button" size="sm" variant="outline" onClick={addProduct}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Product
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-500 text-center py-4">
-              Products can be added after creating the payment link
-            </p>
+            {selectedProducts.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p>No products added yet.</p>
+                <p className="text-sm mt-2">Click "Add Product" to get started.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {selectedProducts.map((item, index) => (
+                  <div key={index} className="grid grid-cols-12 gap-3 items-end p-4 border rounded-lg">
+                    <div className="col-span-5">
+                      <label className="text-xs text-gray-500">Product *</label>
+                      <select
+                        className="w-full h-10 px-3 rounded-md border border-gray-300"
+                        value={item.productId || ''}
+                        onChange={(e) => updateProduct(index, 'productId', e.target.value)}
+                        required
+                      >
+                        <option value="">Select product...</option>
+                        {products.map(product => (
+                          <option key={product.id} value={product.id}>
+                            {product.name} (${product.price.toFixed(2)})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="col-span-3">
+                      <label className="text-xs text-gray-500">Quantity</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={item.qty || ''}
+                        onChange={(e) => updateProduct(index, 'qty', parseInt(e.target.value))}
+                        disabled={item.unlimitedQty}
+                        placeholder="Qty"
+                      />
+                    </div>
+                    
+                    <div className="col-span-3">
+                      <label className="text-xs text-gray-500">Options</label>
+                      <div className="flex items-center gap-2 h-10">
+                        <input
+                          type="checkbox"
+                          id={`unlimited-${index}`}
+                          checked={item.unlimitedQty}
+                          onChange={(e) => updateProduct(index, 'unlimitedQty', e.target.checked)}
+                          className="h-4 w-4"
+                        />
+                        <label htmlFor={`unlimited-${index}`} className="text-sm">
+                          Unlimited
+                        </label>
+                      </div>
+                    </div>
+                    
+                    <div className="col-span-1">
+                      <label className="text-xs text-gray-500 invisible">Del</label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeProduct(index)}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <div className="flex gap-4">
-          <Button type="submit" disabled={loading}>
+          <Button
+            type="submit"
+            disabled={loading || selectedProducts.length === 0 || selectedProducts.every(p => !p.productId)}
+          >
             {loading ? 'Creating...' : 'Create Payment Link'}
           </Button>
           <Button type="button" variant="outline" onClick={() => router.back()}>

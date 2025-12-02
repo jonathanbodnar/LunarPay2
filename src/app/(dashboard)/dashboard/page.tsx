@@ -4,17 +4,47 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Building2, Users, FileText, DollarSign } from 'lucide-react';
+import { Building2, Users, FileText, DollarSign, TrendingUp, CreditCard, RefreshCw, AlertCircle } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
+
+interface DashboardStats {
+  revenue: {
+    total: number;
+    monthly: number;
+    yearly: number;
+    last30Days: number;
+  };
+  fees: {
+    total: number;
+    monthly: number;
+    yearly: number;
+  };
+  net: {
+    total: number;
+    monthly: number;
+    yearly: number;
+  };
+  transactions: {
+    total: number;
+    monthly: number;
+  };
+  invoices: {
+    pending: number;
+  };
+  subscriptions: {
+    active: number;
+  };
+  customers: {
+    total: number;
+    newThisMonth: number;
+  };
+}
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [stats, setStats] = useState({
-    organizations: 0,
-    customers: 0,
-    invoices: 0,
-    revenue: 0,
-  });
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStats();
@@ -22,50 +52,119 @@ export default function DashboardPage() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('/api/auth/me');
+      setError(null);
+      const response = await fetch('/api/dashboard/stats', {
+        credentials: 'include',
+      });
       
       if (!response.ok) {
         if (response.status === 401) {
           router.push('/login');
           return;
         }
+        throw new Error('Failed to fetch stats');
       }
 
-      // TODO: Fetch actual stats
-      setStats({
-        organizations: 0,
-        customers: 0,
-        invoices: 0,
-        revenue: 0,
-      });
+      const data = await response.json();
+      setStats(data.stats);
     } catch (error) {
       console.error('Failed to fetch stats:', error);
+      setError('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-gray-500">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !stats) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Error Loading Dashboard</h3>
+              <p className="text-gray-600 mb-4">{error || 'Unable to load dashboard data'}</p>
+              <Button onClick={fetchStats}>Try Again</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-2 text-gray-600">
-          Welcome back! Here's an overview of your account.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-2 text-gray-600">
+            Welcome back! Here's an overview of your account.
+          </p>
+        </div>
+        <Button variant="outline" onClick={fetchStats}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
       </div>
 
+      {/* Revenue Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">
-              Organizations
+              Total Revenue
             </CardTitle>
-            <Building2 className="h-4 w-4 text-gray-400" />
+            <DollarSign className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.organizations}</div>
+            <div className="text-2xl font-bold text-blue-600">
+              {formatCurrency(stats.revenue.total)}
+            </div>
             <p className="text-xs text-gray-500 mt-1">
-              Active organizations
+              All time • Net: {formatCurrency(stats.net.total)}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Monthly Revenue
+            </CardTitle>
+            <TrendingUp className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {formatCurrency(stats.revenue.monthly)}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              This month • Net: {formatCurrency(stats.net.monthly)}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Transactions
+            </CardTitle>
+            <CreditCard className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.transactions.total.toLocaleString()}</div>
+            <p className="text-xs text-gray-500 mt-1">
+              {stats.transactions.monthly} this month
             </p>
           </CardContent>
         </Card>
@@ -78,24 +177,27 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.customers}</div>
+            <div className="text-2xl font-bold">{stats.customers.total.toLocaleString()}</div>
             <p className="text-xs text-gray-500 mt-1">
-              Total customers
+              +{stats.customers.newThisMonth} this month
             </p>
           </CardContent>
         </Card>
+      </div>
 
+      {/* Secondary Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">
-              Invoices
+              Pending Invoices
             </CardTitle>
             <FileText className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.invoices}</div>
+            <div className="text-2xl font-bold">{stats.invoices.pending}</div>
             <p className="text-xs text-gray-500 mt-1">
-              Total invoices
+              Awaiting payment
             </p>
           </CardContent>
         </Card>
@@ -103,16 +205,31 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">
-              Revenue
+              Active Subscriptions
+            </CardTitle>
+            <RefreshCw className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.subscriptions.active}</div>
+            <p className="text-xs text-gray-500 mt-1">
+              Recurring payments
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Processing Fees
             </CardTitle>
             <DollarSign className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              ${stats.revenue.toLocaleString()}
+            <div className="text-2xl font-bold text-red-600">
+              {formatCurrency(stats.fees.monthly)}
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              All time revenue
+              This month • Total: {formatCurrency(stats.fees.total)}
             </p>
           </CardContent>
         </Card>

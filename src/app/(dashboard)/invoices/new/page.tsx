@@ -6,13 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { CustomerSelect } from '@/components/forms/CustomerSelect';
+import { ProductSelect } from '@/components/forms/ProductSelect';
 
 export default function NewInvoicePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [organizations, setOrganizations] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
   
   const [formData, setFormData] = useState({
     organizationId: '',
@@ -22,6 +22,8 @@ export default function NewInvoicePage() {
     footer: '',
     paymentOptions: 'both',
     coverFee: false,
+    showPostPurchaseLink: false,
+    postPurchaseUrl: '',
   });
 
   const [lineItems, setLineItems] = useState([
@@ -34,22 +36,13 @@ export default function NewInvoicePage() {
 
   const fetchData = async () => {
     try {
-      const [orgsRes, customersRes] = await Promise.all([
-        fetch('/api/organizations'),
-        fetch('/api/customers')
-      ]);
-
+      const orgsRes = await fetch('/api/organizations');
       if (orgsRes.ok) {
         const orgsData = await orgsRes.json();
         setOrganizations(orgsData.organizations || []);
         if (orgsData.organizations?.length > 0) {
           setFormData(prev => ({ ...prev, organizationId: orgsData.organizations[0].id.toString() }));
         }
-      }
-
-      if (customersRes.ok) {
-        const customersData = await customersRes.json();
-        setCustomers(customersData.customers || []);
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -70,11 +63,30 @@ export default function NewInvoicePage() {
     setLineItems(updated);
   };
 
-  const calculateTotal = () => {
-    return lineItems.reduce((sum, item) => sum + (item.qty * item.price), 0);
+  const handleProductSelect = (index: number, product: { id: number; name: string; price: number }) => {
+    const updated = [...lineItems];
+    updated[index] = {
+      ...updated[index],
+      productId: product.id,
+      productName: product.name,
+      price: product.price,
+    };
+    setLineItems(updated);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const calculateTotal = () => {
+    let total = lineItems.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    if (formData.coverFee && total > 0) {
+      // Estimate fee (simplified - should match server calculation)
+      const feePercentage = 0.029; // 2.9%
+      const feeFixed = 0.30;
+      const estimatedFee = (total * feePercentage) + feeFixed;
+      total += estimatedFee;
+    }
+    return total;
+  };
+
+  const handleSubmit = async (e: React.FormEvent, sendNow: boolean = false) => {
     e.preventDefault();
     setLoading(true);
 
@@ -90,6 +102,8 @@ export default function NewInvoicePage() {
           footer: formData.footer,
           paymentOptions: formData.paymentOptions,
           coverFee: formData.coverFee,
+          postPurchaseUrl: formData.showPostPurchaseLink ? formData.postPurchaseUrl : null,
+          sendNow,
           products: lineItems.filter(item => item.productName && item.price > 0),
         }),
         credentials: 'include',
@@ -99,7 +113,8 @@ export default function NewInvoicePage() {
         const data = await response.json();
         router.push(`/invoices/${data.invoice.id}`);
       } else {
-        alert('Failed to create invoice');
+        const errorData = await response.json();
+        alert(errorData.error || 'Failed to create invoice');
       }
     } catch (error) {
       alert('Error creating invoice');
@@ -144,19 +159,12 @@ export default function NewInvoicePage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Customer *</label>
-                <select
-                  className="w-full h-10 px-3 rounded-md border border-gray-300"
+                <CustomerSelect
+                  organizationId={formData.organizationId}
                   value={formData.donorId}
-                  onChange={(e) => setFormData({ ...formData, donorId: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, donorId: value })}
                   required
-                >
-                  <option value="">Select customer...</option>
-                  {customers.map(customer => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.firstName} {customer.lastName}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
             </div>
 
@@ -211,12 +219,11 @@ export default function NewInvoicePage() {
               {lineItems.map((item, index) => (
                 <div key={index} className="grid grid-cols-12 gap-3 items-end">
                   <div className="col-span-5">
-                    <label className="text-xs text-gray-500">Description *</label>
-                    <Input
-                      placeholder="Item description"
-                      value={item.productName}
-                      onChange={(e) => updateLineItem(index, 'productName', e.target.value)}
-                      required
+                    <label className="text-xs text-gray-500">Product/Description *</label>
+                    <ProductSelect
+                      organizationId={formData.organizationId}
+                      value={item.productId}
+                      onSelect={(product) => handleProductSelect(index, product)}
                     />
                   </div>
                   <div className="col-span-2">
@@ -259,12 +266,54 @@ export default function NewInvoicePage() {
                 </div>
               ))}
 
-              <div className="border-t pt-4 mt-4">
-                <div className="flex justify-between items-center">
+              <div className="border-t pt-4 mt-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="coverFee"
+                    checked={formData.coverFee}
+                    onChange={(e) => setFormData({ ...formData, coverFee: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                  <label htmlFor="coverFee" className="text-sm">
+                    Let customer cover transaction fee
+                  </label>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="showPostPurchaseLink"
+                    checked={formData.showPostPurchaseLink}
+                    onChange={(e) => setFormData({ ...formData, showPostPurchaseLink: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                  <label htmlFor="showPostPurchaseLink" className="text-sm">
+                    Add post-purchase redirect link
+                  </label>
+                </div>
+                
+                {formData.showPostPurchaseLink && (
+                  <div className="ml-6">
+                    <Input
+                      type="url"
+                      placeholder="https://example.com/thank-you"
+                      value={formData.postPurchaseUrl}
+                      onChange={(e) => setFormData({ ...formData, postPurchaseUrl: e.target.value })}
+                    />
+                  </div>
+                )}
+                
+                <div className="flex justify-between items-center pt-3">
                   <span className="text-lg font-semibold">Total</span>
-                  <span className="text-2xl font-bold text-blue-600">
-                    ${calculateTotal().toFixed(2)}
-                  </span>
+                  <div className="text-right">
+                    <span className="text-2xl font-bold text-blue-600">
+                      ${calculateTotal().toFixed(2)}
+                    </span>
+                    {formData.coverFee && (
+                      <p className="text-xs text-gray-500">Includes transaction fee</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -272,8 +321,20 @@ export default function NewInvoicePage() {
         </Card>
 
         <div className="flex gap-4">
-          <Button type="submit" disabled={loading || !formData.donorId}>
-            {loading ? 'Creating...' : 'Create Invoice'}
+          <Button
+            type="button"
+            onClick={(e) => handleSubmit(e, false)}
+            variant="outline"
+            disabled={loading || !formData.donorId}
+          >
+            {loading ? 'Saving...' : 'Save as Draft'}
+          </Button>
+          <Button
+            type="button"
+            onClick={(e) => handleSubmit(e, true)}
+            disabled={loading || !formData.donorId || lineItems.every(item => !item.productName)}
+          >
+            {loading ? 'Sending...' : 'Save & Send'}
           </Button>
           <Button type="button" variant="outline" onClick={() => router.back()}>
             Cancel

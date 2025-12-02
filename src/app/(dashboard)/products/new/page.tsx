@@ -18,8 +18,9 @@ export default function NewProductPage() {
     description: '',
     price: '',
     qty: '',
-    isSubscription: false,
-    subscriptionInterval: 'monthly',
+    recurrence: 'one_time', // one_time, periodically, custom
+    billingPeriod: 'monthly', // daily, weekly, monthly, quarterly, yearly
+    customSchedule: [] as Array<{ date: string; amount: string }>,
   });
 
   useEffect(() => {
@@ -41,6 +42,26 @@ export default function NewProductPage() {
     }
   };
 
+  const addCustomScheduleItem = () => {
+    setFormData({
+      ...formData,
+      customSchedule: [...formData.customSchedule, { date: '', amount: '' }],
+    });
+  };
+
+  const removeCustomScheduleItem = (index: number) => {
+    setFormData({
+      ...formData,
+      customSchedule: formData.customSchedule.filter((_, i) => i !== index),
+    });
+  };
+
+  const updateCustomScheduleItem = (index: number, field: string, value: string) => {
+    const updated = [...formData.customSchedule];
+    updated[index] = { ...updated[index], [field]: value };
+    setFormData({ ...formData, customSchedule: updated });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -55,8 +76,10 @@ export default function NewProductPage() {
           description: formData.description,
           price: parseFloat(formData.price),
           qty: formData.qty ? parseInt(formData.qty) : null,
-          isSubscription: formData.isSubscription,
-          subscriptionInterval: formData.isSubscription ? formData.subscriptionInterval : null,
+          isSubscription: formData.recurrence !== 'one_time',
+          subscriptionInterval: formData.recurrence === 'periodically' ? formData.billingPeriod : null,
+          recurrence: formData.recurrence,
+          customSchedule: formData.recurrence === 'custom' ? formData.customSchedule : null,
         }),
         credentials: 'include',
       });
@@ -153,34 +176,110 @@ export default function NewProductPage() {
             </div>
 
             <div className="space-y-4 border-t pt-4">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isSubscription"
-                  checked={formData.isSubscription}
-                  onChange={(e) => setFormData({ ...formData, isSubscription: e.target.checked })}
-                  className="h-4 w-4"
-                />
-                <label htmlFor="isSubscription" className="text-sm font-medium">
-                  This is a subscription product
-                </label>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Recurrence Type</label>
+                <select
+                  className="w-full h-10 px-3 rounded-md border border-gray-300"
+                  value={formData.recurrence}
+                  onChange={(e) => setFormData({ ...formData, recurrence: e.target.value })}
+                >
+                  <option value="one_time">One Time</option>
+                  <option value="periodically">Periodically (Subscription)</option>
+                  <option value="custom">Custom Schedule</option>
+                </select>
               </div>
 
-              {formData.isSubscription && (
+              {formData.recurrence === 'periodically' && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Billing Frequency</label>
                   <select
                     className="w-full h-10 px-3 rounded-md border border-gray-300"
-                    value={formData.subscriptionInterval}
-                    onChange={(e) => setFormData({ ...formData, subscriptionInterval: e.target.value })}
+                    value={formData.billingPeriod}
+                    onChange={(e) => setFormData({ ...formData, billingPeriod: e.target.value })}
                   >
+                    <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
                     <option value="monthly">Monthly</option>
-                    <option value="quarterly">Quarterly</option>
+                    <option value="quarterly">Quarterly (Every 3 Months)</option>
+                    <option value="semiannual">Semi-Annual (Every 6 Months)</option>
                     <option value="yearly">Yearly</option>
                   </select>
                 </div>
               )}
+
+              {formData.recurrence === 'custom' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Payment Schedule</label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={addCustomScheduleItem}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Date
+                    </Button>
+                  </div>
+                  {formData.customSchedule.map((item, index) => (
+                    <div key={index} className="grid grid-cols-12 gap-2">
+                      <div className="col-span-5">
+                        <Input
+                          type="date"
+                          value={item.date}
+                          onChange={(e) => updateCustomScheduleItem(index, 'date', e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="col-span-5">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Amount"
+                          value={item.amount}
+                          onChange={(e) => updateCustomScheduleItem(index, 'amount', e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeCustomScheduleItem(index)}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {formData.customSchedule.length > 0 && (
+                    <div className="text-sm text-gray-500">
+                      Total:{' '}
+                      ${formData.customSchedule.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-2 border-t pt-4">
+                <label className="text-sm font-medium">Digital Content Delivery (PDF)</label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    id="digitalContent"
+                  />
+                  <label htmlFor="digitalContent" className="cursor-pointer text-sm text-gray-600">
+                    Click to upload PDF file (optional)
+                  </label>
+                  <p className="text-xs text-gray-500 mt-2">
+                    This file will be delivered to customers after purchase
+                  </p>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
