@@ -15,11 +15,12 @@ function generatePassword(length: number = 12): string {
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const currentUser = await requireAuth();
-    const memberId = parseInt(params.id);
+    const memberId = parseInt(id);
 
     // Verify member belongs to current user's team
     const member = await prisma.user.findFirst({
