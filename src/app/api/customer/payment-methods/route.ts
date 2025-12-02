@@ -66,8 +66,10 @@ export async function POST(request: Request) {
     const paymentMethod = await prisma.source.create({
       data: {
         donorId: customerId,
-        type: validatedData.type,
-        token: validatedData.token,
+        sourceType: validatedData.type,
+        organizationId: 1, // TODO: Get from organization
+        fortisWalletId: validatedData.token,
+        fortisCustomerId: '', // Set from Fortis response
         isDefault: validatedData.setAsDefault || false,
         // Additional fields would come from tokenization response
       },
