@@ -4,11 +4,12 @@ import { prisma } from '@/lib/prisma';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const currentUser = await requireAuth();
-    const transactionId = parseInt(params.id);
+    const transactionId = parseInt(id);
 
     // Verify transaction exists and belongs to user
     const transaction = await prisma.transaction.findFirst({
