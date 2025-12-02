@@ -322,7 +322,8 @@ model Transaction {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
   
-  donor                 Donor     @relation(fields: [donorId], references: [id])
+  donor                 Donor        @relation(fields: [donorId], references: [id])
+  invoice               Invoice?     @relation(fields: [invoiceId], references: [id])
   transactionFunds      TransactionFund[]
   
   @@map("epicpay_customer_transactions")
@@ -472,9 +473,10 @@ model Invoice {
   createdAt       DateTime  @default(now()) @map("created_at")
   finalizedAt     DateTime? @map("finalized_at")
   
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  donor           Donor        @relation(fields: [donorId], references: [id])
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  donor           Donor           @relation(fields: [donorId], references: [id])
   products        InvoiceProduct[]
+  transactions    Transaction[]
   
   @@map("invoices")
 }
