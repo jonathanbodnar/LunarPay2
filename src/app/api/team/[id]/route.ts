@@ -81,7 +81,7 @@ export async function DELETE(
   try {
     const { id } = await params;
     const currentUser = await requireAuth();
-    const memberId = parseInt(params.id);
+    const memberId = parseInt(id);
 
     // Verify member belongs to current user's team
     const member = await prisma.user.findFirst({
