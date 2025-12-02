@@ -6,11 +6,12 @@ import { generateInvoicePDF } from '@/lib/pdf';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const currentUser = await requireAuth();
-    const invoiceId = parseInt(params.id);
+    const invoiceId = parseInt(id);
 
     // Get invoice with all details
     const invoice = await prisma.invoice.findFirst({
