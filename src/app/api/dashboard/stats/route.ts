@@ -85,7 +85,7 @@ export async function GET() {
       // Pending invoices
       prisma.invoice.count({
         where: {
-          userId: currentUser.userId,
+          organization: { userId: currentUser.userId },
           status: { in: ['finalized', 'sent'] },
         },
       }),

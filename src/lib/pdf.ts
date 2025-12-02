@@ -152,3 +152,4 @@ export function generateInvoicePDFURL(invoice: InvoiceData): string {
   return doc.output('dataurlstring');
 }
 
+

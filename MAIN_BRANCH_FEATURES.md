@@ -132,3 +132,4 @@ Focus on Phase 2 (Critical features) to get a fully functional payment platform:
 
 This gets you to ~40% feature complete and fully functional for core business operations.
 
+
