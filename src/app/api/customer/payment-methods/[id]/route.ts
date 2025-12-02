@@ -7,9 +7,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const cookieStore = await cookies();
     const token = cookieStore.get('customer_token')?.value;
 
@@ -22,7 +23,7 @@ export async function DELETE(
 
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     const customerId = decoded.customerId;
-    const paymentMethodId = parseInt(params.id);
+    const paymentMethodId = parseInt(id);
 
     // Verify ownership
     const paymentMethod = await prisma.source.findFirst({
@@ -59,8 +60,9 @@ export async function DELETE(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('customer_token')?.value;
@@ -74,7 +76,7 @@ export async function PATCH(
 
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     const customerId = decoded.customerId;
-    const paymentMethodId = parseInt(params.id);
+    const paymentMethodId = parseInt(id);
 
     // Verify ownership
     const paymentMethod = await prisma.source.findFirst({
