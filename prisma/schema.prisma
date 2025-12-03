@@ -711,3 +711,25 @@ model Referral {
   
   @@map("referrals")
 }
+
+// ============================================
+// INTEGRATIONS
+// ============================================
+
+model Integration {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  provider  String   @db.VarChar(50) // planning_center, quickbooks, freshbooks, stripe, slack, zapier
+  status    String   @db.VarChar(20) // connected, disconnected, error
+  appId     String?  @map("app_id") @db.VarChar(255)
+  secret    String?  @db.Text
+  apiKey    String?  @map("api_key") @db.Text
+  oauthToken String? @map("oauth_token") @db.Text
+  webhookUrl String? @map("webhook_url") @db.VarChar(500)
+  metadata  String?  @db.Text // JSON for additional provider-specific data
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@unique([userId, provider], name: "userId_provider")
+  @@map("integrations")
+}
