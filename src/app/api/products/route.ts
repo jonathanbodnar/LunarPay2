@@ -46,6 +46,8 @@ export async function POST(request: Request) {
   try {
     const currentUser = await requireAuth();
     const body = await request.json();
+    
+    console.log('Creating product with data:', body);
     const validatedData = createProductSchema.parse(body);
 
     const product = await prisma.product.create({
@@ -55,15 +57,17 @@ export async function POST(request: Request) {
         name: validatedData.name,
         description: validatedData.description,
         price: validatedData.price,
-        qty: validatedData.qty,
+        qty: validatedData.qty ?? null,
         isSubscription: validatedData.isSubscription || false,
-        subscriptionInterval: validatedData.subscriptionInterval,
+        subscriptionInterval: validatedData.subscriptionInterval || null,
       },
     });
 
+    console.log('Product created successfully:', product.id);
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error('Product validation error:', error.issues);
       return NextResponse.json(
         { error: 'Validation error', details: error.issues },
         { status: 400 }
@@ -72,7 +76,7 @@ export async function POST(request: Request) {
 
     console.error('Create product error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
     );
   }

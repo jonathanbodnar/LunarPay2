@@ -74,7 +74,7 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
         onSelect({
           id: data.product.id,
           name: data.product.name,
-          price: data.product.price,
+          price: Number(data.product.price),
         });
         setShowCreateModal(false);
         setNewProduct({
@@ -85,10 +85,13 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
           subscriptionInterval: 'monthly',
         });
       } else {
-        alert('Failed to create product');
+        const errorData = await response.json();
+        console.error('Product creation failed:', errorData);
+        alert(`Failed to create product: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
-      alert('Error creating product');
+      console.error('Product creation error:', error);
+      alert(`Error creating product: ${error}`);
     } finally {
       setLoading(false);
     }
