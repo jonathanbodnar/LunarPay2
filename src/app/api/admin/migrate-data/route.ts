@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     }
 
     // Extract and import donors (customers)
-    const donorMatch = sqlDump.match(/INSERT INTO `account_donor` VALUES (.+?);/s);
+    const donorMatch = sqlDump.match(/INSERT INTO `account_donor` VALUES ([\s\S]+?);/);
     if (donorMatch) {
       const donorData = donorMatch[1];
       const donorRecords = donorData.split(/\),\(/);
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
                   address: null,
                   city: null,
                   state: null,
-                  postalCode: null,
+                  zip: null,
                   country: 'US',
                 },
               });
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
     }
 
     // Extract and import invoices
-    const invoiceMatch = sqlDump.match(/INSERT INTO `invoices` VALUES (.+?);/s);
+    const invoiceMatch = sqlDump.match(/INSERT INTO `invoices` VALUES ([\s\S]+?);/);
     if (invoiceMatch) {
       console.log('Importing invoices...');
       // This is very complex - would need careful field mapping
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
     }
 
     // Extract and import transactions
-    const transMatch = sqlDump.match(/INSERT INTO `epicpay_customer_transactions` VALUES (.+?);/s);
+    const transMatch = sqlDump.match(/INSERT INTO `epicpay_customer_transactions` VALUES ([\s\S]+?);/);
     if (transMatch) {
       console.log('Importing transactions...');
       // This is very complex - would need careful field mapping
