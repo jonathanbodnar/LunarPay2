@@ -22,11 +22,77 @@ export async function POST(request: Request) {
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: validatedData.email },
+      include: {
+        organizations: true,
+      },
     });
 
     if (existingUser) {
+      // If user exists but has no organization (partial registration), complete it
+      if (existingUser.organizations.length === 0) {
+        console.log('Completing partial registration for user:', existingUser.id);
+        
+        const result = await prisma.$transaction(async (tx) => {
+          // Create initial organization
+          const orgToken = generateRandomToken(32);
+          const organization = await tx.organization.create({
+            data: {
+              userId: existingUser.id,
+              name: 'My Organization',
+              token: orgToken,
+            },
+          });
+
+          // Create chat settings
+          await tx.chatSetting.create({
+            data: {
+              userId: existingUser.id,
+              organizationId: organization.id,
+              primaryColor: '#007bff',
+              themeColor: '#007bff',
+            },
+          });
+
+          // Create Fortis onboarding
+          await tx.fortisOnboarding.create({
+            data: {
+              userId: existingUser.id,
+              organizationId: organization.id,
+              appStatus: 'PENDING',
+            },
+          });
+
+          return organization;
+        });
+
+        const token = generateToken({
+          userId: existingUser.id,
+          email: existingUser.email,
+        });
+
+        await setAuthCookie(token);
+
+        return NextResponse.json(
+          {
+            user: {
+              id: existingUser.id,
+              email: existingUser.email,
+              firstName: existingUser.firstName,
+              lastName: existingUser.lastName,
+            },
+            organization: {
+              id: result.id,
+              name: result.name,
+              token: result.token,
+            },
+            token,
+          },
+          { status: 201 }
+        );
+      }
+      
       return NextResponse.json(
-        { error: 'User with this email already exists' },
+        { error: 'User with this email already exists. Try logging in or use password reset.' },
         { status: 400 }
       );
     }
@@ -34,73 +100,78 @@ export async function POST(request: Request) {
     // Hash password
     const hashedPassword = await hashPassword(validatedData.password);
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email: validatedData.email,
-        password: hashedPassword,
-        firstName: validatedData.firstName,
-        lastName: validatedData.lastName,
-        phone: validatedData.phone,
-        paymentProcessor: validatedData.paymentProcessor,
-        active: true,
-        starterStep: 1,
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        paymentProcessor: true,
-        starterStep: true,
-      },
+    // Use a transaction to ensure all-or-nothing registration
+    const result = await prisma.$transaction(async (tx) => {
+      // Create user
+      const user = await tx.user.create({
+        data: {
+          email: validatedData.email,
+          password: hashedPassword,
+          firstName: validatedData.firstName,
+          lastName: validatedData.lastName,
+          phone: validatedData.phone,
+          paymentProcessor: validatedData.paymentProcessor,
+          active: true,
+          starterStep: 1,
+        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          paymentProcessor: true,
+          starterStep: true,
+        },
+      });
+
+      // Create initial organization for user
+      const orgToken = generateRandomToken(32);
+      const organization = await tx.organization.create({
+        data: {
+          userId: user.id,
+          name: 'My Organization',
+          token: orgToken,
+        },
+      });
+
+      // Create chat settings for organization
+      await tx.chatSetting.create({
+        data: {
+          userId: user.id,
+          organizationId: organization.id,
+          primaryColor: '#007bff',
+          themeColor: '#007bff',
+        },
+      });
+
+      // Create Fortis onboarding record
+      await tx.fortisOnboarding.create({
+        data: {
+          userId: user.id,
+          organizationId: organization.id,
+          appStatus: 'PENDING',
+        },
+      });
+
+      return { user, organization };
     });
 
     // Generate JWT token
     const token = generateToken({
-      userId: user.id,
-      email: user.email,
+      userId: result.user.id,
+      email: result.user.email,
     });
 
     // Set cookie
     await setAuthCookie(token);
 
-    // Create initial organization for user
-    const orgToken = generateRandomToken(32);
-    const organization = await prisma.organization.create({
-      data: {
-        userId: user.id,
-        name: 'My Organization',
-        token: orgToken,
-      },
-    });
-
-    // Create chat settings for organization
-    await prisma.chatSetting.create({
-      data: {
-        userId: user.id,
-        organizationId: organization.id,
-        primaryColor: '#007bff',
-        themeColor: '#007bff',
-      },
-    });
-
-    // Create Fortis onboarding record
-    await prisma.fortisOnboarding.create({
-      data: {
-        userId: user.id,
-        organizationId: organization.id,
-        appStatus: 'PENDING',
-      },
-    });
-
     return NextResponse.json(
       {
-        user,
+        user: result.user,
         organization: {
-          id: organization.id,
-          name: organization.name,
-          token: organization.token,
+          id: result.organization.id,
+          name: result.organization.name,
+          token: result.organization.token,
         },
         token,
       },
