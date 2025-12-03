@@ -15,7 +15,7 @@ export async function POST() {
       },
     });
 
-    if (!connection || !connection.accessToken) {
+    if (!connection || !connection.oauthToken) {
       return NextResponse.json(
         { error: 'Stripe not connected' },
         { status: 400 }
@@ -33,7 +33,7 @@ export async function POST() {
     try {
       const customersResponse = await fetch('https://api.stripe.com/v1/customers?limit=100', {
         headers: {
-          'Authorization': `Bearer ${connection.accessToken}`,
+          'Authorization': `Bearer ${connection.oauthToken}`,
         },
       });
 
@@ -91,7 +91,7 @@ export async function POST() {
     try {
       const productsResponse = await fetch('https://api.stripe.com/v1/products?limit=100', {
         headers: {
-          'Authorization': `Bearer ${connection.accessToken}`,
+          'Authorization': `Bearer ${connection.oauthToken}`,
         },
       });
 
@@ -119,7 +119,7 @@ export async function POST() {
                 `https://api.stripe.com/v1/prices?product=${stripeProduct.id}&limit=1`,
                 {
                   headers: {
-                    'Authorization': `Bearer ${connection.accessToken}`,
+                    'Authorization': `Bearer ${connection.oauthToken}`,
                   },
                 }
               );
