@@ -140,7 +140,7 @@ export async function GET() {
       
       // Payment method breakdown
       prisma.transaction.groupBy({
-        by: ['paymentMethod'],
+        by: ['source'],
         where: {
           userId: currentUser.userId,
           status: 'P',
