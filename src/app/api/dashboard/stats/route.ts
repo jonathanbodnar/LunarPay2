@@ -150,23 +150,23 @@ export async function GET() {
       }),
     ]);
 
-    // Calculate net amounts
-    const totalNet = (totalRevenue._sum.totalAmount || 0) - (totalRevenue._sum.fee || 0);
-    const monthlyNet = (monthlyRevenue._sum.totalAmount || 0) - (monthlyRevenue._sum.fee || 0);
-    const yearlyNet = (yearlyRevenue._sum.totalAmount || 0) - (yearlyRevenue._sum.fee || 0);
+    // Calculate net amounts (convert Decimal to Number)
+    const totalNet = Number(totalRevenue._sum.totalAmount || 0) - Number(totalRevenue._sum.fee || 0);
+    const monthlyNet = Number(monthlyRevenue._sum.totalAmount || 0) - Number(monthlyRevenue._sum.fee || 0);
+    const yearlyNet = Number(yearlyRevenue._sum.totalAmount || 0) - Number(yearlyRevenue._sum.fee || 0);
 
     return NextResponse.json({
       stats: {
         revenue: {
-          total: totalRevenue._sum.totalAmount || 0,
-          monthly: monthlyRevenue._sum.totalAmount || 0,
-          yearly: yearlyRevenue._sum.totalAmount || 0,
-          last30Days: last30DaysRevenue._sum.totalAmount || 0,
+          total: Number(totalRevenue._sum.totalAmount || 0),
+          monthly: Number(monthlyRevenue._sum.totalAmount || 0),
+          yearly: Number(yearlyRevenue._sum.totalAmount || 0),
+          last30Days: Number(last30DaysRevenue._sum.totalAmount || 0),
         },
         fees: {
-          total: totalRevenue._sum.fee || 0,
-          monthly: monthlyRevenue._sum.fee || 0,
-          yearly: yearlyRevenue._sum.fee || 0,
+          total: Number(totalRevenue._sum.fee || 0),
+          monthly: Number(monthlyRevenue._sum.fee || 0),
+          yearly: Number(yearlyRevenue._sum.fee || 0),
         },
         net: {
           total: totalNet,
