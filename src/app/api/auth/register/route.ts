@@ -108,6 +108,7 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error('Registration validation error:', error.issues);
       return NextResponse.json(
         { error: 'Validation error', details: error.issues },
         { status: 400 }
@@ -115,8 +116,10 @@ export async function POST(request: Request) {
     }
 
     console.error('Registration error:', error);
+    console.error('Error details:', (error as Error).message);
+    console.error('Error stack:', (error as Error).stack);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
     );
   }

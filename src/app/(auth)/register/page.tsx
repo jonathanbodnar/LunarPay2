@@ -53,7 +53,9 @@ export default function RegisterPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Registration failed');
+        console.error('Registration failed:', data);
+        const errorMsg = data.message || data.error || 'Registration failed';
+        setError(errorMsg);
         setLoading(false);
         return;
       }
@@ -66,7 +68,8 @@ export default function RegisterPage() {
       // Redirect to getting started
       router.push('/getting-started');
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      console.error('Registration error:', err);
+      setError(`An error occurred: ${(err as Error).message || 'Please try again.'}`);
       setLoading(false);
     }
   };
