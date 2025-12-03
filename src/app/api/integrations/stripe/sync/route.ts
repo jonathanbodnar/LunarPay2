@@ -146,7 +146,7 @@ export async function POST() {
                   price,
                   isSubscription,
                   subscriptionInterval: interval,
-                  stripeProductId: stripeProduct.id,
+                  stripeId: stripeProduct.id,
                 },
               });
               summary.productsImported++;
