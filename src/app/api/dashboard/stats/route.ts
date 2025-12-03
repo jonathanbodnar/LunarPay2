@@ -151,17 +151,17 @@ export async function GET() {
     ]);
 
     // Calculate net amounts
-    const totalNet = (totalRevenue._sum.amount || 0) - (totalRevenue._sum.fee || 0);
-    const monthlyNet = (monthlyRevenue._sum.amount || 0) - (monthlyRevenue._sum.fee || 0);
-    const yearlyNet = (yearlyRevenue._sum.amount || 0) - (yearlyRevenue._sum.fee || 0);
+    const totalNet = (totalRevenue._sum.totalAmount || 0) - (totalRevenue._sum.fee || 0);
+    const monthlyNet = (monthlyRevenue._sum.totalAmount || 0) - (monthlyRevenue._sum.fee || 0);
+    const yearlyNet = (yearlyRevenue._sum.totalAmount || 0) - (yearlyRevenue._sum.fee || 0);
 
     return NextResponse.json({
       stats: {
         revenue: {
-          total: totalRevenue._sum.amount || 0,
-          monthly: monthlyRevenue._sum.amount || 0,
-          yearly: yearlyRevenue._sum.amount || 0,
-          last30Days: last30DaysRevenue._sum.amount || 0,
+          total: totalRevenue._sum.totalAmount || 0,
+          monthly: monthlyRevenue._sum.totalAmount || 0,
+          yearly: yearlyRevenue._sum.totalAmount || 0,
+          last30Days: last30DaysRevenue._sum.totalAmount || 0,
         },
         fees: {
           total: totalRevenue._sum.fee || 0,
