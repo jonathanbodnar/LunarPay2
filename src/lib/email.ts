@@ -233,4 +233,110 @@ export function generateReceiptEmailHTML(transaction: any): string {
   `;
 }
 
+export async function sendPasswordResetEmail(to: string, resetUrl: string, userName: string) {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .header {
+      background: linear-gradient(135deg, #5469d4 0%, #4355c9 100%);
+      color: white;
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .button {
+      display: inline-block;
+      padding: 14px 32px;
+      background: #5469d4;
+      color: white !important;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      margin: 20px 0;
+      text-align: center;
+    }
+    .footer {
+      text-align: center;
+      padding: 30px;
+      color: #666;
+      font-size: 0.9em;
+      background: #f8f9fa;
+    }
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 28px;">🔐 Password Reset Request</h1>
+    </div>
+    
+    <div class="content">
+      <p>Hi ${userName},</p>
+      
+      <p>We received a request to reset your password for your LunarPay account. Click the button below to set a new password:</p>
+      
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${resetUrl}" class="button">
+          Reset Your Password
+        </a>
+      </div>
+      
+      <div class="warning">
+        <strong>⏱️ This link expires in 1 hour</strong>
+      </div>
+      
+      <p>If you didn't request this password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+      
+      <p style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e1e1e1; color: #666; font-size: 0.9em;">
+        If the button doesn't work, copy and paste this link into your browser:<br>
+        <a href="${resetUrl}" style="color: #5469d4; word-break: break-all;">${resetUrl}</a>
+      </p>
+    </div>
+    
+    <div class="footer">
+      <p><strong>LunarPay</strong></p>
+      <p>Secure payment processing made simple</p>
+      <p style="margin-top: 15px; color: #999; font-size: 0.85em;">
+        This is an automated email. Please do not reply.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  return sendEmail({
+    to,
+    subject: 'Reset Your LunarPay Password',
+    html,
+  });
+}
+
 

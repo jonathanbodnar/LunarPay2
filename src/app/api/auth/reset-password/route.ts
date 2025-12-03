@@ -16,21 +16,47 @@ export async function POST(request: Request) {
 
     console.log('Password reset attempt with token');
 
-    // Verify token with Supabase
-    const { data: { user: supabaseUser }, error: verifyError } = await supabaseAdmin.auth.getUser(token);
+    // Find all users and check their reset tokens (stored in permissions field)
+    const users = await prisma.user.findMany({
+      where: {
+        permissions: {
+          contains: token,
+        },
+      },
+    });
 
-    if (verifyError || !supabaseUser) {
-      console.error('Invalid or expired token:', verifyError);
+    if (users.length === 0) {
+      console.error('No user found with this reset token');
       return NextResponse.json(
         { error: 'Invalid or expired reset token. Please request a new password reset.' },
         { status: 400 }
       );
     }
 
-    // Find user in our database
-    const user = await prisma.user.findUnique({
-      where: { email: supabaseUser.email! },
-    });
+    const user = users[0];
+
+    // Verify token hasn't expired
+    try {
+      const permData = JSON.parse(user.permissions || '{}');
+      if (permData.resetToken !== token) {
+        throw new Error('Token mismatch');
+      }
+      
+      const expiry = new Date(permData.resetTokenExpiry);
+      if (expiry < new Date()) {
+        console.error('Reset token expired');
+        return NextResponse.json(
+          { error: 'Reset token has expired. Please request a new password reset.' },
+          { status: 400 }
+        );
+      }
+    } catch (parseError) {
+      console.error('Invalid token format');
+      return NextResponse.json(
+        { error: 'Invalid reset token format.' },
+        { status: 400 }
+      );
+    }
 
     if (!user) {
       return NextResponse.json(
@@ -42,11 +68,12 @@ export async function POST(request: Request) {
     // Hash new password
     const hashedPassword = await hashPassword(password);
 
-    // Update user password
+    // Update user password and clear reset token
     await prisma.user.update({
       where: { id: user.id },
       data: {
         password: hashedPassword,
+        permissions: null, // Clear the reset token
       },
     });
 

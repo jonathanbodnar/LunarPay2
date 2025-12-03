@@ -29,38 +29,32 @@ export async function POST(request: Request) {
       });
     }
 
-    // Generate a secure reset token
+    // Generate a secure reset token and store it
     const resetToken = crypto.randomUUID();
     const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
 
-    // Store reset token in database (we'll need to add these fields to User model)
+    // Store reset token in user record
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        // Note: We'll store in apiKey temporarily since we don't have resetToken fields yet
-        // In production, you'd want dedicated resetToken and resetTokenExpiry fields
+        // Store in permissions field temporarily (JSON format)
+        permissions: JSON.stringify({
+          resetToken,
+          resetTokenExpiry: resetTokenExpiry.toISOString(),
+        }),
       },
     });
 
-    // Send reset email via Supabase
-    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+    // Send reset email using nodemailer (more reliable than Supabase for password reset)
+    const { sendPasswordResetEmail } = await import('@/lib/email');
+    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://lunarpay2-production.up.railway.app'}/reset-password?token=${resetToken}`;
     
     try {
-      // Use Supabase to send email
-      const { error: emailError } = await supabaseAdmin.auth.admin.generateLink({
-        type: 'recovery',
-        email: user.email,
-        options: {
-          redirectTo: resetUrl,
-        },
-      });
-
-      if (emailError) {
-        console.error('Supabase email error:', emailError);
-        // Fall back to custom email implementation if needed
-      }
+      await sendPasswordResetEmail(user.email, resetUrl, user.firstName || 'User');
+      console.log('Password reset email sent successfully to:', user.email);
     } catch (emailErr) {
       console.error('Email sending error:', emailErr);
+      // Don't fail the request - still return success for security
     }
 
     return NextResponse.json({
