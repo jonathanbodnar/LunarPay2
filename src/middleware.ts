@@ -11,7 +11,9 @@ const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-passwor
 // Routes that are public APIs (invoices, payment links by hash)
 const publicApiRoutes = [
   '/api/auth/login',
-  '/api/auth/register', 
+  '/api/auth/register',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
   '/api/auth/logout',
   '/api/invoices/public',
   '/api/payment-links/public',
