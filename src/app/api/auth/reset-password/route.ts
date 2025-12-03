@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
-import { supabaseAdmin } from '@/lib/supabase/server';
 import { z } from 'zod';
 
 const resetPasswordSchema = z.object({
