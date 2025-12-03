@@ -111,14 +111,14 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> 
   }
   
   doc.setFontSize(12);
-  doc.setFont(undefined, 'bold');
+  doc.setFont('helvetica', 'bold');
   const totalY = invoice.fee > 0 ? finalY + 12 : finalY + 6;
   doc.text('Total:', totalsX, totalY);
   doc.text(`$${(invoice.totalAmount + invoice.fee).toFixed(2)}`, 180, totalY, { align: 'right' });
   
   // Add memo if present
   if (invoice.memo) {
-    doc.setFont(undefined, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.text('Notes:', 20, totalY + 15);
     const memoLines = doc.splitTextToSize(invoice.memo, 170);

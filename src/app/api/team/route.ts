@@ -41,10 +41,10 @@ export async function GET() {
         email: true,
         role: true,
         permissions: true,
-        createdAt: true,
+        createdOn: true,
         lastLogin: true,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdOn: 'desc' },
     });
 
     return NextResponse.json({ members });

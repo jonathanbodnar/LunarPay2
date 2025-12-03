@@ -71,8 +71,8 @@ export async function POST(request: Request) {
     const tableData = transactions.map(t => [
       new Date(t.createdAt).toLocaleDateString(),
       t.invoice?.reference || `#${t.id}`,
-      t.paymentMethod === 'card' ? 'Card' : 'ACH',
-      `$${t.amount.toFixed(2)}`,
+      t.source === 'CC' ? 'Card' : 'ACH',
+      `$${Number(t.totalAmount).toFixed(2)}`,
       t.status,
     ]);
 
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
 
     // Summary
     const finalY = (doc as any).lastAutoTable.finalY + 10;
-    const totalAmount = transactions.reduce((sum, t) => sum + (t.status === 'succeeded' ? t.amount : 0), 0);
+    const totalAmount = transactions.reduce((sum, t) => sum + (t.status === 'P' ? Number(t.totalAmount) : 0), 0);
 
     doc.setFontSize(12);
     doc.text(`Total Transactions: ${transactions.length}`, 20, finalY);

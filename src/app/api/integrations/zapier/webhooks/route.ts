@@ -72,38 +72,39 @@ export async function sendWebhookNotification(
   data: any
 ) {
   try {
-    // Get all webhook URLs for this user
-    const webhooks = await prisma.webhook.findMany({
-      where: {
-        userId,
-        active: true,
-        events: {
-          contains: eventType,
-        },
-      },
-    });
+    // TODO: Implement webhook model and notifications
+    console.log('Webhook notification:', eventType, 'for user', userId);
+    // const webhooks = await prisma.webhook.findMany({
+    //   where: {
+    //     userId,
+    //     active: true,
+    //     events: {
+    //       contains: eventType,
+    //     },
+    //   },
+    // });
 
-    const payload = {
-      event: eventType,
-      timestamp: new Date().toISOString(),
-      data,
-    };
+    // const payload = {
+    //   event: eventType,
+    //   timestamp: new Date().toISOString(),
+    //   data,
+    // };
 
-    // Send to all configured webhooks
-    await Promise.all(
-      webhooks.map(webhook =>
-        fetch(webhook.url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Webhook-Signature': 'TODO: Add signature',
-          },
-          body: JSON.stringify(payload),
-        }).catch(error => {
-          console.error(`Webhook error for ${webhook.url}:`, error);
-        })
-      )
-    );
+    // // Send to all configured webhooks
+    // await Promise.all(
+    //   webhooks.map(webhook =>
+    //     fetch(webhook.url, {
+    //       method: 'POST',
+    //       headers: {
+    //         'Content-Type': 'application/json',
+    //         'X-Webhook-Signature': 'TODO: Add signature',
+    //       },
+    //       body: JSON.stringify(payload),
+    //     }).catch(error => {
+    //       console.error(`Webhook error for ${webhook.url}:`, error);
+    //     })
+    //   )
+    // );
   } catch (error) {
     console.error('Send webhook notification error:', error);
   }

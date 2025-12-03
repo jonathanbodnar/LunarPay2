@@ -49,17 +49,17 @@ export async function POST(
       },
     });
 
-    // Create a refund record
-    await prisma.refund.create({
-      data: {
-        transactionId: transaction.id,
-        amount: transaction.amount,
-        fee: transaction.fee,
-        status: 'succeeded',
-        reason: 'Requested by merchant',
-        processedBy: currentUser.userId,
-      },
-    });
+    // TODO: Create a refund record in refund tracking table
+    // await prisma.refund.create({
+    //   data: {
+    //     transactionId: transaction.id,
+    //     amount: Number(transaction.totalAmount),
+    //     fee: Number(transaction.fee),
+    //     status: 'succeeded',
+    //     reason: 'Requested by merchant',
+    //     processedBy: currentUser.userId,
+    //   },
+    // });
 
     return NextResponse.json({
       success: true,

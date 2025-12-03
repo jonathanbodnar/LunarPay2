@@ -16,7 +16,7 @@ export async function GET() {
   try {
     const currentUser = await requireAuth();
 
-    const suborganizations = await prisma.suborganization.findMany({
+    const suborganizations = await prisma.subOrganization.findMany({
       where: {
         organization: {
           userId: currentUser.userId,
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       .replace(/[^\w-]+/g, '');
 
     // Create suborganization
-    const suborganization = await prisma.suborganization.create({
+    const suborganization = await prisma.subOrganization.create({
       data: {
         organizationId: validatedData.organizationId,
         name: validatedData.name,

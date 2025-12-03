@@ -29,6 +29,12 @@ model User {
   lastLogin             DateTime? @map("last_login")
   starterStep           Int?      @default(1) @map("starter_step")
   
+  // API & Team management
+  apiKey                String?   @unique @map("api_key") @db.VarChar(255)
+  role                  String?   @db.VarChar(50) // admin, member, viewer
+  parentId              Int?      @map("parent_id") // For team hierarchy
+  permissions           String?   @db.Text // JSON array of permissions
+  
   // OAuth tokens
   stripeOauth           String?   @map("stripe_oauth") @db.Text
   quickbooksOauth       String?   @map("quickbooks_oauth") @db.Text
@@ -94,6 +100,7 @@ model Organization {
   products              Product[]
   chatSettings          ChatSetting[]
   subscriptions         Subscription[]
+  transactions          Transaction[]
   fortisOnboarding      FortisOnboarding?
   
   @@map("church_detail")
@@ -322,9 +329,11 @@ model Transaction {
   date                  DateTime  @default(now())
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
+  refundedAt            DateTime? @map("refunded_at")
   
   donor                 Donor        @relation(fields: [donorId], references: [id])
   invoice               Invoice?     @relation(fields: [invoiceId], references: [id])
+  organization          Organization @relation(fields: [organizationId], references: [id])
   transactionFunds      TransactionFund[]
   
   @@map("epicpay_customer_transactions")
@@ -474,6 +483,7 @@ model Invoice {
   
   createdAt       DateTime  @default(now()) @map("created_at")
   finalizedAt     DateTime? @map("finalized_at")
+  sentAt          DateTime? @map("sent_at")
   
   organization    Organization    @relation(fields: [organizationId], references: [id])
   donor           Donor           @relation(fields: [donorId], references: [id])
@@ -717,18 +727,19 @@ model Referral {
 // ============================================
 
 model Integration {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  provider  String   @db.VarChar(50) // planning_center, quickbooks, freshbooks, stripe, slack, zapier
-  status    String   @db.VarChar(20) // connected, disconnected, error
-  appId     String?  @map("app_id") @db.VarChar(255)
-  secret    String?  @db.Text
-  apiKey    String?  @map("api_key") @db.Text
-  oauthToken String? @map("oauth_token") @db.Text
-  webhookUrl String? @map("webhook_url") @db.VarChar(500)
-  metadata  String?  @db.Text // JSON for additional provider-specific data
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  provider  String    @db.VarChar(50) // planning_center, quickbooks, freshbooks, stripe, slack, zapier
+  status    String    @db.VarChar(20) // connected, disconnected, error
+  appId     String?   @map("app_id") @db.VarChar(255)
+  secret    String?   @db.Text
+  apiKey    String?   @map("api_key") @db.Text
+  oauthToken String?  @map("oauth_token") @db.Text
+  webhookUrl String?  @map("webhook_url") @db.VarChar(500)
+  metadata  String?   @db.Text // JSON for additional provider-specific data
+  lastSync  DateTime? @map("last_sync")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
   
   @@unique([userId, provider], name: "userId_provider")
   @@map("integrations")
