@@ -18,6 +18,7 @@ const publicApiRoutes = [
   '/api/admin/set-password', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/migrate-data', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/sync-database', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/test-db', // TEMPORARY - DELETE AFTER USE!
   '/api/invoices/public',
   '/api/payment-links/public',
   '/api/fortis/webhooks',
