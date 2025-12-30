@@ -44,7 +44,11 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
       const response = await fetch('/api/products');
       if (response.ok) {
         const data = await response.json();
-        setProducts(data.products.filter((p: Product) => p.id !== 0) || []);
+        const productsList = (data.products || []).filter((p: any) => p.id !== 0).map((p: any) => ({
+          ...p,
+          price: Number(p.price), // Convert Decimal to number
+        }));
+        setProducts(productsList);
       }
     } catch (error) {
       console.error('Failed to fetch products:', error);
@@ -122,7 +126,7 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
                 onSelect({
                   id: product.id,
                   name: product.name,
-                  price: product.price,
+                  price: Number(product.price),
                 });
               }
             }}
@@ -130,7 +134,7 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
             <option value="">Select product...</option>
             {filteredProducts.map(product => (
               <option key={product.id} value={product.id}>
-                {product.name} (${product.price.toFixed(2)})
+                {product.name} (${Number(product.price).toFixed(2)})
                 {product.isSubscription && ` - ${product.subscriptionInterval}`}
               </option>
             ))}
