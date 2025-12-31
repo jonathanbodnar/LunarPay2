@@ -25,6 +25,10 @@ interface PaymentLink {
       name: string;
       description: string | null;
       price: number;
+      isSubscription: boolean;
+      subscriptionInterval: string | null;
+      subscriptionIntervalCount: number | null;
+      subscriptionTrialDays: number | null;
     };
     qty: number | null;
     unlimitedQty: boolean;
@@ -32,6 +36,23 @@ interface PaymentLink {
     unlimited: boolean;
   }>;
 }
+
+// Helper to format subscription frequency
+const formatFrequency = (interval: string | null, count: number | null): string => {
+  if (!interval) return '';
+  const intervalMap: Record<string, string> = {
+    'daily': 'daily',
+    'weekly': 'weekly',
+    'monthly': 'monthly',
+    'quarterly': 'quarterly',
+    'yearly': 'yearly',
+    'annual': 'annually',
+  };
+  if (count && count > 1) {
+    return `every ${count} ${interval}s`;
+  }
+  return intervalMap[interval.toLowerCase()] || interval;
+};
 
 export default function PaymentLinkPage() {
   const params = useParams();
@@ -157,6 +178,10 @@ export default function PaymentLinkPage() {
   const total = calculateTotal();
   const hasItems = Object.values(cart).some(qty => qty > 0);
   const selectedProducts = paymentLink.products.filter(item => cart[item.id] > 0);
+  
+  // Check if any selected product is a subscription
+  const hasSubscription = selectedProducts.some(item => item.product.isSubscription);
+  const subscriptionProduct = selectedProducts.find(item => item.product.isSubscription);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor }}>
@@ -192,8 +217,18 @@ export default function PaymentLinkPage() {
             <div>
               <p className="text-5xl font-light text-gray-900">
                 {formatCurrency(total)}
+                {hasSubscription && subscriptionProduct && (
+                  <span className="text-xl text-gray-500 ml-2">
+                    {formatFrequency(subscriptionProduct.product.subscriptionInterval, subscriptionProduct.product.subscriptionIntervalCount)}
+                  </span>
+                )}
               </p>
-              <p className="text-gray-500 mt-1">Due today</p>
+              <p className="text-gray-500 mt-1">
+                {hasSubscription && subscriptionProduct?.product.subscriptionTrialDays 
+                  ? `${subscriptionProduct.product.subscriptionTrialDays} day trial, then billed ${formatFrequency(subscriptionProduct.product.subscriptionInterval, subscriptionProduct.product.subscriptionIntervalCount)}`
+                  : 'Due today'
+                }
+              </p>
             </div>
 
             {/* Divider */}
@@ -209,10 +244,22 @@ export default function PaymentLinkPage() {
                     {paymentLink.products[0].product.description && (
                       <p className="text-sm text-gray-500">{paymentLink.products[0].product.description}</p>
                     )}
+                    {paymentLink.products[0].product.isSubscription && paymentLink.products[0].product.subscriptionTrialDays && (
+                      <p className="text-sm text-gray-500">
+                        ({paymentLink.products[0].product.subscriptionTrialDays} days trial)
+                      </p>
+                    )}
                   </div>
-                  <p className="font-medium text-gray-900">
-                    {formatCurrency(Number(paymentLink.products[0].product.price))}
-                  </p>
+                  <div className="text-right">
+                    <p className="font-medium text-gray-900">
+                      {formatCurrency(Number(paymentLink.products[0].product.price))}
+                      {paymentLink.products[0].product.isSubscription && (
+                        <span className="text-gray-500 font-normal">
+                          {' '}{formatFrequency(paymentLink.products[0].product.subscriptionInterval, paymentLink.products[0].product.subscriptionIntervalCount)}
+                        </span>
+                      )}
+                    </p>
+                  </div>
                 </div>
                 <hr className="border-gray-100 mt-4" />
               </div>
@@ -232,10 +279,22 @@ export default function PaymentLinkPage() {
                           {item.product.description && (
                             <p className="text-sm text-gray-500">{item.product.description}</p>
                           )}
+                          {item.product.isSubscription && item.product.subscriptionTrialDays && (
+                            <p className="text-sm text-gray-500">
+                              ({item.product.subscriptionTrialDays} days trial)
+                            </p>
+                          )}
                         </div>
-                        <p className="font-medium" style={{ color: primaryColor }}>
-                          {formatCurrency(Number(item.product.price))}
-                        </p>
+                        <div className="text-right">
+                          <p className="font-medium" style={{ color: primaryColor }}>
+                            {formatCurrency(Number(item.product.price))}
+                          </p>
+                          {item.product.isSubscription && (
+                            <p className="text-xs text-gray-500">
+                              {formatFrequency(item.product.subscriptionInterval, item.product.subscriptionIntervalCount)}
+                            </p>
+                          )}
+                        </div>
                       </div>
                       
                       {isAvailable ? (
@@ -426,12 +485,19 @@ export default function PaymentLinkPage() {
                 className="w-full py-4 rounded-lg font-medium text-lg transition-opacity hover:opacity-90 disabled:opacity-50"
                 style={{ backgroundColor: primaryColor, color: buttonTextColor }}
               >
-                {processing ? 'Processing...' : hasItems ? `Pay ${formatCurrency(total)}` : 'Select items to continue'}
+                {processing 
+                  ? 'Processing...' 
+                  : !hasItems 
+                    ? 'Select items to continue'
+                    : hasSubscription 
+                      ? 'Subscribe' 
+                      : `Pay ${formatCurrency(total)}`
+                }
               </button>
 
               {/* Terms */}
               <p className="text-xs text-gray-500 text-center leading-relaxed">
-                By clicking on "Pay", you agree to allow {paymentLink.organization.name} to charge your card for this payment and future payments according to the payment frequency listed.
+                By clicking on "{hasSubscription ? 'Subscribe' : 'Pay'}", you agree to allow {paymentLink.organization.name} to charge your card for this payment{hasSubscription ? ' and future payments according to the payment frequency listed' : ''}.
               </p>
 
               {/* Security */}

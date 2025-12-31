@@ -41,6 +41,16 @@ export async function GET(
         },
         products: {
           orderBy: { id: 'asc' },
+          include: {
+            product: {
+              select: {
+                isSubscription: true,
+                subscriptionInterval: true,
+                subscriptionIntervalCount: true,
+                subscriptionTrialDays: true,
+              },
+            },
+          },
         },
       },
     });

@@ -35,8 +35,31 @@ interface Invoice {
     qty: number;
     price: number;
     subtotal: number;
+    product?: {
+      isSubscription: boolean;
+      subscriptionInterval: string | null;
+      subscriptionIntervalCount: number | null;
+      subscriptionTrialDays: number | null;
+    } | null;
   }>;
 }
+
+// Helper to format subscription frequency
+const formatFrequency = (interval: string | null, count: number | null): string => {
+  if (!interval) return '';
+  const intervalMap: Record<string, string> = {
+    'daily': 'daily',
+    'weekly': 'weekly',
+    'monthly': 'monthly',
+    'quarterly': 'quarterly',
+    'yearly': 'yearly',
+    'annual': 'annually',
+  };
+  if (count && count > 1) {
+    return `every ${count} ${interval}s`;
+  }
+  return intervalMap[interval.toLowerCase()] || interval;
+};
 
 export default function PublicInvoicePage() {
   const params = useParams();
@@ -143,6 +166,10 @@ export default function PublicInvoicePage() {
 
   const isPaid = invoice.status === 'paid';
   const amountDue = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+  
+  // Check if any product is a subscription
+  const hasSubscription = invoice.products.some(p => p.product?.isSubscription);
+  const subscriptionProduct = invoice.products.find(p => p.product?.isSubscription);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor }}>
@@ -178,9 +205,19 @@ export default function PublicInvoicePage() {
             <div>
               <p className="text-5xl font-light text-gray-900">
                 {formatCurrency(amountDue)}
+                {hasSubscription && subscriptionProduct?.product && (
+                  <span className="text-xl text-gray-500 ml-2">
+                    {formatFrequency(subscriptionProduct.product.subscriptionInterval, subscriptionProduct.product.subscriptionIntervalCount)}
+                  </span>
+                )}
               </p>
               <p className="text-gray-500 mt-1">
-                {invoice.dueDate ? `Due ${formatDate(invoice.dueDate)}` : 'Due today'}
+                {hasSubscription && subscriptionProduct?.product?.subscriptionTrialDays 
+                  ? `${subscriptionProduct.product.subscriptionTrialDays} day trial`
+                  : invoice.dueDate 
+                    ? `Due ${formatDate(invoice.dueDate)}` 
+                    : 'Due today'
+                }
               </p>
             </div>
 
@@ -196,10 +233,20 @@ export default function PublicInvoicePage() {
                     {product.qty > 1 && (
                       <p className="text-sm text-gray-500">Qty: {product.qty} × {formatCurrency(Number(product.price))}</p>
                     )}
+                    {product.product?.isSubscription && product.product.subscriptionTrialDays && (
+                      <p className="text-sm text-gray-500">({product.product.subscriptionTrialDays} days trial)</p>
+                    )}
                   </div>
-                  <p className="font-medium text-gray-900">
-                    {formatCurrency(Number(product.subtotal))}
-                  </p>
+                  <div className="text-right">
+                    <p className="font-medium text-gray-900">
+                      {formatCurrency(Number(product.subtotal))}
+                    </p>
+                    {product.product?.isSubscription && (
+                      <p className="text-xs text-gray-500">
+                        {formatFrequency(product.product.subscriptionInterval, product.product.subscriptionIntervalCount)}
+                      </p>
+                    )}
+                  </div>
                 </div>
               ))}
               
@@ -394,12 +441,17 @@ export default function PublicInvoicePage() {
                   className="w-full py-4 rounded-lg font-medium text-lg transition-opacity hover:opacity-90 disabled:opacity-50"
                   style={{ backgroundColor: primaryColor, color: buttonTextColor }}
                 >
-                  {processing ? 'Processing...' : `Pay ${formatCurrency(amountDue)}`}
+                  {processing 
+                    ? 'Processing...' 
+                    : hasSubscription 
+                      ? 'Subscribe' 
+                      : `Pay ${formatCurrency(amountDue)}`
+                  }
                 </button>
 
                 {/* Terms */}
                 <p className="text-xs text-gray-500 text-center leading-relaxed">
-                  By clicking on "Pay", you agree to allow {invoice.organization.name} to charge your card for this payment.
+                  By clicking on "{hasSubscription ? 'Subscribe' : 'Pay'}", you agree to allow {invoice.organization.name} to charge your card for this payment{hasSubscription ? ' and future payments according to the payment frequency listed' : ''}.
                 </p>
 
                 {/* Security */}
