@@ -814,3 +814,37 @@ model EmailTemplate {
   @@unique([organizationId, templateType])
   @@map("email_templates")
 }
+
+// ============================================
+// TEAM INVITES
+// ============================================
+
+model TeamInvite {
+  id              Int       @id @default(autoincrement())
+  organizationId  Int       @map("organization_id")
+  invitedBy       Int       @map("invited_by")
+  email           String    @db.VarChar(254)
+  role            String    @db.VarChar(20) // admin, member
+  permissions     String?   @db.Text // JSON array of allowed menu items
+  token           String    @unique @db.VarChar(255)
+  status          String    @default("pending") @db.VarChar(20) // pending, accepted, expired
+  expiresAt       DateTime  @map("expires_at")
+  acceptedAt      DateTime? @map("accepted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  @@index([email, organizationId])
+  @@map("team_invites")
+}
+
+model TeamMember {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @map("user_id")
+  organizationId  Int       @map("organization_id")
+  role            String    @db.VarChar(20) // owner, admin, member
+  permissions     String?   @db.Text // JSON array of allowed menu items for members
+  invitedBy       Int?      @map("invited_by")
+  joinedAt        DateTime  @default(now()) @map("joined_at")
+  
+  @@unique([userId, organizationId])
+  @@map("team_members")
+}

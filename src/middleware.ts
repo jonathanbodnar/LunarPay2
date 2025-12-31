@@ -6,7 +6,7 @@ import { verifyToken } from '@/lib/auth';
 export const runtime = 'nodejs';
 
 // Routes that don't require authentication
-const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal'];
+const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal', '/invite'];
 
 // Routes that are public APIs (invoices, payment links by hash)
 const publicApiRoutes = [
@@ -23,6 +23,8 @@ const publicApiRoutes = [
   '/api/admin/add-branding-columns', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-portal-columns', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-email-templates-table', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/add-team-tables', // TEMPORARY - DELETE AFTER USE!
+  '/api/team/invite', // Public invite endpoints
   '/api/invoices/public',
   '/api/payment-links/public',
   '/api/portal', // Customer portal APIs

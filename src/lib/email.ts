@@ -785,3 +785,61 @@ export async function sendPaymentFailedEmail(data: PaymentFailedData): Promise<b
     replyTo: data.organizationEmail,
   });
 }
+
+// ============================================
+// TEAM INVITE
+// ============================================
+
+interface TeamInviteEmailData {
+  to: string;
+  inviterName: string;
+  organizationName: string;
+  role: string;
+  inviteUrl: string;
+}
+
+export async function sendTeamInviteEmail(data: TeamInviteEmailData): Promise<boolean> {
+  const roleText = data.role === 'admin' ? 'an Admin' : 'a Team Member';
+  
+  const html = baseTemplate(`
+    <div class="header">
+      <div class="logo">LunarPay</div>
+    </div>
+    <div class="content">
+      <h2 style="margin-top: 0;">You're Invited!</h2>
+      <p><strong>${data.inviterName}</strong> has invited you to join <strong>${data.organizationName}</strong> on LunarPay as ${roleText}.</p>
+      
+      <div class="details">
+        <table>
+          <tr>
+            <td>Organization</td>
+            <td style="text-align: right;"><strong>${data.organizationName}</strong></td>
+          </tr>
+          <tr>
+            <td>Your Role</td>
+            <td style="text-align: right;">${data.role === 'admin' ? 'Admin' : 'Team Member'}</td>
+          </tr>
+        </table>
+      </div>
+      
+      <div style="text-align: center;">
+        <a href="${data.inviteUrl}" class="button">Accept Invitation</a>
+      </div>
+      
+      <p style="font-size: 14px; color: #666;">
+        This invitation expires in 7 days. If you didn't expect this invitation, you can safely ignore this email.
+      </p>
+      
+      <p style="font-size: 12px; color: #999;">
+        If the button doesn't work, copy and paste this URL into your browser:<br>
+        <span style="word-break: break-all;">${data.inviteUrl}</span>
+      </p>
+    </div>
+  `);
+
+  return sendEmail({
+    to: data.to,
+    subject: `You're invited to join ${data.organizationName} on LunarPay`,
+    html,
+  });
+}

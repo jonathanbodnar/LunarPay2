@@ -1,150 +1,107 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendEmail } from '@/lib/email';
-import bcrypt from 'bcryptjs';
-import { z } from 'zod';
 
-const createTeamMemberSchema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  email: z.string().email(),
-  role: z.enum(['admin', 'manager', 'staff', 'viewer']),
-  permissions: z.array(z.string()).optional(),
-});
+// Available permissions for team members
+export const AVAILABLE_PERMISSIONS = [
+  { id: 'dashboard', name: 'Dashboard', description: 'View dashboard overview' },
+  { id: 'invoices', name: 'Invoices', description: 'Create and manage invoices' },
+  { id: 'payment_links', name: 'Payment Links', description: 'Create and manage payment links' },
+  { id: 'transactions', name: 'Transactions', description: 'View transactions' },
+  { id: 'subscriptions', name: 'Subscriptions', description: 'Manage subscriptions' },
+  { id: 'customers', name: 'Customers', description: 'View and manage customers' },
+  { id: 'products', name: 'Products', description: 'Manage products' },
+  { id: 'payouts', name: 'Payouts', description: 'View payouts' },
+] as const;
 
-// Generate random password
-function generatePassword(length: number = 12): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-  let password = '';
-  for (let i = 0; i < length; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return password;
-}
-
+// GET /api/team - List team members and pending invites
 export async function GET() {
   try {
     const currentUser = await requireAuth();
 
-    const members = await prisma.user.findMany({
-      where: {
-        OR: [
-          { id: currentUser.userId },
-          { parentId: currentUser.userId },
-        ],
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        role: true,
-        permissions: true,
-        createdOn: true,
-        lastLogin: true,
-      },
-      orderBy: { createdOn: 'desc' },
+    // Get user's organizations
+    const organizations = await prisma.organization.findMany({
+      where: { userId: currentUser.userId },
+      select: { id: true, name: true },
     });
 
-    return NextResponse.json({ members });
-  } catch (error) {
-    if ((error as Error).message === 'Unauthorized') {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    if (organizations.length === 0) {
+      return NextResponse.json({ members: [], invites: [] });
     }
 
-    console.error('Get team members error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
+    const orgIds = organizations.map(o => o.id);
 
-export async function POST(request: Request) {
-  try {
-    const currentUser = await requireAuth();
-    const body = await request.json();
-    const validatedData = createTeamMemberSchema.parse(body);
-
-    // Check if email already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email },
-    });
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: 'A user with this email already exists' },
-        { status: 400 }
-      );
-    }
-
-    // Generate temporary password
-    const tempPassword = generatePassword();
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
-
-    // Create team member
-    const member = await prisma.user.create({
-      data: {
-        email: validatedData.email,
-        password: hashedPassword,
-        firstName: validatedData.firstName,
-        lastName: validatedData.lastName,
-        role: validatedData.role,
-        permissions: validatedData.permissions?.join(','),
-        parentId: currentUser.userId,
-      },
-    });
-
-    // Send invitation email
-    const emailHTML = `
-      <h2>You've been invited to join the team!</h2>
-      <p>Hello ${validatedData.firstName},</p>
-      <p>You have been invited to join the team as a <strong>${validatedData.role}</strong>.</p>
-      <p>Your login credentials:</p>
-      <p><strong>Email:</strong> ${validatedData.email}<br>
-      <strong>Password:</strong> ${tempPassword}</p>
-      <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/login">Click here to login</a></p>
-      <p>Please change your password after your first login.</p>
+    // Get team members
+    const teamMembers = await prisma.$queryRaw<Array<{
+      id: number;
+      user_id: number;
+      organization_id: number;
+      role: string;
+      permissions: string | null;
+      joined_at: Date;
+      email: string;
+      first_name: string | null;
+      last_name: string | null;
+    }>>`
+      SELECT tm.*, u.email, u.first_name, u.last_name
+      FROM team_members tm
+      JOIN users u ON tm.user_id = u.id
+      WHERE tm.organization_id = ANY(${orgIds})
+      ORDER BY tm.joined_at ASC
     `;
 
-    await sendEmail({
-      to: validatedData.email,
-      subject: 'Team Invitation - LunarPay',
-      html: emailHTML,
+    // Get pending invites
+    const pendingInvites = await prisma.teamInvite.findMany({
+      where: {
+        organizationId: { in: orgIds },
+        status: 'pending',
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json(
+    // Add the owner (current user)
+    const members = [
       {
-        member,
-        message: 'Team member added and invitation sent',
+        id: 0,
+        name: `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'Account Owner',
+        email: currentUser.email,
+        role: 'owner',
+        permissions: null,
+        status: 'active',
+        joinedAt: null,
       },
-      { status: 201 }
-    );
+      ...teamMembers.map(tm => ({
+        id: tm.id,
+        name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
+        email: tm.email,
+        role: tm.role,
+        permissions: tm.permissions ? JSON.parse(tm.permissions) : null,
+        status: 'active',
+        joinedAt: tm.joined_at,
+      })),
+    ];
+
+    const invites = pendingInvites.map(inv => ({
+      id: inv.id,
+      email: inv.email,
+      role: inv.role,
+      permissions: inv.permissions ? JSON.parse(inv.permissions) : null,
+      status: 'pending',
+      createdAt: inv.createdAt,
+      expiresAt: inv.expiresAt,
+    }));
+
+    return NextResponse.json({ 
+      members, 
+      invites,
+      availablePermissions: AVAILABLE_PERMISSIONS,
+    });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.issues },
-        { status: 400 }
-      );
-    }
-
     if ((error as Error).message === 'Unauthorized') {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    console.error('Create team member error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('Get team error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-
-
