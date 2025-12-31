@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendEmail, generateInvoiceEmailHTML } from '@/lib/email';
-import { generateInvoicePDF } from '@/lib/pdf';
+import { sendInvoiceEmail } from '@/lib/email';
+import { formatCurrency, formatDate } from '@/lib/utils';
 
 export async function POST(
   request: Request,
@@ -12,6 +12,10 @@ export async function POST(
     const { id } = await params;
     const currentUser = await requireAuth();
     const invoiceId = parseInt(id);
+
+    // Get base URL from request
+    const url = new URL(request.url);
+    const baseUrl = `${url.protocol}//${url.host}`;
 
     // Get invoice with all details
     const invoice = await prisma.invoice.findFirst({
@@ -42,29 +46,26 @@ export async function POST(
       );
     }
 
-    // Generate PDF
-    const pdfBuffer = await generateInvoicePDF(invoice as any);
+    // Send invoice email using SendGrid
+    const customerName = `${invoice.donor.firstName || ''} ${invoice.donor.lastName || ''}`.trim() || 'Customer';
+    const invoiceUrl = `${baseUrl}/invoice/${invoice.hash}`;
 
-    // Generate email HTML
-    const emailHTML = generateInvoiceEmailHTML(invoice);
-
-    // Send email with PDF attachment
-    const result = await sendEmail({
-      to: invoice.donor.email,
-      subject: `Invoice from ${invoice.organization.name} - #${invoice.reference || invoice.id}`,
-      html: emailHTML,
-      attachments: [
-        {
-          filename: `invoice-${invoice.reference || invoice.id}.pdf`,
-          content: pdfBuffer,
-          contentType: 'application/pdf',
-        },
-      ],
+    const emailSent = await sendInvoiceEmail({
+      customerName,
+      customerEmail: invoice.donor.email,
+      invoiceNumber: invoice.reference || `INV-${invoice.id}`,
+      totalAmount: formatCurrency(Number(invoice.totalAmount)),
+      dueDate: invoice.dueDate ? formatDate(invoice.dueDate.toISOString()) : undefined,
+      invoiceUrl,
+      organizationName: invoice.organization.name,
+      organizationEmail: invoice.organization.email || undefined,
+      memo: invoice.memo || undefined,
+      brandColor: invoice.organization.primaryColor || undefined,
     });
 
-    if (!result.success) {
+    if (!emailSent) {
       return NextResponse.json(
-        { error: 'Failed to send email', details: result.error },
+        { error: 'Failed to send email' },
         { status: 500 }
       );
     }
@@ -81,7 +82,6 @@ export async function POST(
     return NextResponse.json({
       success: true,
       message: 'Invoice sent successfully',
-      messageId: result.messageId,
     });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
@@ -98,4 +98,3 @@ export async function POST(
     );
   }
 }
-

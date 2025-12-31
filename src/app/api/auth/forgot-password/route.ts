@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { supabaseAdmin } from '@/lib/supabase/server';
+import { sendPasswordResetEmail } from '@/lib/email';
 import { z } from 'zod';
 
 const forgotPasswordSchema = z.object({
@@ -45,12 +45,11 @@ export async function POST(request: Request) {
       },
     });
 
-    // Send reset email using nodemailer (more reliable than Supabase for password reset)
-    const { sendPasswordResetEmail } = await import('@/lib/email');
+    // Send reset email using SendGrid
     const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://lunarpay2-production.up.railway.app'}/reset-password?token=${resetToken}`;
     
     try {
-      await sendPasswordResetEmail(user.email, resetUrl, user.firstName || 'User');
+      await sendPasswordResetEmail(user.email, resetUrl);
       console.log('Password reset email sent successfully to:', user.email);
     } catch (emailErr) {
       console.error('Email sending error:', emailErr);

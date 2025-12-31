@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import { sendPortalLoginCode } from '@/lib/email';
 
 // POST /api/portal/auth/request-code - Request OTP code for customer login
 export async function POST(request: Request) {
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
         id: true,
         name: true,
         portalSlug: true,
+        primaryColor: true,
       },
     });
 
@@ -82,17 +84,19 @@ export async function POST(request: Request) {
       },
     });
 
-    // TODO: Send email with the code
-    // For now, we'll log it (in production, integrate with email service)
-    console.log(`[PORTAL AUTH] OTP Code for ${email}: ${code}`);
+    // Send email with the code
+    await sendPortalLoginCode(
+      email.toLowerCase(),
+      code,
+      organization.name,
+      organization.primaryColor || undefined
+    );
 
-    // In development, return the code for testing
-    const isDev = process.env.NODE_ENV === 'development';
+    console.log(`[PORTAL AUTH] OTP Code sent to ${email}`);
 
     return NextResponse.json({
       success: true,
       message: 'If an account exists with this email, a code has been sent.',
-      ...(isDev && { code }), // Only include code in development
     });
   } catch (error) {
     console.error('Request OTP error:', error);
