@@ -9,6 +9,7 @@ export const runtime = 'nodejs';
 const APP_DOMAINS = [
   'localhost',
   'lunarpay2-development.up.railway.app',
+  'new.lunarpay.com',
   'app.lunarpay.com',
   'lunarpay.com',
 ];
