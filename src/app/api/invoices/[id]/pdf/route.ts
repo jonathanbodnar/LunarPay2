@@ -44,6 +44,8 @@ export async function GET(
       memo: invoice.memo,
       footer: invoice.footer,
       createdAt: invoice.createdAt.toISOString(),
+      hash: invoice.hash,
+      coverFee: invoice.coverFee,
       donor: {
         firstName: invoice.donor?.firstName || null,
         lastName: invoice.donor?.lastName || null,
@@ -58,6 +60,7 @@ export async function GET(
           [invoice.organization.streetAddress, invoice.organization.city, invoice.organization.state, invoice.organization.postal]
             .filter(Boolean)
             .join(', ') : null,
+        logo: invoice.organization?.logo || null,
       },
       products: invoice.products.map(p => ({
         productName: p.productName,

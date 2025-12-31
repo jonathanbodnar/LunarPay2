@@ -117,7 +117,7 @@ export default function InvoiceDetailPage() {
       });
       if (response.ok) {
         const data = await response.json();
-        router.push(`/invoices/${data.invoice.id}`);
+        router.push(`/invoices/${data.invoice.id}/edit`);
       }
     } catch (error) {
       console.error('Failed to clone invoice:', error);

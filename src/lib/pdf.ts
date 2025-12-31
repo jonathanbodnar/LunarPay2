@@ -10,17 +10,21 @@ interface InvoiceData {
   memo: string | null;
   footer: string | null;
   createdAt: string;
+  hash?: string;
+  coverFee?: boolean;
   donor: {
     firstName: string | null;
     lastName: string | null;
     email: string | null;
     address: string | null;
+    company?: string | null;
   };
   organization: {
     name: string;
     phone: string | null;
     email: string | null;
     address: string | null;
+    logo?: string | null;
   };
   products: Array<{
     productName: string;
@@ -30,107 +34,266 @@ interface InvoiceData {
   }>;
 }
 
+// Processing fee rates
+const FEE_RATES = {
+  regularCard: 0.0299, // 2.99%
+  amex: 0.0363, // 3.63%
+  ach: 0.0127, // 1.27%
+};
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amount);
+}
+
+function formatDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> {
   const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
   
-  // Add header
-  doc.setFontSize(24);
-  doc.setTextColor(84, 105, 212); // Blue color
-  doc.text('INVOICE', 20, 20);
+  // Calculate fees for different payment methods
+  const subtotal = invoice.totalAmount;
+  const regularCardFee = subtotal * FEE_RATES.regularCard;
+  const amexFee = subtotal * FEE_RATES.amex;
+  const achFee = subtotal * FEE_RATES.ach;
   
-  // Add invoice reference
-  doc.setFontSize(10);
+  // ========== HEADER ==========
+  // "INVOICE" title
+  doc.setFontSize(14);
   doc.setTextColor(100, 100, 100);
-  if (invoice.reference) {
-    doc.text(`Invoice #: ${invoice.reference}`, 20, 30);
-  }
-  doc.text(`Date: ${new Date(invoice.createdAt).toLocaleDateString()}`, 20, 36);
+  doc.setFont('helvetica', 'bold');
+  doc.text('INVOICE', 20, 25);
+  
+  // Merchant name/logo (as text for now, could be image if logo URL provided)
+  doc.setFontSize(28);
+  doc.setTextColor(30, 30, 30);
+  doc.setFont('helvetica', 'bold');
+  doc.text(invoice.organization.name.toUpperCase(), 20, 40);
+  
+  // Invoice details on the right
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 100, 100);
+  
+  const rightColX = 130;
+  const rightValX = pageWidth - 20;
+  let rightY = 25;
+  
+  doc.text('Invoice Reference:', rightColX, rightY);
+  doc.setTextColor(30, 30, 30);
+  doc.setFont('helvetica', 'bold');
+  doc.text(invoice.reference || `INV-${invoice.id}`, rightValX, rightY, { align: 'right' });
+  
+  rightY += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 100, 100);
+  doc.text('Date of issue:', rightColX, rightY);
+  doc.setTextColor(30, 30, 30);
+  doc.text(formatDate(invoice.createdAt), rightValX, rightY, { align: 'right' });
+  
   if (invoice.dueDate) {
-    doc.text(`Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}`, 20, 42);
+    rightY += 8;
+    doc.setTextColor(100, 100, 100);
+    doc.text('Due date:', rightColX, rightY);
+    doc.setTextColor(30, 30, 30);
+    doc.text(formatDate(invoice.dueDate), rightValX, rightY, { align: 'right' });
   }
   
-  // Add organization info
-  doc.setFontSize(12);
-  doc.setTextColor(0, 0, 0);
-  doc.text('From:', 20, 55);
+  // ========== FROM / BILLED TO SECTION ==========
+  let sectionY = 60;
+  
+  // From section (left)
   doc.setFontSize(10);
-  doc.text(invoice.organization.name, 20, 61);
-  if (invoice.organization.email) {
-    doc.text(invoice.organization.email, 20, 67);
-  }
-  if (invoice.organization.phone) {
-    doc.text(invoice.organization.phone, 20, 73);
-  }
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 30, 30);
+  doc.text('From', 20, sectionY);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60, 60, 60);
+  let fromY = sectionY + 7;
+  doc.text(invoice.organization.name, 20, fromY);
+  
   if (invoice.organization.address) {
-    doc.text(invoice.organization.address, 20, 79);
+    fromY += 5;
+    const addressLines = doc.splitTextToSize(invoice.organization.address, 80);
+    doc.text(addressLines, 20, fromY);
+    fromY += (addressLines.length - 1) * 5;
   }
   
-  // Add customer info
-  doc.setFontSize(12);
-  doc.text('Bill To:', 120, 55);
-  doc.setFontSize(10);
-  doc.text(`${invoice.donor.firstName || ''} ${invoice.donor.lastName || ''}`.trim(), 120, 61);
-  if (invoice.donor.email) {
-    doc.text(invoice.donor.email, 120, 67);
+  // Billed To section (right)
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 30, 30);
+  doc.text('Billed To', rightColX, sectionY);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60, 60, 60);
+  let toY = sectionY + 7;
+  
+  const customerName = `${invoice.donor.firstName || ''} ${invoice.donor.lastName || ''}`.trim();
+  const customerLine = invoice.donor.email 
+    ? `${customerName} - ${invoice.donor.email}` 
+    : customerName;
+  doc.text(customerLine, rightValX, toY, { align: 'right' });
+  
+  if (invoice.donor.company) {
+    toY += 5;
+    doc.text(invoice.donor.company, rightValX, toY, { align: 'right' });
   }
+  
   if (invoice.donor.address) {
-    doc.text(invoice.donor.address, 120, 73);
+    toY += 5;
+    const addressLines = doc.splitTextToSize(invoice.donor.address, 70);
+    addressLines.forEach((line: string, i: number) => {
+      doc.text(line, rightValX, toY + (i * 5), { align: 'right' });
+    });
   }
   
-  // Add line items table
+  // ========== PAY ONLINE LINK ==========
+  const payLinkY = Math.max(fromY, toY) + 15;
+  doc.setTextColor(0, 102, 204);
+  doc.setFont('helvetica', 'normal');
+  doc.textWithLink('Pay online', 20, payLinkY, { 
+    url: invoice.hash ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/invoice/${invoice.hash}` : '#' 
+  });
+  
+  // ========== MEMO/DESCRIPTION ==========
+  let contentY = payLinkY + 10;
+  if (invoice.memo) {
+    doc.setTextColor(60, 60, 60);
+    doc.setFont('helvetica', 'normal');
+    const memoLines = doc.splitTextToSize(invoice.memo, pageWidth - 40);
+    doc.text(memoLines, 20, contentY);
+    contentY += memoLines.length * 5 + 10;
+  }
+  
+  // ========== LINE ITEMS TABLE ==========
   const tableData = invoice.products.map(product => [
     product.productName,
     product.qty.toString(),
-    `$${product.price.toFixed(2)}`,
-    `$${product.subtotal.toFixed(2)}`,
+    formatCurrency(product.price),
+    formatCurrency(product.subtotal),
   ]);
   
   autoTable(doc, {
-    startY: 95,
-    head: [['Description', 'Qty', 'Unit Price', 'Amount']],
+    startY: contentY,
+    head: [['Description', 'Qty', 'Unit price', 'Amount']],
     body: tableData,
-    theme: 'grid',
+    theme: 'plain',
     headStyles: {
-      fillColor: [84, 105, 212],
-      textColor: [255, 255, 255],
+      fillColor: [255, 255, 255],
+      textColor: [100, 100, 100],
+      fontStyle: 'bold',
+      fontSize: 10,
+      cellPadding: { top: 8, bottom: 8, left: 0, right: 10 },
+    },
+    bodyStyles: {
+      textColor: [30, 30, 30],
+      fontSize: 10,
+      cellPadding: { top: 8, bottom: 8, left: 0, right: 10 },
+    },
+    columnStyles: {
+      0: { cellWidth: 80 },
+      1: { halign: 'left', cellWidth: 30 },
+      2: { halign: 'left', cellWidth: 40 },
+      3: { halign: 'right' },
+    },
+    styles: {
+      lineColor: [200, 200, 200],
+      lineWidth: 0,
+    },
+    didDrawCell: (data) => {
+      // Draw bottom border for header
+      if (data.section === 'head') {
+        doc.setDrawColor(200, 50, 50);
+        doc.setLineWidth(0.5);
+        doc.line(
+          data.cell.x,
+          data.cell.y + data.cell.height,
+          data.cell.x + data.cell.width,
+          data.cell.y + data.cell.height
+        );
+      }
     },
   });
   
-  // Get final Y position after table
-  const finalY = (doc as any).lastAutoTable.finalY + 10;
+  // ========== TOTALS SECTION ==========
+  let finalY = (doc as any).lastAutoTable.finalY + 15;
+  const totalsLabelX = 120;
+  const totalsValueX = pageWidth - 20;
   
-  // Add totals
+  // Subtotal
   doc.setFontSize(10);
-  const totalsX = 140;
-  doc.text('Subtotal:', totalsX, finalY);
-  doc.text(`$${invoice.totalAmount.toFixed(2)}`, 180, finalY, { align: 'right' });
-  
-  if (invoice.fee > 0) {
-    doc.text('Processing Fee:', totalsX, finalY + 6);
-    doc.text(`$${invoice.fee.toFixed(2)}`, 180, finalY + 6, { align: 'right' });
-  }
-  
-  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 100, 100);
+  doc.text('Subtotal', totalsLabelX, finalY);
+  doc.setTextColor(30, 30, 30);
   doc.setFont('helvetica', 'bold');
-  const totalY = invoice.fee > 0 ? finalY + 12 : finalY + 6;
-  doc.text('Total:', totalsX, totalY);
-  doc.text(`$${(invoice.totalAmount + invoice.fee).toFixed(2)}`, 180, totalY, { align: 'right' });
+  doc.text(formatCurrency(subtotal), totalsValueX, finalY, { align: 'right' });
   
-  // Add memo if present
-  if (invoice.memo) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text('Notes:', 20, totalY + 15);
-    const memoLines = doc.splitTextToSize(invoice.memo, 170);
-    doc.text(memoLines, 20, totalY + 21);
-  }
+  // Processing Fee section
+  finalY += 12;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 100, 100);
+  doc.text('Processing Fee', totalsLabelX, finalY);
   
-  // Add footer if present
+  // Fee breakdown
+  finalY += 7;
+  doc.setTextColor(60, 60, 60);
+  doc.text(`Regular Card: ${formatCurrency(regularCardFee)}`, totalsValueX, finalY, { align: 'right' });
+  
+  finalY += 5;
+  doc.text(`Amex: ${formatCurrency(amexFee)}`, totalsValueX, finalY, { align: 'right' });
+  
+  finalY += 5;
+  doc.text(`Ach: ${formatCurrency(achFee)}`, totalsValueX, finalY, { align: 'right' });
+  
+  // Draw line before Amount due
+  finalY += 8;
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(totalsLabelX, finalY, totalsValueX, finalY);
+  
+  // Amount due section
+  finalY += 10;
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 30, 30);
+  doc.text('Amount due', totalsLabelX, finalY);
+  
+  // Amount due breakdown
+  finalY += 7;
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Regular Card: `, totalsLabelX + 20, finalY);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(subtotal + regularCardFee), totalsValueX, finalY, { align: 'right' });
+  
+  finalY += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Amex: `, totalsLabelX + 20, finalY);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(subtotal + amexFee), totalsValueX, finalY, { align: 'right' });
+  
+  finalY += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Ach: `, totalsLabelX + 20, finalY);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(subtotal + achFee), totalsValueX, finalY, { align: 'right' });
+  
+  // ========== FOOTER ==========
   if (invoice.footer) {
-    const footerY = doc.internal.pageSize.height - 30;
+    const footerY = doc.internal.pageSize.height - 20;
     doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 100, 100);
-    const footerLines = doc.splitTextToSize(invoice.footer, 170);
+    const footerLines = doc.splitTextToSize(invoice.footer, pageWidth - 40);
     doc.text(footerLines, 20, footerY);
   }
   
@@ -140,16 +303,17 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> 
 }
 
 export function generateInvoicePDFURL(invoice: InvoiceData): string {
+  // This is a simplified version for data URL generation
+  // Full implementation would mirror generateInvoicePDF
   const doc = new jsPDF();
   
-  // Same PDF generation logic as above...
-  // (simplified for URL generation)
+  doc.setFontSize(14);
+  doc.setTextColor(100, 100, 100);
+  doc.text('INVOICE', 20, 25);
   
-  doc.setFontSize(24);
-  doc.text('INVOICE', 20, 20);
+  doc.setFontSize(28);
+  doc.setTextColor(30, 30, 30);
+  doc.text(invoice.organization.name.toUpperCase(), 20, 40);
   
-  // Return data URL
   return doc.output('dataurlstring');
 }
-
-
