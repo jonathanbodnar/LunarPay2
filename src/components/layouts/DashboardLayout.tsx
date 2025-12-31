@@ -30,6 +30,7 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Organizations', href: '/organizations', icon: Building2 },
   { 
     name: 'Payments', 
@@ -154,7 +155,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             onClick={() => setSidebarOpen(false)} 
           />
           <div className="fixed inset-y-0 left-0 w-[280px] bg-background shadow-soft">
-            <div className="flex h-16 items-center justify-between px-6 border-b border-border">
+            <div className="flex h-16 items-center justify-between px-6">
               <Link href="/dashboard" className="flex items-center gap-2">
                 <img 
                   src="/logo.png" 
@@ -174,7 +175,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <NavLink key={item.name} item={item} mobile />
               ))}
             </nav>
-            <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border">
+            <div className="absolute bottom-0 left-0 right-0 p-4">
               <button
                 onClick={() => {}}
                 className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
@@ -189,8 +190,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Desktop sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-[260px] lg:flex-col">
-        <div className="flex flex-col flex-grow bg-background border-r border-border">
-          <div className="flex h-16 items-center px-6 border-b border-border">
+        <div className="flex flex-col flex-grow bg-background">
+          <div className="flex h-16 items-center px-6">
             <Link href="/dashboard" className="flex items-center gap-2">
               <img 
                 src="/logo.png" 
@@ -204,7 +205,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <NavLink key={item.name} item={item} />
             ))}
           </nav>
-          <div className="p-4 border-t border-border">
+          <div className="p-4">
             <button
               onClick={() => {}}
               className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
@@ -219,7 +220,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content */}
       <div className="lg:pl-[260px]">
         {/* Top header */}
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-background px-4 lg:px-8">
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between bg-background px-4 lg:px-8">
           <div className="flex items-center gap-4">
             <button
               type="button"
@@ -254,7 +255,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-border py-6 px-4 lg:px-8">
+        <footer className="py-6 px-4 lg:px-8">
           <div className="text-center text-sm text-muted-foreground">
             @ LunarPay
           </div>
