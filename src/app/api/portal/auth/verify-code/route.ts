@@ -86,16 +86,15 @@ export async function POST(request: Request) {
 
     // Generate session token
     const sessionToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    // Create session (expires in 7 days)
-    await prisma.customerSession.create({
-      data: {
-        donorId: customer.id,
-        organizationId: organization.id,
-        token: sessionToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-      },
-    });
+    // Create session using raw SQL for reliability
+    await prisma.$executeRaw`
+      INSERT INTO customer_sessions (id, donor_id, organization_id, token, expires_at, created_at)
+      VALUES (${crypto.randomUUID()}, ${customer.id}, ${organization.id}, ${sessionToken}, ${expiresAt}, NOW())
+    `;
+
+    console.log('[PORTAL] Session created for customer:', customer.email, 'token:', sessionToken.substring(0, 10) + '...');
 
     // Set cookie
     const response = NextResponse.json({
