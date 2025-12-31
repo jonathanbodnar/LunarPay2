@@ -49,14 +49,30 @@ export function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || '';
   
   // Check if this is a custom domain request (not our app domains)
-  const isCustomDomain = !APP_DOMAINS.some(domain => hostname.includes(domain));
+  // Skip custom domain check for API routes (they need normal routing)
+  const isCustomDomain = !APP_DOMAINS.some(domain => hostname.includes(domain)) && 
+                         !hostname.includes('railway') && // Railway internal
+                         !hostname.match(/^\d+\.\d+\.\d+\.\d+/); // IP addresses
   
-  if (isCustomDomain && !pathname.startsWith('/api/portal') && !pathname.startsWith('/_next') && !pathname.startsWith('/favicon')) {
+  // Only apply custom domain handling to non-API, non-static routes
+  if (isCustomDomain && 
+      !pathname.startsWith('/api') && 
+      !pathname.startsWith('/_next') && 
+      !pathname.startsWith('/favicon') &&
+      pathname !== '/') {
     // This is a custom domain - redirect to portal lookup by domain
     // The portal page will look up the org by custom domain
     const url = request.nextUrl.clone();
     url.pathname = `/portal/domain/${encodeURIComponent(hostname)}${pathname}`;
     console.log('[MIDDLEWARE] Custom domain detected:', hostname, '-> rewriting to', url.pathname);
+    return NextResponse.rewrite(url);
+  }
+  
+  // For root path on custom domain, redirect to portal
+  if (isCustomDomain && pathname === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = `/portal/domain/${encodeURIComponent(hostname)}`;
+    console.log('[MIDDLEWARE] Custom domain root:', hostname, '-> rewriting to', url.pathname);
     return NextResponse.rewrite(url);
   }
 
