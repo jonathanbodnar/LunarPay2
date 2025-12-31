@@ -2,22 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import modern fonts */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+
+:root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #0a0a0a;
+  --primary: #0a0a0a;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #0a0a0a;
+  --accent: #f5f5f5;
+  --accent-foreground: #0a0a0a;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+  --warning: #f59e0b;
+  --warning-foreground: #0a0a0a;
+}
+
 @layer base {
   * {
-    @apply border-gray-200;
+    @apply border-[var(--border)];
   }
   
   body {
-    @apply bg-white text-gray-900;
-    font-family: system-ui, -apple-system, sans-serif;
+    @apply bg-[var(--background)] text-[var(--foreground)] antialiased;
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
   }
   
   input, textarea, select {
-    @apply text-gray-900;
+    @apply text-[var(--foreground)];
   }
   
   label {
-    @apply text-gray-700;
+    @apply text-[var(--foreground)] font-medium;
   }
 }
 
@@ -25,4 +50,30 @@
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d4d4d4;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a3a3a3;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
 }

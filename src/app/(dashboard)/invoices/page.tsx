@@ -2,9 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, Plus, Eye, Mail, Download } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FileText, Plus, Eye, MoreHorizontal, ArrowUpDown } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 interface Invoice {
@@ -13,6 +21,7 @@ interface Invoice {
   totalAmount: number;
   paidAmount: number;
   dueDate: string | null;
+  createdAt: string;
   reference: string | null;
   hash: string;
   donor: {
@@ -51,16 +60,17 @@ export default function InvoicesPage() {
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      draft: 'bg-gray-100 text-gray-800',
-      finalized: 'bg-blue-100 text-blue-800',
-      sent: 'bg-purple-100 text-purple-800',
-      paid: 'bg-green-100 text-green-800',
-      partial: 'bg-yellow-100 text-yellow-800',
-      overdue: 'bg-red-100 text-red-800',
+      draft: 'bg-muted text-muted-foreground uppercase text-[10px] font-semibold tracking-wider',
+      finalized: 'bg-foreground text-background uppercase text-[10px] font-semibold tracking-wider',
+      sent: 'bg-foreground text-background uppercase text-[10px] font-semibold tracking-wider',
+      paid: 'bg-foreground text-background uppercase text-[10px] font-semibold tracking-wider',
+      partial: 'bg-warning/10 text-warning uppercase text-[10px] font-semibold tracking-wider',
+      overdue: 'bg-destructive/10 text-destructive uppercase text-[10px] font-semibold tracking-wider',
+      canceled: 'bg-muted text-muted-foreground uppercase text-[10px] font-semibold tracking-wider',
     };
     return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${styles[status] || styles.draft}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+      <span className={`px-2.5 py-1 rounded-md ${styles[status] || styles.draft}`}>
+        {status === 'overdue' ? 'PAST DUE' : status.toUpperCase()}
       </span>
     );
   };
@@ -69,8 +79,8 @@ export default function InvoicesPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-gray-500">Loading invoices...</p>
+          <div className="animate-spin h-6 w-6 border-2 border-foreground border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-muted-foreground text-sm">Loading invoices...</p>
         </div>
       </div>
     );
@@ -79,25 +89,23 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Invoices</h1>
-          <p className="mt-2 text-gray-600">
-            Manage your invoices and billing
-          </p>
+        <div className="flex items-center gap-3">
+          <FileText className="h-5 w-5" />
+          <h1 className="text-xl font-semibold">Invoices</h1>
         </div>
         <Button onClick={() => router.push('/invoices/new')}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Invoice
+          <FileText className="mr-2 h-4 w-4" />
+          Create invoice
         </Button>
       </div>
 
       {invoices.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FileText className="h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No invoices yet</h3>
-            <p className="text-gray-500 text-center mb-6">
-              Create your first invoice to get started
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-medium mb-2">No invoices yet</h3>
+            <p className="text-muted-foreground text-sm text-center mb-6 max-w-sm">
+              Create your first invoice to start tracking payments from your customers
             </p>
             <Button onClick={() => router.push('/invoices/new')}>
               <Plus className="mr-2 h-4 w-4" />
@@ -106,64 +114,125 @@ export default function InvoicesPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>All Invoices</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+        <Card className="overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent border-b border-border">
+                <TableHead className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                  <button className="flex items-center gap-1 hover:text-foreground">
+                    Total <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </TableHead>
+                <TableHead className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                  <button className="flex items-center gap-1 hover:text-foreground">
+                    Status <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </TableHead>
+                <TableHead className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                  <button className="flex items-center gap-1 hover:text-foreground">
+                    Invoice Reference <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </TableHead>
+                <TableHead className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                  <button className="flex items-center gap-1 hover:text-foreground">
+                    Customer <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </TableHead>
+                <TableHead className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                  <button className="flex items-center gap-1 hover:text-foreground">
+                    Due Date <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </TableHead>
+                <TableHead className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                  <button className="flex items-center gap-1 hover:text-foreground">
+                    Created At <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </TableHead>
+                <TableHead className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                  Action
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {invoices.map((invoice) => (
-                <div
+                <TableRow 
                   key={invoice.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                  className="cursor-pointer"
                   onClick={() => router.push(`/invoices/${invoice.id}`)}
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      {invoice.reference && (
-                        <span className="font-medium">#{invoice.reference}</span>
+                  <TableCell className="font-medium">
+                    {formatCurrency(Number(invoice.totalAmount))}
+                  </TableCell>
+                  <TableCell>
+                    {getStatusBadge(invoice.status)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {invoice.reference || `INV-${invoice.id}`}
+                  </TableCell>
+                  <TableCell>
+                    <div>
+                      <span className="font-medium">
+                        {invoice.donor.firstName} {invoice.donor.lastName}
+                      </span>
+                      {invoice.donor.email && (
+                        <span className="text-muted-foreground"> - {invoice.donor.email}</span>
                       )}
-                      {getStatusBadge(invoice.status)}
                     </div>
-                    <p className="text-sm text-gray-600">
-                      {invoice.donor.firstName} {invoice.donor.lastName}
-                      {invoice.donor.email && ` • ${invoice.donor.email}`}
-                    </p>
-                    {invoice.dueDate && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Due: {formatDate(invoice.dueDate)}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-blue-600">
-                      {formatCurrency(Number(invoice.totalAmount))}
-                    </p>
-                    {Number(invoice.paidAmount) > 0 && (
-                      <p className="text-xs text-gray-500">
-                        Paid: {formatCurrency(Number(invoice.paidAmount))}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex gap-2 ml-4">
-                    <Button
-                      size="sm"
-                      variant="ghost"
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {invoice.dueDate ? formatDate(invoice.dueDate) : '-'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {invoice.createdAt ? formatDate(invoice.createdAt) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(`/invoice/${invoice.hash}`, '_blank');
+                        // Open action menu
                       }}
+                      className="p-2 hover:bg-muted rounded-lg"
                     >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                      <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  </TableCell>
+                </TableRow>
               ))}
+            </TableBody>
+          </Table>
+          
+          {/* Pagination */}
+          <div className="flex items-center justify-between px-6 py-4 border-t border-border">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Show</span>
+              <select className="border border-border rounded-md px-2 py-1 text-sm bg-background">
+                <option>10</option>
+                <option>25</option>
+                <option>50</option>
+              </select>
             </div>
-          </CardContent>
+            <div className="text-sm text-muted-foreground">
+              Showing 1 to {Math.min(10, invoices.length)} of {invoices.length} entries
+            </div>
+            <div className="flex items-center gap-1">
+              <button className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-muted disabled:opacity-50">
+                &lt;
+              </button>
+              <button className="px-3 py-1.5 text-sm bg-foreground text-background rounded-md">
+                1
+              </button>
+              {invoices.length > 10 && (
+                <button className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-muted">
+                  2
+                </button>
+              )}
+              <button className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-muted disabled:opacity-50">
+                &gt;
+              </button>
+            </div>
+          </div>
         </Card>
       )}
     </div>
   );
 }
-
