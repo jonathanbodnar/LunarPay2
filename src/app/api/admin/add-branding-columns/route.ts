@@ -6,10 +6,11 @@ import { prisma } from '@/lib/prisma';
 export async function POST() {
   try {
     // Add columns if they don't exist (PostgreSQL syntax)
+    // Note: Organization model maps to "church_detail" table
     const queries = [
-      `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS primary_color VARCHAR(20) DEFAULT '#000000'`,
-      `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS background_color VARCHAR(20) DEFAULT '#ffffff'`,
-      `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS button_text_color VARCHAR(20) DEFAULT '#ffffff'`,
+      `ALTER TABLE church_detail ADD COLUMN IF NOT EXISTS primary_color VARCHAR(20) DEFAULT '#000000'`,
+      `ALTER TABLE church_detail ADD COLUMN IF NOT EXISTS background_color VARCHAR(20) DEFAULT '#ffffff'`,
+      `ALTER TABLE church_detail ADD COLUMN IF NOT EXISTS button_text_color VARCHAR(20) DEFAULT '#ffffff'`,
     ];
 
     const results = [];
