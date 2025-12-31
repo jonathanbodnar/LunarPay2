@@ -222,18 +222,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Top header */}
         <header className="sticky top-0 z-40 flex h-16 items-center justify-between bg-background px-4 lg:px-8">
           <div className="flex items-center gap-4">
-            <button
-              type="button"
+          <button
+            type="button"
               className="lg:hidden p-2 rounded-lg hover:bg-muted"
-              onClick={() => setSidebarOpen(true)}
-            >
+            onClick={() => setSidebarOpen(true)}
+          >
               <Menu className="h-5 w-5" />
-            </button>
+          </button>
             {/* Organization selector placeholder */}
             <div className="hidden sm:block">
               <span className="text-sm font-medium">Apollo Eleven Inc</span>
             </div>
-          </div>
+        </div>
           
           <div className="flex items-center gap-3">
             <Button

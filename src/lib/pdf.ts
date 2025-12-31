@@ -34,13 +34,6 @@ interface InvoiceData {
   }>;
 }
 
-// Processing fee rates
-const FEE_RATES = {
-  regularCard: 0.0299, // 2.99%
-  amex: 0.0363, // 3.63%
-  ach: 0.0127, // 1.27%
-};
-
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -59,12 +52,6 @@ function formatDate(dateString: string): string {
 export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
-  
-  // Calculate fees for different payment methods
-  const subtotal = invoice.totalAmount;
-  const regularCardFee = subtotal * FEE_RATES.regularCard;
-  const amexFee = subtotal * FEE_RATES.amex;
-  const achFee = subtotal * FEE_RATES.ach;
   
   // ========== HEADER ==========
   // "INVOICE" title
@@ -237,55 +224,21 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> 
   doc.text('Subtotal', totalsLabelX, finalY);
   doc.setTextColor(30, 30, 30);
   doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(subtotal), totalsValueX, finalY, { align: 'right' });
-  
-  // Processing Fee section
-  finalY += 12;
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 100, 100);
-  doc.text('Processing Fee', totalsLabelX, finalY);
-  
-  // Fee breakdown
-  finalY += 7;
-  doc.setTextColor(60, 60, 60);
-  doc.text(`Regular Card: ${formatCurrency(regularCardFee)}`, totalsValueX, finalY, { align: 'right' });
-  
-  finalY += 5;
-  doc.text(`Amex: ${formatCurrency(amexFee)}`, totalsValueX, finalY, { align: 'right' });
-  
-  finalY += 5;
-  doc.text(`Ach: ${formatCurrency(achFee)}`, totalsValueX, finalY, { align: 'right' });
+  doc.text(formatCurrency(invoice.totalAmount), totalsValueX, finalY, { align: 'right' });
   
   // Draw line before Amount due
-  finalY += 8;
+  finalY += 10;
   doc.setDrawColor(200, 200, 200);
   doc.setLineWidth(0.3);
   doc.line(totalsLabelX, finalY, totalsValueX, finalY);
   
-  // Amount due section
+  // Amount due
   finalY += 10;
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 30, 30);
   doc.text('Amount due', totalsLabelX, finalY);
-  
-  // Amount due breakdown
-  finalY += 7;
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Regular Card: `, totalsLabelX + 20, finalY);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(subtotal + regularCardFee), totalsValueX, finalY, { align: 'right' });
-  
-  finalY += 5;
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Amex: `, totalsLabelX + 20, finalY);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(subtotal + amexFee), totalsValueX, finalY, { align: 'right' });
-  
-  finalY += 5;
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Ach: `, totalsLabelX + 20, finalY);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(subtotal + achFee), totalsValueX, finalY, { align: 'right' });
+  doc.setFontSize(12);
+  doc.text(formatCurrency(invoice.totalAmount), totalsValueX, finalY, { align: 'right' });
   
   // ========== FOOTER ==========
   if (invoice.footer) {
@@ -304,7 +257,6 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> 
 
 export function generateInvoicePDFURL(invoice: InvoiceData): string {
   // This is a simplified version for data URL generation
-  // Full implementation would mirror generateInvoicePDF
   const doc = new jsPDF();
   
   doc.setFontSize(14);
