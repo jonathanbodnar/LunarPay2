@@ -122,3 +122,24 @@ export function formatPhoneNumber(phone: string): string {
 export function getLast4(value: string): string {
   return value.slice(-4);
 }
+
+/**
+ * Get subscription frequency display text
+ */
+export function getSubscriptionFrequencyText(frequency: string | null | undefined): string {
+  if (!frequency) return 'One-time';
+  
+  const frequencyMap: Record<string, string> = {
+    'weekly': 'Weekly',
+    'biweekly': 'Every 2 Weeks',
+    'monthly': 'Monthly',
+    'quarterly': 'Quarterly',
+    'semiannual': 'Every 6 Months',
+    'annual': 'Yearly',
+    'yearly': 'Yearly',
+    'one-time': 'One-time',
+    'onetime': 'One-time',
+  };
+  
+  return frequencyMap[frequency.toLowerCase()] || frequency;
+}
