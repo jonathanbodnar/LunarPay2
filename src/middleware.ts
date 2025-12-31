@@ -5,6 +5,14 @@ import { verifyToken } from '@/lib/auth';
 // Force Node.js runtime (Edge runtime doesn't support crypto module)
 export const runtime = 'nodejs';
 
+// Known app domains (requests from these go through normal routing)
+const APP_DOMAINS = [
+  'localhost',
+  'lunarpay2-development.up.railway.app',
+  'app.lunarpay.com',
+  'lunarpay.com',
+];
+
 // Routes that don't require authentication
 const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal', '/invite'];
 
@@ -37,6 +45,19 @@ const publicApiRoutes = [
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const hostname = request.headers.get('host') || '';
+  
+  // Check if this is a custom domain request (not our app domains)
+  const isCustomDomain = !APP_DOMAINS.some(domain => hostname.includes(domain));
+  
+  if (isCustomDomain && !pathname.startsWith('/api/portal') && !pathname.startsWith('/_next') && !pathname.startsWith('/favicon')) {
+    // This is a custom domain - redirect to portal lookup by domain
+    // The portal page will look up the org by custom domain
+    const url = request.nextUrl.clone();
+    url.pathname = `/portal/domain/${encodeURIComponent(hostname)}${pathname}`;
+    console.log('[MIDDLEWARE] Custom domain detected:', hostname, '-> rewriting to', url.pathname);
+    return NextResponse.rewrite(url);
+  }
 
   // Allow public routes
   if (publicRoutes.some(route => pathname.startsWith(route))) {
