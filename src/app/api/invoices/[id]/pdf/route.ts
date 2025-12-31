@@ -11,6 +11,10 @@ export async function GET(
     const { id } = await params;
     const currentUser = await requireAuth();
     const invoiceId = parseInt(id);
+    
+    // Get the base URL from the request
+    const url = new URL(request.url);
+    const baseUrl = `${url.protocol}//${url.host}`;
 
     // Get invoice with all details
     const invoice = await prisma.invoice.findFirst({
@@ -46,6 +50,7 @@ export async function GET(
       createdAt: invoice.createdAt.toISOString(),
       hash: invoice.hash,
       coverFee: invoice.coverFee,
+      baseUrl, // Pass the base URL for generating pay online link
       donor: {
         firstName: invoice.donor?.firstName || null,
         lastName: invoice.donor?.lastName || null,

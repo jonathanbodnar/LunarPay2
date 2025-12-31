@@ -9,6 +9,10 @@ export async function GET(
 ) {
   try {
     const { hash } = await params;
+    
+    // Get the base URL from the request
+    const url = new URL(request.url);
+    const baseUrl = `${url.protocol}//${url.host}`;
 
     const invoice = await prisma.invoice.findUnique({
       where: { hash },
@@ -67,6 +71,7 @@ export async function GET(
       createdAt: invoice.createdAt.toISOString(),
       hash: invoice.hash,
       coverFee: invoice.coverFee,
+      baseUrl, // Pass the base URL for generating pay online link
       donor: {
         firstName: invoice.donor?.firstName || null,
         lastName: invoice.donor?.lastName || null,

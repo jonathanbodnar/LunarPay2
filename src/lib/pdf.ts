@@ -12,6 +12,7 @@ interface InvoiceData {
   createdAt: string;
   hash?: string;
   coverFee?: boolean;
+  baseUrl?: string; // Base URL for generating pay online link
   donor: {
     firstName: string | null;
     lastName: string | null;
@@ -161,9 +162,13 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> 
   const payLinkY = Math.max(fromY, toY) + 15;
   doc.setTextColor(brandRgb[0], brandRgb[1], brandRgb[2]);
   doc.setFont('helvetica', 'normal');
-  doc.textWithLink('Pay online', 20, payLinkY, { 
-    url: invoice.hash ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/invoice/${invoice.hash}` : '#' 
-  });
+  
+  // Construct the pay online URL using provided baseUrl or fallback
+  const payOnlineUrl = invoice.hash 
+    ? `${invoice.baseUrl || 'https://app.lunarpay.com'}/invoice/${invoice.hash}` 
+    : '#';
+  
+  doc.textWithLink('Pay online', 20, payLinkY, { url: payOnlineUrl });
   
   // ========== MEMO/DESCRIPTION ==========
   let contentY = payLinkY + 10;
