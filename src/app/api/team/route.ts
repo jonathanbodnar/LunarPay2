@@ -19,6 +19,12 @@ export async function GET() {
   try {
     const currentUser = await requireAuth();
 
+    // Get user info from database
+    const userInfo = await prisma.user.findUnique({
+      where: { id: currentUser.userId },
+      select: { firstName: true, lastName: true, email: true },
+    });
+
     // Get user's organizations
     const organizations = await prisma.organization.findMany({
       where: { userId: currentUser.userId },
@@ -64,8 +70,8 @@ export async function GET() {
     const members = [
       {
         id: 0,
-        name: `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'Account Owner',
-        email: currentUser.email,
+        name: `${userInfo?.firstName || ''} ${userInfo?.lastName || ''}`.trim() || 'Account Owner',
+        email: userInfo?.email || currentUser.email,
         role: 'owner',
         permissions: null,
         status: 'active',
