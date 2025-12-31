@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,12 +11,17 @@ import { ProductSelect } from '@/components/forms/ProductSelect';
 
 export default function NewInvoicePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [organizations, setOrganizations] = useState<any[]>([]);
   
+  // Get pre-filled values from URL params (e.g., from customer profile)
+  const prefilledCustomerId = searchParams.get('customerId') || '';
+  const prefilledOrganizationId = searchParams.get('organizationId') || '';
+  
   const [formData, setFormData] = useState({
-    organizationId: '',
-    donorId: '',
+    organizationId: prefilledOrganizationId,
+    donorId: prefilledCustomerId,
     dueDate: '',
     memo: '',
     footer: '',
@@ -40,7 +45,8 @@ export default function NewInvoicePage() {
       if (orgsRes.ok) {
         const orgsData = await orgsRes.json();
         setOrganizations(orgsData.organizations || []);
-        if (orgsData.organizations?.length > 0) {
+        // Only set default organization if not pre-filled from URL
+        if (orgsData.organizations?.length > 0 && !prefilledOrganizationId) {
           setFormData(prev => ({ ...prev, organizationId: orgsData.organizations[0].id.toString() }));
         }
       }
