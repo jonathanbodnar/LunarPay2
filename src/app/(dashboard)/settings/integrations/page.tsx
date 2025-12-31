@@ -672,7 +672,7 @@ function IntegrationsContent() {
               </p>
               <Button 
                 className="bg-white text-orange-600 hover:bg-orange-50"
-                onClick={() => window.open('https://zapier.com/developer/public-invite/215942/your-invite-code', '_blank')}
+                onClick={() => window.open('https://zapier.com/developer/public-invite/234862/d388c374a59ce83eb06f7fe5c9f40141/', '_blank')}
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Connect with Zapier
