@@ -19,6 +19,7 @@ const publicApiRoutes = [
   '/api/admin/migrate-data', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/sync-database', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/test-db', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/backfill-hashes', // TEMPORARY - DELETE AFTER USE!
   '/api/invoices/public',
   '/api/payment-links/public',
   '/api/fortis/webhooks',
