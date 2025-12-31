@@ -221,7 +221,7 @@ export async function POST() {
       let startingAfter: string | undefined;
 
       while (hasMore) {
-        const params: Record<string, string> = { limit: '100', status: 'all' };
+        const params: Record<string, string> = { limit: '100', 'expand[]': 'data.items.data.price' };
         if (startingAfter) params.starting_after = startingAfter;
 
         const subsData = await stripeRequest(apiKey, '/subscriptions', params);
@@ -306,7 +306,8 @@ export async function POST() {
       while (hasMore) {
         const params: Record<string, string> = { 
           limit: '100',
-          created: JSON.stringify({ gte: ninetyDaysAgo }),
+          'created[gte]': ninetyDaysAgo.toString(),
+          'expand[]': 'data.lines',
         };
         if (startingAfter) params.starting_after = startingAfter;
 
@@ -401,7 +402,7 @@ export async function POST() {
       while (hasMore) {
         const params: Record<string, string> = { 
           limit: '100',
-          created: JSON.stringify({ gte: ninetyDaysAgo }),
+          'created[gte]': ninetyDaysAgo.toString(),
         };
         if (startingAfter) params.starting_after = startingAfter;
 
