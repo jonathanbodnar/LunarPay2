@@ -52,8 +52,9 @@ export async function GET(
     }
 
     console.error('Get branding error:', error);
+    console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
     );
   }
