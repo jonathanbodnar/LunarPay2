@@ -12,152 +12,90 @@ export async function GET() {
     const startOfYear = new Date(now.getFullYear(), 0, 1);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // Get all transactions for user's organizations
-    const [
-      totalRevenue,
-      monthlyRevenue,
-      yearlyRevenue,
-      last30DaysRevenue,
-      totalTransactions,
-      monthlyTransactions,
-      pendingInvoices,
-      activeSubscriptions,
-      totalCustomers,
-      newCustomersThisMonth,
-      revenueByDay,
-      transactionsByStatus,
-      paymentMethodBreakdown,
-    ] = await Promise.all([
-      // Total revenue
-      prisma.transaction.aggregate({
-        where: {
-          userId: currentUser.userId,
-          status: 'P',
-        },
+    // Initialize default values
+    let totalRevenue = { _sum: { totalAmount: null, fee: null } };
+    let monthlyRevenue = { _sum: { totalAmount: null, fee: null } };
+    let yearlyRevenue = { _sum: { totalAmount: null, fee: null } };
+    let last30DaysRevenue = { _sum: { totalAmount: null, fee: null } };
+    let totalTransactions = 0;
+    let monthlyTransactions = 0;
+    let pendingInvoices = 0;
+    let activeSubscriptions = 0;
+    let totalCustomers = 0;
+    let newCustomersThisMonth = 0;
+
+    // Execute queries with individual error handling
+    try {
+      totalRevenue = await prisma.transaction.aggregate({
+        where: { userId: currentUser.userId, status: 'P' },
         _sum: { totalAmount: true, fee: true },
-      }),
-      
-      // Monthly revenue
-      prisma.transaction.aggregate({
-        where: {
-          userId: currentUser.userId,
-          status: 'P',
-          createdAt: { gte: startOfMonth },
-        },
+      });
+    } catch (e) { console.error('totalRevenue error:', e); }
+
+    try {
+      monthlyRevenue = await prisma.transaction.aggregate({
+        where: { userId: currentUser.userId, status: 'P', createdAt: { gte: startOfMonth } },
         _sum: { totalAmount: true, fee: true },
-      }),
-      
-      // Yearly revenue
-      prisma.transaction.aggregate({
-        where: {
-          userId: currentUser.userId,
-          status: 'P',
-          createdAt: { gte: startOfYear },
-        },
+      });
+    } catch (e) { console.error('monthlyRevenue error:', e); }
+
+    try {
+      yearlyRevenue = await prisma.transaction.aggregate({
+        where: { userId: currentUser.userId, status: 'P', createdAt: { gte: startOfYear } },
         _sum: { totalAmount: true, fee: true },
-      }),
-      
-      // Last 30 days revenue
-      prisma.transaction.aggregate({
-        where: {
-          userId: currentUser.userId,
-          status: 'P',
-          createdAt: { gte: thirtyDaysAgo },
-        },
+      });
+    } catch (e) { console.error('yearlyRevenue error:', e); }
+
+    try {
+      last30DaysRevenue = await prisma.transaction.aggregate({
+        where: { userId: currentUser.userId, status: 'P', createdAt: { gte: thirtyDaysAgo } },
         _sum: { totalAmount: true, fee: true },
-      }),
-      
-      // Total transactions
-      prisma.transaction.count({
-        where: {
-          userId: currentUser.userId,
-        },
-      }),
-      
-      // Monthly transactions
-      prisma.transaction.count({
-        where: {
-          userId: currentUser.userId,
-          createdAt: { gte: startOfMonth },
-        },
-      }),
-      
-      // Pending invoices
-      prisma.invoice.count({
+      });
+    } catch (e) { console.error('last30DaysRevenue error:', e); }
+
+    try {
+      totalTransactions = await prisma.transaction.count({
+        where: { userId: currentUser.userId },
+      });
+    } catch (e) { console.error('totalTransactions error:', e); }
+
+    try {
+      monthlyTransactions = await prisma.transaction.count({
+        where: { userId: currentUser.userId, createdAt: { gte: startOfMonth } },
+      });
+    } catch (e) { console.error('monthlyTransactions error:', e); }
+
+    try {
+      pendingInvoices = await prisma.invoice.count({
         where: {
           organization: { userId: currentUser.userId },
           status: { in: ['finalized', 'sent'] },
         },
-      }),
-      
-      // Active subscriptions
-      prisma.subscription.count({
+      });
+    } catch (e) { console.error('pendingInvoices error:', e); }
+
+    try {
+      activeSubscriptions = await prisma.subscription.count({
         where: {
           organization: { userId: currentUser.userId },
-          status: 'A', // A=Active, D=Cancelled
+          status: 'A',
         },
-      }),
-      
-      // Total customers
-      prisma.donor.count({
-        where: {
-          userId: currentUser.userId,
-        },
-      }),
-      
-      // New customers this month
-      prisma.donor.count({
-        where: {
-          userId: currentUser.userId,
-          createdAt: { gte: startOfMonth },
-        },
-      }),
-      
-      // Revenue by day (last 30 days) - wrapped in try-catch to prevent failure
-      (async () => {
-        try {
-          return await prisma.$queryRaw<Array<{ date: Date; amount: number; count: number }>>`
-            SELECT 
-              DATE(created_at) as date,
-              COALESCE(SUM(total_amount), 0) as amount,
-              COUNT(*)::int as count
-            FROM epicpay_customer_transactions t
-            INNER JOIN church_detail o ON t.church_id = o.ch_id
-            WHERE o.client_id = ${currentUser.userId}
-              AND t.status = 'P'
-              AND t.created_at >= ${thirtyDaysAgo}
-            GROUP BY DATE(created_at)
-            ORDER BY date ASC
-          `;
-        } catch (err) {
-          console.error('Revenue by day query error:', err);
-          return [];
-        }
-      })(),
-      
-      // Transactions by status
-      prisma.transaction.groupBy({
-        by: ['status'],
-        where: {
-          userId: currentUser.userId,
-        },
-        _count: true,
-        _sum: { totalAmount: true },
-      }),
-      
-      // Payment method breakdown
-      prisma.transaction.groupBy({
-        by: ['source'],
-        where: {
-          userId: currentUser.userId,
-          status: 'P',
-        },
-        _count: true,
-        _sum: { totalAmount: true },
-      }),
-    ]);
+      });
+    } catch (e) { console.error('activeSubscriptions error:', e); }
 
-    // Calculate net amounts (convert Decimal to Number)
+    try {
+      totalCustomers = await prisma.donor.count({
+        where: { userId: currentUser.userId },
+      });
+    } catch (e) { console.error('totalCustomers error:', e); }
+
+    try {
+      newCustomersThisMonth = await prisma.donor.count({
+        where: { userId: currentUser.userId, createdAt: { gte: startOfMonth } },
+      });
+    } catch (e) { console.error('newCustomersThisMonth error:', e); }
+
+    // Calculate net amounts
     const totalNet = Number(totalRevenue._sum.totalAmount || 0) - Number(totalRevenue._sum.fee || 0);
     const monthlyNet = Number(monthlyRevenue._sum.totalAmount || 0) - Number(monthlyRevenue._sum.fee || 0);
     const yearlyNet = Number(yearlyRevenue._sum.totalAmount || 0) - Number(yearlyRevenue._sum.fee || 0);
@@ -195,34 +133,16 @@ export async function GET() {
           newThisMonth: newCustomersThisMonth,
         },
       },
-      charts: {
-        revenueByDay,
-        transactionsByStatus,
-        paymentMethodBreakdown,
-      },
     });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     console.error('Dashboard stats error:', error);
-    console.error('Error details:', {
-      message: (error as Error).message,
-      stack: (error as Error).stack,
-      name: (error as Error).name,
-    });
-    
     return NextResponse.json(
-      { 
-        error: 'Internal server error',
-        message: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
-      },
+      { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
     );
   }
 }
-
