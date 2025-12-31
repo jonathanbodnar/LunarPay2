@@ -4,12 +4,12 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { 
   Link2, 
   CheckCircle, 
   XCircle, 
   Download, 
-  Upload, 
   Loader2,
   ExternalLink,
   RefreshCw,
@@ -21,7 +21,9 @@ import {
   FileText,
   Users,
   Receipt,
-  AlertTriangle
+  AlertTriangle,
+  Key,
+  X
 } from 'lucide-react';
 
 interface Connector {
@@ -45,20 +47,40 @@ interface ZapierWebhook {
   isActive: boolean;
 }
 
+interface StripeStatus {
+  connected: boolean;
+  lastSync: string | null;
+  stats: {
+    lastImport?: {
+      customers: { imported: number; skipped: number };
+      products: { imported: number; skipped: number };
+      subscriptions: { imported: number; skipped: number };
+      invoices: { imported: number; skipped: number };
+      payments: { imported: number; skipped: number };
+    };
+  } | null;
+}
+
 function IntegrationsContent() {
   const searchParams = useSearchParams();
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [zapierWebhooks, setZapierWebhooks] = useState<ZapierWebhook[]>([]);
+  const [stripeStatus, setStripeStatus] = useState<StripeStatus>({ connected: false, lastSync: null, stats: null });
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  
+  // Stripe connect modal
+  const [showStripeModal, setShowStripeModal] = useState(false);
+  const [stripeApiKey, setStripeApiKey] = useState('');
 
   useEffect(() => {
     fetchIntegrations();
     fetchZapierInfo();
+    fetchStripeStatus();
     
     if (searchParams.get('connected') === 'true') {
       setSuccess('Integration connected successfully!');
@@ -96,6 +118,21 @@ function IntegrationsContent() {
       }
     } catch (err) {
       console.error('Failed to fetch Zapier info:', err);
+    }
+  };
+
+  const fetchStripeStatus = async () => {
+    try {
+      const response = await fetch('/api/integrations/stripe', {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setStripeStatus(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch Stripe status:', err);
     }
   };
 
@@ -180,12 +217,96 @@ function IntegrationsContent() {
     }
   };
 
-  const isConnected = (connectorId: string) => {
-    return connections.some(c => c.serviceId === connectorId);
+  const handleStripeConnect = async () => {
+    if (!stripeApiKey.startsWith('sk_')) {
+      setError('Please enter a valid Stripe secret key (starts with sk_)');
+      return;
+    }
+
+    setConnecting('stripe');
+    setError('');
+
+    try {
+      const response = await fetch('/api/integrations/stripe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: stripeApiKey }),
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        setSuccess('Stripe connected successfully! You can now import your data.');
+        setShowStripeModal(false);
+        setStripeApiKey('');
+        fetchStripeStatus();
+        setTimeout(() => setSuccess(''), 5000);
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to connect Stripe');
+      }
+    } catch (err) {
+      setError('Error connecting Stripe');
+    } finally {
+      setConnecting(null);
+    }
   };
 
-  const getConnection = (connectorId: string) => {
-    return connections.find(c => c.serviceId === connectorId);
+  const handleStripeDisconnect = async () => {
+    if (!confirm('Are you sure you want to disconnect Stripe?')) return;
+
+    try {
+      const response = await fetch('/api/integrations/stripe', {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        setSuccess('Stripe disconnected');
+        fetchStripeStatus();
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        setError('Failed to disconnect Stripe');
+      }
+    } catch (err) {
+      setError('Error disconnecting Stripe');
+    }
+  };
+
+  const handleStripeSync = async () => {
+    setSyncing('stripe');
+    setError('');
+
+    try {
+      const response = await fetch('/api/integrations/stripe/sync', {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const { summary } = data;
+        setSuccess(
+          `Import complete: ${summary.customers.imported} customers, ` +
+          `${summary.products.imported} products, ` +
+          `${summary.subscriptions.imported} subscriptions, ` +
+          `${summary.invoices.imported} invoices, ` +
+          `${summary.payments.imported} payments`
+        );
+        fetchStripeStatus();
+        setTimeout(() => setSuccess(''), 8000);
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Import failed');
+      }
+    } catch (err) {
+      setError('Error importing from Stripe');
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  const isConnected = (connectorId: string) => {
+    return connections.some(c => c.serviceId === connectorId);
   };
 
   // Zapier triggers info
@@ -210,7 +331,7 @@ function IntegrationsContent() {
       <div>
         <h1 className="text-2xl font-semibold">Integrations</h1>
         <p className="mt-1 text-muted-foreground">
-          Connect your accounting software, import from Stripe, or automate with Zapier
+          Import from Stripe, connect accounting software, or automate with Zapier
         </p>
       </div>
 
@@ -225,6 +346,130 @@ function IntegrationsContent() {
         <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
           <XCircle className="h-5 w-5 flex-shrink-0" />
           <p>{error}</p>
+          <button onClick={() => setError('')} className="ml-auto">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Stripe Import */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-medium flex items-center gap-2">
+          <CreditCard className="h-5 w-5" />
+          Import from Stripe
+        </h2>
+        <Card className={stripeStatus.connected ? 'border-green-200 bg-green-50/30' : ''}>
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-4">
+              <div className="h-12 w-12 rounded-lg bg-[#635BFF] flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-lg">S</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-lg">Stripe</h3>
+                  {stripeStatus.connected && (
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Connected</span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Import your customers, products, subscriptions, invoices, and payment history from Stripe
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="text-xs bg-muted px-2 py-1 rounded">Customers</span>
+                  <span className="text-xs bg-muted px-2 py-1 rounded">Products</span>
+                  <span className="text-xs bg-muted px-2 py-1 rounded">Subscriptions</span>
+                  <span className="text-xs bg-muted px-2 py-1 rounded">Invoices</span>
+                  <span className="text-xs bg-muted px-2 py-1 rounded">Payments</span>
+                </div>
+                {stripeStatus.lastSync && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Last imported: {new Date(stripeStatus.lastSync).toLocaleString()}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                {stripeStatus.connected ? (
+                  <>
+                    <Button
+                      onClick={handleStripeSync}
+                      disabled={syncing === 'stripe'}
+                    >
+                      {syncing === 'stripe' ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4 mr-2" />
+                      )}
+                      {syncing === 'stripe' ? 'Importing...' : 'Import Data'}
+                    </Button>
+                    <Button variant="outline" onClick={handleStripeDisconnect}>
+                      Disconnect
+                    </Button>
+                  </>
+                ) : (
+                  <Button onClick={() => setShowStripeModal(true)}>
+                    <Key className="h-4 w-4 mr-2" />
+                    Connect Stripe
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Stripe Connect Modal */}
+      {showStripeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Connect Stripe</h3>
+              <button onClick={() => setShowStripeModal(false)}>
+                <X className="h-5 w-5 text-gray-500 hover:text-gray-700" />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Enter your Stripe secret API key to import your data. You can find this in your{' '}
+              <a 
+                href="https://dashboard.stripe.com/apikeys" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Stripe Dashboard → Developers → API keys
+              </a>
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium block mb-1">Secret Key</label>
+                <Input
+                  type="password"
+                  placeholder="sk_live_..."
+                  value={stripeApiKey}
+                  onChange={(e) => setStripeApiKey(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use your live secret key (starts with sk_live_) to import real data
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  onClick={handleStripeConnect}
+                  disabled={connecting === 'stripe' || !stripeApiKey}
+                >
+                  {connecting === 'stripe' ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Link2 className="h-4 w-4 mr-2" />
+                  )}
+                  Connect
+                </Button>
+                <Button variant="outline" onClick={() => setShowStripeModal(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -233,7 +478,7 @@ function IntegrationsContent() {
         <div className="space-y-4">
           <h2 className="text-lg font-medium flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-green-600" />
-            Connected
+            Connected Accounting
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {connections.map((connection) => (
@@ -269,16 +514,6 @@ function IntegrationsContent() {
                     </Button>
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => handleSync(connection.serviceId, 'sync-customers')}
-                      disabled={syncing === connection.serviceId}
-                    >
-                      <Upload className="h-4 w-4 mr-1" />
-                      Export
-                    </Button>
-                    <Button
-                      size="sm"
                       variant="ghost"
                       onClick={() => handleDisconnect(connection.serviceId, connection.name)}
                     >
@@ -291,40 +526,6 @@ function IntegrationsContent() {
           </div>
         </div>
       )}
-
-      {/* Stripe Import */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-medium flex items-center gap-2">
-          <CreditCard className="h-5 w-5" />
-          Payment Platforms
-        </h2>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-4">
-              <div className="h-12 w-12 rounded-lg bg-[#635BFF] flex items-center justify-center">
-                <span className="text-white font-bold text-lg">S</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-medium text-lg">Stripe</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Import your customers, products, subscriptions, and payment history from Stripe
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="text-xs bg-muted px-2 py-1 rounded">Customers</span>
-                  <span className="text-xs bg-muted px-2 py-1 rounded">Products</span>
-                  <span className="text-xs bg-muted px-2 py-1 rounded">Subscriptions</span>
-                  <span className="text-xs bg-muted px-2 py-1 rounded">Invoices</span>
-                  <span className="text-xs bg-muted px-2 py-1 rounded">Payment Methods</span>
-                </div>
-              </div>
-              <Button disabled>
-                <Link2 className="h-4 w-4 mr-2" />
-                Coming Soon
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Accounting Integrations */}
       <div className="space-y-4">
