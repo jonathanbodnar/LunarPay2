@@ -56,15 +56,23 @@ export async function GET() {
       ORDER BY tm.joined_at ASC
     `;
 
-    // Get pending invites
-    const pendingInvites = await prisma.teamInvite.findMany({
-      where: {
-        organizationId: { in: orgIds },
-        status: 'pending',
-        expiresAt: { gt: new Date() },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Get pending invites (use raw SQL for reliability)
+    const pendingInvites = await prisma.$queryRaw<Array<{
+      id: number;
+      email: string;
+      role: string;
+      permissions: string | null;
+      status: string;
+      expires_at: Date;
+      created_at: Date;
+    }>>`
+      SELECT id, email, role, permissions, status, expires_at, created_at 
+      FROM team_invites 
+      WHERE organization_id = ANY(${orgIds}) 
+      AND status = 'pending' 
+      AND expires_at > NOW()
+      ORDER BY created_at DESC
+    `;
 
     // Add the owner (current user)
     const members = [
@@ -94,8 +102,8 @@ export async function GET() {
       role: inv.role,
       permissions: inv.permissions ? JSON.parse(inv.permissions) : null,
       status: 'pending',
-      createdAt: inv.createdAt,
-      expiresAt: inv.expiresAt,
+      createdAt: inv.created_at,
+      expiresAt: inv.expires_at,
     }));
 
     return NextResponse.json({ 
