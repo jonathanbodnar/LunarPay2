@@ -157,9 +157,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex h-16 items-center justify-between px-6 border-b border-border">
               <Link href="/dashboard" className="flex items-center gap-2">
                 <img 
-                  src="/logo-dark.svg" 
+                  src="/logo.png" 
                   alt="LunarPay" 
-                  className="h-7 w-auto"
+                  className="h-8 w-auto"
                 />
               </Link>
               <button 
@@ -193,9 +193,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex h-16 items-center px-6 border-b border-border">
             <Link href="/dashboard" className="flex items-center gap-2">
               <img 
-                src="/logo-dark.svg" 
+                src="/logo.png" 
                 alt="LunarPay" 
-                className="h-7 w-auto"
+                className="h-8 w-auto"
               />
             </Link>
           </div>
