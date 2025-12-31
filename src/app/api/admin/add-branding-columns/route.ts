@@ -7,10 +7,12 @@ export async function POST() {
   try {
     // Add columns if they don't exist (PostgreSQL syntax)
     // Note: Organization model maps to "church_detail" table
+    // Note: PaymentLink model maps to "payment_links" table
     const queries = [
       `ALTER TABLE church_detail ADD COLUMN IF NOT EXISTS primary_color VARCHAR(20) DEFAULT '#000000'`,
       `ALTER TABLE church_detail ADD COLUMN IF NOT EXISTS background_color VARCHAR(20) DEFAULT '#ffffff'`,
       `ALTER TABLE church_detail ADD COLUMN IF NOT EXISTS button_text_color VARCHAR(20) DEFAULT '#ffffff'`,
+      `ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS webhook_url VARCHAR(500)`,
     ];
 
     const results = [];
@@ -26,7 +28,7 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      message: 'Branding columns migration completed',
+      message: 'Database migration completed',
       results,
     });
   } catch (error) {

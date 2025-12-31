@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Webhook, HelpCircle } from 'lucide-react';
 
 interface Product {
   id: number;
@@ -25,6 +25,7 @@ export default function NewPaymentLinkPage() {
     description: '',
     paymentMethods: 'both',
     status: 'active',
+    webhookUrl: '',
   });
 
   const [selectedProducts, setSelectedProducts] = useState<Array<{
@@ -126,6 +127,7 @@ export default function NewPaymentLinkPage() {
         description: formData.description || undefined,
         paymentMethods: formData.paymentMethods,
         status: formData.status,
+        webhookUrl: formData.webhookUrl || undefined,
         products: selectedProducts
           .filter(p => p.productId !== null)
           .map(p => ({
@@ -238,6 +240,60 @@ export default function NewPaymentLinkPage() {
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Webhook className="h-5 w-5" />
+              <CardTitle className="text-base font-medium">Webhook Integration</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                Webhook URL
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Input
+                type="url"
+                value={formData.webhookUrl}
+                onChange={(e) => setFormData({ ...formData, webhookUrl: e.target.value })}
+                placeholder="https://your-server.com/webhook"
+              />
+              <p className="text-xs text-muted-foreground">
+                We'll send a POST request with customer and payment data to this URL after each successful payment.
+              </p>
+            </div>
+            
+            <div className="bg-muted/50 rounded-lg p-4">
+              <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                <HelpCircle className="h-4 w-4" />
+                Webhook Payload Example
+              </p>
+              <pre className="text-xs bg-background p-3 rounded border overflow-x-auto">
+{`{
+  "event": "payment.completed",
+  "payment_link_id": 123,
+  "payment_link_name": "Event Registration",
+  "customer": {
+    "email": "john@example.com",
+    "name": "John Doe"
+  },
+  "payment": {
+    "amount": 50.00,
+    "currency": "USD",
+    "method": "card",
+    "transaction_id": "txn_abc123"
+  },
+  "products": [
+    { "name": "General Admission", "qty": 2, "price": 25.00 }
+  ],
+  "timestamp": "2025-01-01T12:00:00Z"
+}`}
+              </pre>
             </div>
           </CardContent>
         </Card>
