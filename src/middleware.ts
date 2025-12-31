@@ -24,6 +24,7 @@ const publicApiRoutes = [
   '/api/admin/add-portal-columns', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-email-templates-table', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-team-tables', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/enable-portal', // TEMPORARY - DELETE AFTER USE!
   '/api/team/invite', // Public invite endpoints
   '/api/invoices/public',
   '/api/payment-links/public',
