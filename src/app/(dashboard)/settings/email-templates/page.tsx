@@ -101,12 +101,15 @@ export default function EmailTemplatesPage() {
     try {
       const res = await fetch('/api/organizations');
       if (!res.ok) throw new Error('Failed to fetch organization');
-      const orgs = await res.json();
+      const data = await res.json();
+      const orgs = data.organizations || [];
       if (orgs.length > 0) {
         setOrganization(orgs[0]);
       }
     } catch (error) {
       console.error('Error fetching organization:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
