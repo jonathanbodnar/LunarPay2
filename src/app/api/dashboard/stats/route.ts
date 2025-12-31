@@ -94,7 +94,7 @@ export async function GET() {
       prisma.subscription.count({
         where: {
           organization: { userId: currentUser.userId },
-          status: 'active',
+          status: 'A', // A=Active, D=Cancelled
         },
       }),
       
@@ -113,20 +113,27 @@ export async function GET() {
         },
       }),
       
-      // Revenue by day (last 30 days)
-      prisma.$queryRaw`
-        SELECT 
-          DATE(created_at) as date,
-          SUM(amount) as amount,
-          COUNT(*) as count
-        FROM transactions t
-        INNER JOIN organizations o ON t.organization_id = o.id
-        WHERE o.user_id = ${currentUser.userId}
-          AND t.status = 'succeeded'
-          AND t.created_at >= ${thirtyDaysAgo}
-        GROUP BY DATE(created_at)
-        ORDER BY date ASC
-      `,
+      // Revenue by day (last 30 days) - wrapped in try-catch to prevent failure
+      (async () => {
+        try {
+          return await prisma.$queryRaw<Array<{ date: Date; amount: number; count: number }>>`
+            SELECT 
+              DATE(created_at) as date,
+              COALESCE(SUM(total_amount), 0) as amount,
+              COUNT(*)::int as count
+            FROM epicpay_customer_transactions t
+            INNER JOIN church_detail o ON t.church_id = o.ch_id
+            WHERE o.client_id = ${currentUser.userId}
+              AND t.status = 'P'
+              AND t.created_at >= ${thirtyDaysAgo}
+            GROUP BY DATE(created_at)
+            ORDER BY date ASC
+          `;
+        } catch (err) {
+          console.error('Revenue by day query error:', err);
+          return [];
+        }
+      })(),
       
       // Transactions by status
       prisma.transaction.groupBy({
@@ -203,8 +210,17 @@ export async function GET() {
     }
 
     console.error('Dashboard stats error:', error);
+    console.error('Error details:', {
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+      name: (error as Error).name,
+    });
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+      },
       { status: 500 }
     );
   }

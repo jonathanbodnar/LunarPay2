@@ -10,7 +10,12 @@ const createProductSchema = z.object({
   price: z.number().nonnegative(),
   qty: z.number().nullable().optional(),
   isSubscription: z.boolean().optional(),
-  subscriptionInterval: z.string().optional(),
+  subscriptionInterval: z.string().nullable().optional(),
+  recurrence: z.string().optional(),
+  customSchedule: z.array(z.object({
+    date: z.string(),
+    amount: z.string(),
+  })).nullable().optional(),
 });
 
 export async function GET() {

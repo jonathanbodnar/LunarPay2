@@ -56,7 +56,11 @@ export default function NewPaymentLinkPage() {
 
       if (productsRes.ok) {
         const data = await productsRes.json();
-        setProducts(data.products || []);
+        const productsList = (data.products || []).map((p: any) => ({
+          ...p,
+          price: Number(p.price), // Convert Decimal to number
+        }));
+        setProducts(productsList);
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -85,7 +89,7 @@ export default function NewPaymentLinkPage() {
           ...updated[index],
           productId: product.id,
           productName: product.name,
-          price: product.price,
+          price: Number(product.price), // Ensure price is a number
         };
       }
     } else {
@@ -243,7 +247,7 @@ export default function NewPaymentLinkPage() {
                         <option value="">Select product...</option>
                         {products.map(product => (
                           <option key={product.id} value={product.id}>
-                            {product.name} (${product.price.toFixed(2)})
+                            {product.name} (${Number(product.price).toFixed(2)})
                           </option>
                         ))}
                       </select>
