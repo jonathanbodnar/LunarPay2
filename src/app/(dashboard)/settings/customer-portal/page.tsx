@@ -106,7 +106,15 @@ export default function CustomerPortalSettingsPage() {
         setTimeout(() => setSuccess(''), 3000);
       } else {
         const data = await response.json();
-        setError(data.error || 'Failed to save portal settings');
+        if (data.details && Array.isArray(data.details)) {
+          // Handle Zod validation errors
+          const messages = data.details.map((d: { message: string; path?: string[] }) => 
+            d.path ? `${d.path.join('.')}: ${d.message}` : d.message
+          ).join(', ');
+          setError(messages || data.error || 'Failed to save portal settings');
+        } else {
+          setError(data.error || 'Failed to save portal settings');
+        }
       }
     } catch (err) {
       setError('Error saving portal settings');
@@ -260,9 +268,20 @@ export default function CustomerPortalSettingsPage() {
                 onChange={(e) => setFormData({ ...formData, portalCustomDomain: e.target.value })}
                 placeholder="pay.yourcompany.com"
               />
-              <p className="text-xs text-muted-foreground">
-                Point your domain's CNAME record to <code className="bg-muted px-1 rounded">portal.lunarpay.com</code>
-              </p>
+              {formData.portalCustomDomain ? (
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p>To use your custom domain, add this DNS record:</p>
+                  <div className="bg-muted p-2 rounded font-mono text-xs">
+                    <div><span className="text-muted-foreground">Type:</span> CNAME</div>
+                    <div><span className="text-muted-foreground">Name:</span> {formData.portalCustomDomain.split('.')[0] || formData.portalCustomDomain}</div>
+                    <div><span className="text-muted-foreground">Value:</span> portal.lunarpay.com</div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Use your own domain for the customer portal (e.g., pay.yourcompany.com)
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

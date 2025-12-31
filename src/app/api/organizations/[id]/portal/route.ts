@@ -4,11 +4,15 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
 const portalSettingsSchema = z.object({
-  portalSlug: z.string().min(3).max(100).regex(/^[a-z0-9-]+$/).optional(),
+  portalSlug: z.string()
+    .min(3, 'Portal slug must be at least 3 characters')
+    .max(100, 'Portal slug must be 100 characters or less')
+    .regex(/^[a-z0-9-]+$/, 'Portal slug can only contain lowercase letters, numbers, and hyphens')
+    .transform(val => val || null),
   portalEnabled: z.boolean().optional(),
-  portalCustomDomain: z.string().max(255).optional().nullable(),
-  portalTitle: z.string().max(255).optional().nullable(),
-  portalDescription: z.string().max(1000).optional().nullable(),
+  portalCustomDomain: z.string().max(255).optional().nullable().transform(val => val?.trim() || null),
+  portalTitle: z.string().max(255).optional().nullable().transform(val => val?.trim() || null),
+  portalDescription: z.string().max(1000).optional().nullable().transform(val => val?.trim() || null),
 });
 
 // GET /api/organizations/:id/portal - Get portal settings
