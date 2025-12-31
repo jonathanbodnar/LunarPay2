@@ -54,6 +54,13 @@ const navigation: NavItem[] = [
     name: 'Settings', 
     href: '/settings', 
     icon: Settings,
+    children: [
+      { name: 'Customer Portal', href: '/settings/customer-portal' },
+      { name: 'Branding', href: '/settings/branding' },
+      { name: 'Integrations', href: '/settings/integrations' },
+      { name: 'Team', href: '/settings/team' },
+      { name: 'Notifications', href: '/settings/notifications' },
+    ]
   },
 ];
 

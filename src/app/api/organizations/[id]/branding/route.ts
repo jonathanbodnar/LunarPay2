@@ -85,52 +85,75 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { primaryColor, backgroundColor, buttonTextColor, logoBase64, logoFileName } = body;
+    const { primaryColor, backgroundColor, buttonTextColor, logoBase64, logoFileName, removeLogo } = body;
 
     let logoUrl = organization.logo;
+    let logoUploadError: string | null = null;
 
+    // Handle logo removal
+    if (removeLogo) {
+      logoUrl = null;
+    }
     // Handle logo upload if provided
-    if (logoBase64 && logoFileName && supabase) {
-      try {
-        // Convert base64 to buffer
-        const base64Data = logoBase64.replace(/^data:image\/\w+;base64,/, '');
-        const buffer = Buffer.from(base64Data, 'base64');
-
-        // Determine content type
-        const extension = logoFileName.split('.').pop()?.toLowerCase() || 'png';
-        const contentType = extension === 'jpg' || extension === 'jpeg' 
-          ? 'image/jpeg' 
-          : 'image/png';
-
-        // Upload to Supabase Storage
-        const fileName = `org-${organizationId}-logo-${Date.now()}.${extension}`;
-        
-        // Ensure bucket exists
-        const { data: buckets } = await supabase.storage.listBuckets();
-        if (!buckets?.find(b => b.name === 'logos')) {
-          await supabase.storage.createBucket('logos', { public: true });
-        }
-
-        const { data, error } = await supabase.storage
-          .from('logos')
-          .upload(fileName, buffer, {
-            contentType,
-            upsert: true,
-          });
-
-        if (error) {
-          console.error('Logo upload error:', error);
-        } else {
-          // Get public URL
-          const { data: urlData } = supabase.storage
-            .from('logos')
-            .getPublicUrl(fileName);
+    else if (logoBase64 && logoFileName) {
+      if (!supabase) {
+        console.error('Supabase not configured. URL:', supabaseUrl ? 'Set' : 'Missing', 'Key:', supabaseServiceKey ? 'Set' : 'Missing');
+        logoUploadError = 'Storage service not configured';
+      } else {
+        try {
+          console.log('Uploading logo for org:', organizationId, 'File:', logoFileName);
           
-          logoUrl = urlData.publicUrl;
+          // Convert base64 to buffer
+          const base64Data = logoBase64.replace(/^data:image\/\w+;base64,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+
+          // Determine content type
+          const extension = logoFileName.split('.').pop()?.toLowerCase() || 'png';
+          const contentType = extension === 'jpg' || extension === 'jpeg' 
+            ? 'image/jpeg' 
+            : 'image/png';
+
+          // Upload to Supabase Storage
+          const fileName = `org-${organizationId}-logo-${Date.now()}.${extension}`;
+          
+          // Ensure bucket exists
+          const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+          if (bucketsError) {
+            console.error('Error listing buckets:', bucketsError);
+          }
+          
+          if (!buckets?.find(b => b.name === 'logos')) {
+            console.log('Creating logos bucket...');
+            const { error: createError } = await supabase.storage.createBucket('logos', { public: true });
+            if (createError) {
+              console.error('Error creating bucket:', createError);
+            }
+          }
+
+          const { data, error } = await supabase.storage
+            .from('logos')
+            .upload(fileName, buffer, {
+              contentType,
+              upsert: true,
+            });
+
+          if (error) {
+            console.error('Logo upload error:', error);
+            logoUploadError = error.message;
+          } else {
+            console.log('Logo uploaded successfully:', data);
+            // Get public URL
+            const { data: urlData } = supabase.storage
+              .from('logos')
+              .getPublicUrl(fileName);
+            
+            logoUrl = urlData.publicUrl;
+            console.log('Logo URL:', logoUrl);
+          }
+        } catch (uploadError) {
+          console.error('Logo upload failed:', uploadError);
+          logoUploadError = (uploadError as Error).message;
         }
-      } catch (uploadError) {
-        console.error('Logo upload failed:', uploadError);
-        // Continue without updating logo
       }
     }
 
@@ -141,7 +164,7 @@ export async function PUT(
         primaryColor: primaryColor || '#000000',
         backgroundColor: backgroundColor || '#ffffff',
         buttonTextColor: buttonTextColor || '#ffffff',
-        ...(logoUrl !== organization.logo && { logo: logoUrl }),
+        logo: logoUrl,
       },
       select: {
         id: true,
@@ -153,7 +176,10 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json({ branding: updatedOrg });
+    return NextResponse.json({ 
+      branding: updatedOrg,
+      ...(logoUploadError && { warning: `Logo upload failed: ${logoUploadError}` }),
+    });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
       return NextResponse.json(

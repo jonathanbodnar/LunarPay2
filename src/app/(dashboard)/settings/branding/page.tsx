@@ -118,6 +118,9 @@ export default function BrandingPage() {
         logoFileName = formData.logo.name;
       }
 
+      // Check if we need to remove the logo
+      const removeLogo = !formData.logoPreview && !formData.logo && formData.existingLogo;
+
       const response = await fetch(`/api/organizations/${formData.organizationId}/branding`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -127,12 +130,19 @@ export default function BrandingPage() {
           buttonTextColor: formData.buttonTextColor,
           logoBase64,
           logoFileName,
+          removeLogo,
         }),
         credentials: 'include',
       });
 
       if (response.ok) {
         const data = await response.json();
+        
+        // Show warning if logo upload failed
+        if (data.warning) {
+          alert(data.warning);
+        }
+        
         setFormData(prev => ({
           ...prev,
           existingLogo: data.branding.logo || '',
