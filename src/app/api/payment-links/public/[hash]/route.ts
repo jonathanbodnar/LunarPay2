@@ -20,6 +20,9 @@ export async function GET(
             phoneNumber: true,
             email: true,
             website: true,
+            primaryColor: true,
+            backgroundColor: true,
+            buttonTextColor: true,
           },
         },
         products: {

@@ -24,6 +24,9 @@ export async function GET(
             city: true,
             state: true,
             postal: true,
+            primaryColor: true,
+            backgroundColor: true,
+            buttonTextColor: true,
           },
         },
         donor: {

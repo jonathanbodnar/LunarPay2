@@ -23,6 +23,7 @@ export async function GET(
             state: true,
             postal: true,
             logo: true,
+            primaryColor: true,
           },
         },
         donor: {
@@ -81,6 +82,7 @@ export async function GET(
             .filter(Boolean)
             .join(', ') : null,
         logo: invoice.organization?.logo || null,
+        primaryColor: invoice.organization?.primaryColor || null,
       },
       products: invoice.products.map(p => ({
         productName: p.productName,

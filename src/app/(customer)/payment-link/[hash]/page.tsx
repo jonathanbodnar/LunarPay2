@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { ShoppingCart, CreditCard, Minus, Plus } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
@@ -17,6 +15,9 @@ interface PaymentLink {
   organization: {
     name: string;
     logo: string | null;
+    primaryColor: string | null;
+    backgroundColor: string | null;
+    buttonTextColor: string | null;
   };
   products: Array<{
     id: number;
@@ -41,6 +42,11 @@ export default function PaymentLinkPage() {
   const [error, setError] = useState('');
   const [cart, setCart] = useState<Record<number, number>>({});
   const [processing, setProcessing] = useState(false);
+
+  // Branding colors with defaults
+  const primaryColor = paymentLink?.organization?.primaryColor || '#000000';
+  const backgroundColor = paymentLink?.organization?.backgroundColor || '#ffffff';
+  const buttonTextColor = paymentLink?.organization?.buttonTextColor || '#ffffff';
 
   useEffect(() => {
     fetchPaymentLink();
@@ -87,14 +93,18 @@ export default function PaymentLinkPage() {
     setProcessing(true);
     // TODO: Open Fortis Elements payment modal
     alert('Payment processing will open here with Fortis Elements');
+    setProcessing(false);
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor }}>
         <div className="text-center">
-          <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-gray-500">Loading...</p>
+          <div 
+            className="animate-spin h-8 w-8 border-4 border-t-transparent rounded-full mx-auto mb-4"
+            style={{ borderColor: primaryColor }}
+          />
+          <p style={{ color: `${primaryColor}80` }}>Loading...</p>
         </div>
       </div>
     );
@@ -102,12 +112,12 @@ export default function PaymentLinkPage() {
 
   if (error || !paymentLink) {
     return (
-      <div className="flex items-center justify-center min-h-screen px-4">
+      <div className="flex items-center justify-center min-h-screen px-4" style={{ backgroundColor }}>
         <Card className="w-full max-w-md">
           <CardContent className="pt-6 text-center">
-            <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <ShoppingCart className="h-12 w-12 mx-auto mb-4" style={{ color: `${primaryColor}60` }} />
             <h2 className="text-xl font-semibold mb-2">Page Not Found</h2>
-            <p className="text-gray-500">{error || 'This payment link does not exist.'}</p>
+            <p className="text-muted-foreground">{error || 'This payment link does not exist.'}</p>
           </CardContent>
         </Card>
       </div>
@@ -118,18 +128,31 @@ export default function PaymentLinkPage() {
   const hasItems = Object.values(cart).some(qty => qty > 0);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
+    <div className="min-h-screen py-12 px-4" style={{ backgroundColor }}>
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          {paymentLink.organization.logo && (
-            <img src={paymentLink.organization.logo} alt={paymentLink.organization.name} className="h-16 mx-auto mb-4" />
+          {paymentLink.organization.logo ? (
+            <img 
+              src={paymentLink.organization.logo} 
+              alt={paymentLink.organization.name} 
+              className="h-14 mx-auto mb-4 object-contain" 
+            />
+          ) : (
+            <h2 
+              className="text-lg font-bold mb-2"
+              style={{ color: primaryColor }}
+            >
+              {paymentLink.organization.name}
+            </h2>
           )}
-          <h1 className="text-3xl font-bold text-gray-900">{paymentLink.name}</h1>
+          <h1 className="text-3xl font-bold">{paymentLink.name}</h1>
           {paymentLink.description && (
-            <p className="text-gray-600 mt-2">{paymentLink.description}</p>
+            <p className="text-muted-foreground mt-2 max-w-xl mx-auto">{paymentLink.description}</p>
           )}
-          <p className="text-sm text-gray-500 mt-1">by {paymentLink.organization.name}</p>
+          {!paymentLink.organization.logo && (
+            <p className="text-sm text-muted-foreground mt-1">by {paymentLink.organization.name}</p>
+          )}
         </div>
 
         {/* Products */}
@@ -142,11 +165,13 @@ export default function PaymentLinkPage() {
             return (
               <Card key={item.id} className={!isAvailable ? 'opacity-60' : ''}>
                 <CardHeader>
-                  <CardTitle>{item.product.name}</CardTitle>
-                  <CardDescription>
-                    {formatCurrency(Number(item.product.price))}
+                  <CardTitle className="text-lg">{item.product.name}</CardTitle>
+                  <CardDescription className="flex items-center gap-2">
+                    <span className="font-semibold" style={{ color: primaryColor }}>
+                      {formatCurrency(Number(item.product.price))}
+                    </span>
                     {!item.unlimited && (
-                      <span className="ml-2 text-xs">
+                      <span className="text-xs text-muted-foreground">
                         ({item.available} available)
                       </span>
                     )}
@@ -154,38 +179,36 @@ export default function PaymentLinkPage() {
                 </CardHeader>
                 <CardContent>
                   {item.product.description && (
-                    <p className="text-sm text-gray-600 mb-4">{item.product.description}</p>
+                    <p className="text-sm text-muted-foreground mb-4">{item.product.description}</p>
                   )}
                   
                   {isAvailable ? (
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
+                        <button
+                          className="h-9 w-9 rounded-lg border border-border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-50"
                           onClick={() => updateQuantity(item.id, -1)}
                           disabled={quantity === 0}
                         >
                           <Minus className="h-4 w-4" />
-                        </Button>
+                        </button>
                         <span className="w-12 text-center font-medium">{quantity}</span>
-                        <Button
-                          size="sm"
-                          variant="outline"
+                        <button
+                          className="h-9 w-9 rounded-lg border border-border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-50"
                           onClick={() => updateQuantity(item.id, 1)}
                           disabled={quantity >= maxQty}
                         >
                           <Plus className="h-4 w-4" />
-                        </Button>
+                        </button>
                       </div>
                       {quantity > 0 && (
-                        <span className="font-semibold text-blue-600">
+                        <span className="font-semibold" style={{ color: primaryColor }}>
                           {formatCurrency(Number(item.product.price) * quantity)}
                         </span>
                       )}
                     </div>
                   ) : (
-                    <p className="text-red-600 text-sm font-medium">Out of stock</p>
+                    <p className="text-destructive text-sm font-medium">Out of stock</p>
                   )}
                 </CardContent>
               </Card>
@@ -195,21 +218,32 @@ export default function PaymentLinkPage() {
 
         {/* Checkout */}
         {hasItems && (
-          <Card className="sticky bottom-4 shadow-lg">
+          <Card className="sticky bottom-4 shadow-lg border-2" style={{ borderColor: `${primaryColor}30` }}>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-lg font-semibold">Total</span>
-                <span className="text-2xl font-bold text-blue-600">{formatCurrency(total)}</span>
+                <span className="text-2xl font-bold" style={{ color: primaryColor }}>
+                  {formatCurrency(total)}
+                </span>
               </div>
-              <Button size="lg" className="w-full" onClick={handleCheckout} disabled={processing}>
-                <CreditCard className="mr-2 h-5 w-5" />
+              <button 
+                className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: primaryColor, color: buttonTextColor }}
+                onClick={handleCheckout} 
+                disabled={processing}
+              >
+                <CreditCard className="h-5 w-5" />
                 {processing ? 'Processing...' : 'Proceed to Payment'}
-              </Button>
+              </button>
             </CardContent>
           </Card>
         )}
+
+        {/* Footer */}
+        <p className="text-center text-sm text-muted-foreground mt-8">
+          Powered by LunarPay
+        </p>
       </div>
     </div>
   );
 }
-

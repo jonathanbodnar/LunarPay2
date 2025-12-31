@@ -25,6 +25,7 @@ interface InvoiceData {
     email: string | null;
     address: string | null;
     logo?: string | null;
+    primaryColor?: string | null;
   };
   products: Array<{
     productName: string;
@@ -32,6 +33,14 @@ interface InvoiceData {
     price: number;
     subtotal: number;
   }>;
+}
+
+// Helper to convert hex color to RGB array
+function hexToRgb(hex: string): [number, number, number] {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result 
+    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+    : [0, 0, 0];
 }
 
 function formatCurrency(amount: number): string {
@@ -52,6 +61,10 @@ function formatDate(dateString: string): string {
 export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
+  
+  // Get branding color (default to a nice accent red if not set)
+  const primaryColor = invoice.organization.primaryColor || '#000000';
+  const brandRgb = hexToRgb(primaryColor);
   
   // ========== HEADER ==========
   // "INVOICE" title
@@ -146,7 +159,7 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> 
   
   // ========== PAY ONLINE LINK ==========
   const payLinkY = Math.max(fromY, toY) + 15;
-  doc.setTextColor(0, 102, 204);
+  doc.setTextColor(brandRgb[0], brandRgb[1], brandRgb[2]);
   doc.setFont('helvetica', 'normal');
   doc.textWithLink('Pay online', 20, payLinkY, { 
     url: invoice.hash ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/invoice/${invoice.hash}` : '#' 
@@ -198,9 +211,9 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> 
       lineWidth: 0,
     },
     didDrawCell: (data) => {
-      // Draw bottom border for header
+      // Draw bottom border for header using brand color
       if (data.section === 'head') {
-        doc.setDrawColor(200, 50, 50);
+        doc.setDrawColor(brandRgb[0], brandRgb[1], brandRgb[2]);
         doc.setLineWidth(0.5);
         doc.line(
           data.cell.x,

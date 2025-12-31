@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { FileText, Download, CreditCard, Building2, ChevronRight, ChevronDown } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
@@ -22,6 +21,9 @@ interface Invoice {
     logo: string | null;
     email: string | null;
     phoneNumber: string | null;
+    primaryColor: string | null;
+    backgroundColor: string | null;
+    buttonTextColor: string | null;
   };
   donor: {
     firstName: string | null;
@@ -45,6 +47,11 @@ export default function PublicInvoicePage() {
   const [showDetails, setShowDetails] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'amex' | 'bank'>('card');
   const [processing, setProcessing] = useState(false);
+
+  // Branding colors with defaults
+  const primaryColor = invoice?.organization?.primaryColor || '#000000';
+  const backgroundColor = invoice?.organization?.backgroundColor || '#ffffff';
+  const buttonTextColor = invoice?.organization?.buttonTextColor || '#ffffff';
 
   useEffect(() => {
     fetchInvoice();
@@ -77,7 +84,6 @@ export default function PublicInvoicePage() {
 
   const handleDownloadPDF = async () => {
     try {
-      // For public invoices, we need a public PDF endpoint
       window.open(`/api/invoices/public/${hash}/pdf`, '_blank');
     } catch (error) {
       console.error('Failed to download PDF:', error);
@@ -86,10 +92,13 @@ export default function PublicInvoicePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-muted">
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor }}>
         <div className="text-center">
-          <div className="animate-spin h-6 w-6 border-2 border-foreground border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-muted-foreground text-sm">Loading invoice...</p>
+          <div 
+            className="animate-spin h-6 w-6 border-2 border-t-transparent rounded-full mx-auto mb-4"
+            style={{ borderColor: primaryColor }}
+          />
+          <p className="text-sm" style={{ color: `${primaryColor}80` }}>Loading invoice...</p>
         </div>
       </div>
     );
@@ -97,10 +106,10 @@ export default function PublicInvoicePage() {
 
   if (error || !invoice) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-muted px-4">
+      <div className="flex items-center justify-center min-h-screen px-4" style={{ backgroundColor }}>
         <Card className="w-full max-w-md">
           <CardContent className="pt-6 text-center">
-            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <FileText className="h-12 w-12 mx-auto mb-4" style={{ color: `${primaryColor}60` }} />
             <h2 className="text-xl font-semibold mb-2">Invoice Not Found</h2>
             <p className="text-muted-foreground">{error || 'This invoice does not exist or has been removed.'}</p>
           </CardContent>
@@ -113,7 +122,7 @@ export default function PublicInvoicePage() {
   const amountDue = Number(invoice.totalAmount) - Number(invoice.paidAmount);
 
   return (
-    <div className="min-h-screen bg-muted py-8 px-4">
+    <div className="min-h-screen py-8 px-4" style={{ backgroundColor }}>
       <div className="max-w-lg mx-auto space-y-6">
         {/* Invoice Header Card */}
         <Card>
@@ -125,19 +134,30 @@ export default function PublicInvoicePage() {
                   <img 
                     src={invoice.organization.logo} 
                     alt={invoice.organization.name} 
-                    className="h-8 mb-2" 
+                    className="h-10 mb-3 object-contain" 
                   />
                 ) : (
-                  <h2 className="text-xl font-bold tracking-tight">{invoice.organization.name.toUpperCase()}</h2>
+                  <h2 
+                    className="text-xl font-bold tracking-tight mb-1"
+                    style={{ color: primaryColor }}
+                  >
+                    {invoice.organization.name.toUpperCase()}
+                  </h2>
                 )}
                 {/* Amount */}
-                <p className="text-3xl font-bold mt-2">{formatCurrency(amountDue)}</p>
+                <p className="text-3xl font-bold mt-2" style={{ color: primaryColor }}>
+                  {formatCurrency(amountDue)}
+                </p>
                 {invoice.dueDate && (
                   <p className="text-muted-foreground text-sm">Due {formatDate(invoice.dueDate)}</p>
                 )}
               </div>
-              <button onClick={handleDownloadPDF} className="p-2 hover:bg-muted rounded-lg">
-                <FileText className="h-6 w-6 text-muted-foreground" />
+              <button 
+                onClick={handleDownloadPDF} 
+                className="p-2 rounded-lg transition-colors"
+                style={{ color: primaryColor }}
+              >
+                <FileText className="h-6 w-6" />
               </button>
             </div>
 
@@ -151,10 +171,6 @@ export default function PublicInvoicePage() {
                 <span className="text-muted-foreground">Customer name</span>
                 <span className="font-medium">{invoice.donor.firstName} {invoice.donor.lastName}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">From</span>
-                <span className="font-medium">{invoice.organization.name}</span>
-              </div>
               {invoice.memo && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Memo</span>
@@ -167,7 +183,8 @@ export default function PublicInvoicePage() {
             <div className="mt-6 pt-4 border-t border-border space-y-2">
               <button 
                 onClick={handleDownloadPDF}
-                className="flex items-center gap-2 text-sm font-medium underline"
+                className="flex items-center gap-2 text-sm font-medium"
+                style={{ color: primaryColor }}
               >
                 <Download className="h-4 w-4" />
                 Download PDF
@@ -175,15 +192,10 @@ export default function PublicInvoicePage() {
               
               <button 
                 onClick={() => setShowDetails(!showDetails)}
-                className="flex items-center gap-2 text-sm text-muted-foreground italic"
+                className="flex items-center gap-2 text-sm text-muted-foreground"
               >
-                Show Invoice Details
+                {showDetails ? 'Hide' : 'Show'} Invoice Details
                 {showDetails ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </button>
-              
-              <button className="flex items-center gap-2 text-sm text-muted-foreground italic">
-                Manage billing
-                <ChevronRight className="h-4 w-4" />
               </button>
             </div>
 
@@ -212,7 +224,9 @@ export default function PublicInvoicePage() {
                   <tfoot>
                     <tr className="border-t border-border">
                       <td colSpan={3} className="py-2 text-right font-medium">Total</td>
-                      <td className="py-2 text-right font-bold">{formatCurrency(Number(invoice.totalAmount))}</td>
+                      <td className="py-2 text-right font-bold" style={{ color: primaryColor }}>
+                        {formatCurrency(Number(invoice.totalAmount))}
+                      </td>
                     </tr>
                   </tfoot>
                 </table>
@@ -231,36 +245,36 @@ export default function PublicInvoicePage() {
               <div className="flex gap-3 mb-6">
                 <button
                   onClick={() => setPaymentMethod('card')}
-                  className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors ${
-                    paymentMethod === 'card' 
-                      ? 'border-foreground bg-muted' 
-                      : 'border-border hover:border-muted-foreground'
-                  }`}
+                  className="flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors"
+                  style={{
+                    borderColor: paymentMethod === 'card' ? primaryColor : undefined,
+                    backgroundColor: paymentMethod === 'card' ? `${primaryColor}10` : undefined,
+                  }}
                 >
                   <CreditCard className="h-6 w-6" />
-                  <span className="text-xs">Regular</span>
+                  <span className="text-xs">Card</span>
                 </button>
                 <button
                   onClick={() => setPaymentMethod('amex')}
-                  className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors ${
-                    paymentMethod === 'amex' 
-                      ? 'border-foreground bg-muted' 
-                      : 'border-border hover:border-muted-foreground'
-                  }`}
+                  className="flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors"
+                  style={{
+                    borderColor: paymentMethod === 'amex' ? primaryColor : undefined,
+                    backgroundColor: paymentMethod === 'amex' ? `${primaryColor}10` : undefined,
+                  }}
                 >
                   <span className="text-xs font-bold">AMEX</span>
                   <span className="text-xs">American Express</span>
                 </button>
                 <button
                   onClick={() => setPaymentMethod('bank')}
-                  className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors ${
-                    paymentMethod === 'bank' 
-                      ? 'border-foreground bg-muted' 
-                      : 'border-border hover:border-muted-foreground'
-                  }`}
+                  className="flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors"
+                  style={{
+                    borderColor: paymentMethod === 'bank' ? primaryColor : undefined,
+                    backgroundColor: paymentMethod === 'bank' ? `${primaryColor}10` : undefined,
+                  }}
                 >
                   <Building2 className="h-6 w-6" />
-                  <span className="text-xs">Bank Transfer</span>
+                  <span className="text-xs">Bank</span>
                 </button>
               </div>
 
@@ -270,29 +284,31 @@ export default function PublicInvoicePage() {
                 
                 {paymentMethod !== 'bank' ? (
                   <div className="space-y-4">
-                    <div>
-                      <input
-                        type="text"
-                        placeholder="Card Number"
-                        className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      placeholder="Card Number"
+                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
+                      style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                    />
                     <div className="grid grid-cols-2 gap-4">
                       <input
                         type="text"
-                        placeholder="Expiration Date (MM/YY)"
-                        className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                        placeholder="MM/YY"
+                        className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
+                        style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
                       />
                       <input
                         type="text"
                         placeholder="CVV"
-                        className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                        className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
+                        style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
                       />
                     </div>
                     <input
                       type="text"
                       placeholder="Billing ZIP Code"
-                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
+                      style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
                     />
                   </div>
                 ) : (
@@ -300,28 +316,33 @@ export default function PublicInvoicePage() {
                     <input
                       type="text"
                       placeholder="Routing Number"
-                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
+                      style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
                     />
                     <input
                       type="text"
                       placeholder="Account Number"
-                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
+                      style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
                     />
-                    <select className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground">
+                    <select 
+                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
+                      style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                    >
                       <option>Checking</option>
                       <option>Savings</option>
                     </select>
                   </div>
                 )}
 
-                <Button 
+                <button 
                   type="submit" 
-                  className="w-full mt-6" 
-                  size="lg"
+                  className="w-full mt-6 py-3 rounded-lg font-medium text-base transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: primaryColor, color: buttonTextColor }}
                   disabled={processing}
                 >
                   {processing ? 'Processing...' : `Pay ${formatCurrency(amountDue)}`}
-                </Button>
+                </button>
               </form>
             </CardContent>
           </Card>
@@ -329,10 +350,13 @@ export default function PublicInvoicePage() {
 
         {/* Paid Status */}
         {isPaid && (
-          <Card className="bg-success/10 border-success/20">
+          <Card style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}30` }}>
             <CardContent className="pt-6 text-center">
-              <div className="bg-success/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div 
+                className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+                style={{ backgroundColor: `${primaryColor}20` }}
+              >
+                <svg className="w-8 h-8" style={{ color: primaryColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
