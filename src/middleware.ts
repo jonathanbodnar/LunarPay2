@@ -37,6 +37,7 @@ const publicApiRoutes = [
   '/api/admin/enable-portal', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/debug-products', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-customer-sessions-table', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/add-zapier-table', // TEMPORARY - DELETE AFTER USE!
   '/api/team/invite', // Public invite endpoints
   '/api/invoices/public',
   '/api/payment-links/public',
