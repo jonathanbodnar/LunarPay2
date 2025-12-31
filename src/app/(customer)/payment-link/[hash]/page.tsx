@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ShoppingCart, CreditCard, Minus, Plus } from 'lucide-react';
+import { CreditCard, Building2, Landmark, Lock, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
 interface PaymentLink {
@@ -42,10 +41,17 @@ export default function PaymentLinkPage() {
   const [error, setError] = useState('');
   const [cart, setCart] = useState<Record<number, number>>({});
   const [processing, setProcessing] = useState(false);
+  
+  // Form state
+  const [email, setEmail] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'amex' | 'bank'>('card');
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cardName, setCardName] = useState('');
 
   // Branding colors with defaults
   const primaryColor = paymentLink?.organization?.primaryColor || '#000000';
-  const backgroundColor = paymentLink?.organization?.backgroundColor || '#ffffff';
+  const backgroundColor = paymentLink?.organization?.backgroundColor || '#f8fafc';
   const buttonTextColor = paymentLink?.organization?.buttonTextColor || '#ffffff';
 
   useEffect(() => {
@@ -62,6 +68,15 @@ export default function PaymentLinkPage() {
       }
 
       setPaymentLink(data.paymentLink);
+      
+      // Initialize cart with 1 of each product if single product
+      if (data.paymentLink.products.length === 1) {
+        const product = data.paymentLink.products[0];
+        const isAvailable = product.unlimited || (product.available !== null && product.available > 0);
+        if (isAvailable) {
+          setCart({ [product.id]: 1 });
+        }
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -89,22 +104,39 @@ export default function PaymentLinkPage() {
     }, 0);
   };
 
-  const handleCheckout = () => {
+  const formatCardNumber = (value: string) => {
+    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+    const matches = v.match(/\d{4,16}/g);
+    const match = (matches && matches[0]) || '';
+    const parts = [];
+    for (let i = 0, len = match.length; i < len; i += 4) {
+      parts.push(match.substring(i, i + 4));
+    }
+    return parts.length ? parts.join(' ') : v;
+  };
+
+  const formatExpiry = (value: string) => {
+    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+    if (v.length >= 2) {
+      return v.substring(0, 2) + '/' + v.substring(2, 4);
+    }
+    return v;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     setProcessing(true);
-    // TODO: Open Fortis Elements payment modal
-    alert('Payment processing will open here with Fortis Elements');
+    // TODO: Integrate with Fortis Elements payment modal
+    alert('Payment processing will be integrated with Fortis Elements');
     setProcessing(false);
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor }}>
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
         <div className="text-center">
-          <div 
-            className="animate-spin h-8 w-8 border-4 border-t-transparent rounded-full mx-auto mb-4"
-            style={{ borderColor: primaryColor }}
-          />
-          <p style={{ color: `${primaryColor}80` }}>Loading...</p>
+          <div className="animate-spin h-8 w-8 border-4 border-black border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-gray-500">Loading...</p>
         </div>
       </div>
     );
@@ -112,137 +144,315 @@ export default function PaymentLinkPage() {
 
   if (error || !paymentLink) {
     return (
-      <div className="flex items-center justify-center min-h-screen px-4" style={{ backgroundColor }}>
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center">
-            <ShoppingCart className="h-12 w-12 mx-auto mb-4" style={{ color: `${primaryColor}60` }} />
-            <h2 className="text-xl font-semibold mb-2">Page Not Found</h2>
-            <p className="text-muted-foreground">{error || 'This payment link does not exist.'}</p>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 px-4">
+        <div className="bg-white rounded-lg shadow-sm p-8 max-w-md w-full text-center">
+          <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <h2 className="text-xl font-semibold mb-2">Page Not Found</h2>
+          <p className="text-gray-500">{error || 'This payment link does not exist.'}</p>
+        </div>
       </div>
     );
   }
 
   const total = calculateTotal();
   const hasItems = Object.values(cart).some(qty => qty > 0);
+  const selectedProducts = paymentLink.products.filter(item => cart[item.id] > 0);
 
   return (
-    <div className="min-h-screen py-12 px-4" style={{ backgroundColor }}>
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          {paymentLink.organization.logo ? (
-            <img 
-              src={paymentLink.organization.logo} 
-              alt={paymentLink.organization.name} 
-              className="h-14 mx-auto mb-4 object-contain" 
-            />
-          ) : (
-            <h2 
-              className="text-lg font-bold mb-2"
-              style={{ color: primaryColor }}
-            >
-              {paymentLink.organization.name}
-            </h2>
-          )}
-          <h1 className="text-3xl font-bold">{paymentLink.name}</h1>
-          {paymentLink.description && (
-            <p className="text-muted-foreground mt-2 max-w-xl mx-auto">{paymentLink.description}</p>
-          )}
-          {!paymentLink.organization.logo && (
-            <p className="text-sm text-muted-foreground mt-1">by {paymentLink.organization.name}</p>
-          )}
-        </div>
+    <div className="min-h-screen" style={{ backgroundColor }}>
+      <div className="max-w-6xl mx-auto px-4 py-8 lg:py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
+          
+          {/* Left Column - Order Details */}
+          <div className="space-y-6">
+            {/* Logo/Brand */}
+            <div>
+              {paymentLink.organization.logo ? (
+                <img 
+                  src={paymentLink.organization.logo} 
+                  alt={paymentLink.organization.name} 
+                  className="h-12 object-contain" 
+                />
+              ) : (
+                <h2 
+                  className="text-2xl font-bold tracking-tight"
+                  style={{ color: primaryColor }}
+                >
+                  {paymentLink.organization.name.toUpperCase()}
+                </h2>
+              )}
+            </div>
 
-        {/* Products */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {paymentLink.products.map((item) => {
-            const quantity = cart[item.id] || 0;
-            const isAvailable = item.unlimited || (item.available !== null && item.available > 0);
-            const maxQty = item.unlimited ? 999 : (item.available || 0);
+            {/* Pay To */}
+            <p className="text-gray-600">
+              Pay to <span className="font-medium text-gray-900">{paymentLink.organization.name}</span>
+            </p>
 
-            return (
-              <Card key={item.id} className={!isAvailable ? 'opacity-60' : ''}>
-                <CardHeader>
-                  <CardTitle className="text-lg">{item.product.name}</CardTitle>
-                  <CardDescription className="flex items-center gap-2">
-                    <span className="font-semibold" style={{ color: primaryColor }}>
-                      {formatCurrency(Number(item.product.price))}
-                    </span>
-                    {!item.unlimited && (
-                      <span className="text-xs text-muted-foreground">
-                        ({item.available} available)
-                      </span>
+            {/* Amount */}
+            <div>
+              <p className="text-5xl font-light text-gray-900">
+                {formatCurrency(total)}
+              </p>
+              <p className="text-gray-500 mt-1">Due today</p>
+            </div>
+
+            {/* Divider */}
+            <hr className="border-gray-200" />
+
+            {/* Line Items */}
+            {paymentLink.products.length === 1 ? (
+              // Single product - simple display
+              <div className="space-y-1">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-medium text-gray-900">{paymentLink.products[0].product.name}</p>
+                    {paymentLink.products[0].product.description && (
+                      <p className="text-sm text-gray-500">{paymentLink.products[0].product.description}</p>
                     )}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {item.product.description && (
-                    <p className="text-sm text-muted-foreground mb-4">{item.product.description}</p>
-                  )}
-                  
-                  {isAvailable ? (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          className="h-9 w-9 rounded-lg border border-border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-50"
-                          onClick={() => updateQuantity(item.id, -1)}
-                          disabled={quantity === 0}
-                        >
-                          <Minus className="h-4 w-4" />
-                        </button>
-                        <span className="w-12 text-center font-medium">{quantity}</span>
-                        <button
-                          className="h-9 w-9 rounded-lg border border-border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-50"
-                          onClick={() => updateQuantity(item.id, 1)}
-                          disabled={quantity >= maxQty}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
+                  </div>
+                  <p className="font-medium text-gray-900">
+                    {formatCurrency(Number(paymentLink.products[0].product.price))}
+                  </p>
+                </div>
+                <hr className="border-gray-100 mt-4" />
+              </div>
+            ) : (
+              // Multiple products - selectable
+              <div className="space-y-4">
+                {paymentLink.products.map((item) => {
+                  const quantity = cart[item.id] || 0;
+                  const isAvailable = item.unlimited || (item.available !== null && item.available > 0);
+                  const maxQty = item.unlimited ? 999 : (item.available || 0);
+
+                  return (
+                    <div key={item.id} className={`p-4 rounded-lg border ${!isAvailable ? 'opacity-50 bg-gray-50' : 'bg-white'}`}>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">{item.product.name}</p>
+                          {item.product.description && (
+                            <p className="text-sm text-gray-500">{item.product.description}</p>
+                          )}
+                        </div>
+                        <p className="font-medium" style={{ color: primaryColor }}>
+                          {formatCurrency(Number(item.product.price))}
+                        </p>
                       </div>
-                      {quantity > 0 && (
-                        <span className="font-semibold" style={{ color: primaryColor }}>
-                          {formatCurrency(Number(item.product.price) * quantity)}
-                        </span>
+                      
+                      {isAvailable ? (
+                        <div className="flex items-center gap-3 mt-3">
+                          <button
+                            className="h-8 w-8 rounded border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50"
+                            onClick={() => updateQuantity(item.id, -1)}
+                            disabled={quantity === 0}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="w-8 text-center font-medium">{quantity}</span>
+                          <button
+                            className="h-8 w-8 rounded border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50"
+                            onClick={() => updateQuantity(item.id, 1)}
+                            disabled={quantity >= maxQty}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                          {quantity > 0 && (
+                            <span className="ml-auto font-medium">
+                              {formatCurrency(Number(item.product.price) * quantity)}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-red-500 mt-2">Out of stock</p>
                       )}
                     </div>
-                  ) : (
-                    <p className="text-destructive text-sm font-medium">Out of stock</p>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Checkout */}
-        {hasItems && (
-          <Card className="sticky bottom-4 shadow-lg border-2" style={{ borderColor: `${primaryColor}30` }}>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-lg font-semibold">Total</span>
-                <span className="text-2xl font-bold" style={{ color: primaryColor }}>
-                  {formatCurrency(total)}
-                </span>
+                  );
+                })}
               </div>
-              <button 
-                className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-50"
-                style={{ backgroundColor: primaryColor, color: buttonTextColor }}
-                onClick={handleCheckout} 
-                disabled={processing}
-              >
-                <CreditCard className="h-5 w-5" />
-                {processing ? 'Processing...' : 'Proceed to Payment'}
-              </button>
-            </CardContent>
-          </Card>
-        )}
+            )}
 
-        {/* Footer */}
-        <p className="text-center text-sm text-muted-foreground mt-8">
-          Powered by LunarPay
-        </p>
+            {/* Footer */}
+            <div className="pt-8 mt-auto">
+              <p className="text-sm text-gray-400 flex items-center gap-2">
+                Powered by <span className="font-semibold text-gray-600">Lunar<span style={{ color: primaryColor }}>Pay</span></span>
+              </p>
+            </div>
+          </div>
+
+          {/* Right Column - Payment Form */}
+          <div className="bg-white rounded-lg shadow-sm p-6 lg:p-8 h-fit">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              {/* Payment Method */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Payment method</label>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('card')}
+                    className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
+                      paymentMethod === 'card' 
+                        ? 'border-black bg-gray-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <CreditCard className="h-6 w-6" />
+                    <span className="text-xs font-medium">Credit / Debit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('amex')}
+                    className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
+                      paymentMethod === 'amex' 
+                        ? 'border-black bg-gray-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="h-6 w-10 bg-blue-600 rounded text-white text-[8px] font-bold flex items-center justify-center">
+                      AMEX
+                    </div>
+                    <span className="text-xs font-medium">American Express</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('bank')}
+                    className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
+                      paymentMethod === 'bank' 
+                        ? 'border-black bg-gray-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <Landmark className="h-6 w-6" />
+                    <span className="text-xs font-medium">Bank Transfer</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Payment Info */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Info</h3>
+                
+                {paymentMethod !== 'bank' ? (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Card Number</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          value={cardNumber}
+                          onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                          maxLength={19}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none pr-12"
+                          placeholder="1234 5678 9012 3456"
+                        />
+                        <CreditCard className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Expiration Date (MM/YY)</label>
+                      <input
+                        type="text"
+                        required
+                        value={expiry}
+                        onChange={(e) => setExpiry(formatExpiry(e.target.value))}
+                        maxLength={5}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                        placeholder="MM/YY"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Name on Card</label>
+                      <input
+                        type="text"
+                        required
+                        value={cardName}
+                        onChange={(e) => setCardName(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                        placeholder="John Smith"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Routing Number</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                        placeholder="123456789"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Account Number</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                        placeholder="1234567890"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Account Holder Name</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                        placeholder="John Smith"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={processing || !hasItems}
+                className="w-full py-4 rounded-lg font-medium text-lg transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: primaryColor, color: buttonTextColor }}
+              >
+                {processing ? 'Processing...' : hasItems ? `Pay ${formatCurrency(total)}` : 'Select items to continue'}
+              </button>
+
+              {/* Terms */}
+              <p className="text-xs text-gray-500 text-center leading-relaxed">
+                By clicking on "Pay", you agree to allow {paymentLink.organization.name} to charge your card for this payment and future payments according to the payment frequency listed.
+              </p>
+
+              {/* Security */}
+              <div className="text-center space-y-1">
+                <p className="text-sm text-gray-600 flex items-center justify-center gap-1">
+                  <Lock className="h-4 w-4" />
+                  Securely encrypted by SSL
+                </p>
+                <a 
+                  href="https://lunarpay.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm hover:underline"
+                  style={{ color: primaryColor }}
+                >
+                  LunarPay.com
+                </a>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   );

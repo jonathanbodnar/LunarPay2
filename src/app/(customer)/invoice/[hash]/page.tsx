@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
-import { FileText, Download, CreditCard, Building2, ChevronRight, ChevronDown } from 'lucide-react';
+import { FileText, Download, CreditCard, Landmark, Lock } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 interface Invoice {
@@ -12,6 +11,7 @@ interface Invoice {
   totalAmount: number;
   paidAmount: number;
   dueDate: string | null;
+  invoiceDate: string | null;
   reference: string | null;
   memo: string | null;
   pdfUrl: string | null;
@@ -44,13 +44,18 @@ export default function PublicInvoicePage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showDetails, setShowDetails] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'amex' | 'bank'>('card');
   const [processing, setProcessing] = useState(false);
+  
+  // Form state
+  const [email, setEmail] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cardName, setCardName] = useState('');
 
   // Branding colors with defaults
   const primaryColor = invoice?.organization?.primaryColor || '#000000';
-  const backgroundColor = invoice?.organization?.backgroundColor || '#ffffff';
+  const backgroundColor = invoice?.organization?.backgroundColor || '#f8fafc';
   const buttonTextColor = invoice?.organization?.buttonTextColor || '#ffffff';
 
   useEffect(() => {
@@ -67,11 +72,34 @@ export default function PublicInvoicePage() {
       }
 
       setInvoice(data.invoice);
+      // Pre-fill email if available
+      if (data.invoice.donor?.email) {
+        setEmail(data.invoice.donor.email);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatCardNumber = (value: string) => {
+    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+    const matches = v.match(/\d{4,16}/g);
+    const match = (matches && matches[0]) || '';
+    const parts = [];
+    for (let i = 0, len = match.length; i < len; i += 4) {
+      parts.push(match.substring(i, i + 4));
+    }
+    return parts.length ? parts.join(' ') : v;
+  };
+
+  const formatExpiry = (value: string) => {
+    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+    if (v.length >= 2) {
+      return v.substring(0, 2) + '/' + v.substring(2, 4);
+    }
+    return v;
   };
 
   const handlePayment = async (e: React.FormEvent) => {
@@ -92,13 +120,10 @@ export default function PublicInvoicePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor }}>
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
         <div className="text-center">
-          <div 
-            className="animate-spin h-6 w-6 border-2 border-t-transparent rounded-full mx-auto mb-4"
-            style={{ borderColor: primaryColor }}
-          />
-          <p className="text-sm" style={{ color: `${primaryColor}80` }}>Loading invoice...</p>
+          <div className="animate-spin h-8 w-8 border-4 border-black border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-gray-500">Loading invoice...</p>
         </div>
       </div>
     );
@@ -106,14 +131,12 @@ export default function PublicInvoicePage() {
 
   if (error || !invoice) {
     return (
-      <div className="flex items-center justify-center min-h-screen px-4" style={{ backgroundColor }}>
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center">
-            <FileText className="h-12 w-12 mx-auto mb-4" style={{ color: `${primaryColor}60` }} />
-            <h2 className="text-xl font-semibold mb-2">Invoice Not Found</h2>
-            <p className="text-muted-foreground">{error || 'This invoice does not exist or has been removed.'}</p>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 px-4">
+        <div className="bg-white rounded-lg shadow-sm p-8 max-w-md w-full text-center">
+          <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <h2 className="text-xl font-semibold mb-2">Invoice Not Found</h2>
+          <p className="text-gray-500">{error || 'This invoice does not exist or has been removed.'}</p>
+        </div>
       </div>
     );
   }
@@ -122,254 +145,310 @@ export default function PublicInvoicePage() {
   const amountDue = Number(invoice.totalAmount) - Number(invoice.paidAmount);
 
   return (
-    <div className="min-h-screen py-8 px-4" style={{ backgroundColor }}>
-      <div className="max-w-lg mx-auto space-y-6">
-        {/* Invoice Header Card */}
-        <Card>
-          <CardContent className="pt-6">
-            {/* Organization Logo/Name */}
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                {invoice.organization.logo ? (
-                  <img 
-                    src={invoice.organization.logo} 
-                    alt={invoice.organization.name} 
-                    className="h-10 mb-3 object-contain" 
-                  />
-                ) : (
-                  <h2 
-                    className="text-xl font-bold tracking-tight mb-1"
-                    style={{ color: primaryColor }}
-                  >
-                    {invoice.organization.name.toUpperCase()}
-                  </h2>
-                )}
-                {/* Amount */}
-                <p className="text-3xl font-bold mt-2" style={{ color: primaryColor }}>
-                  {formatCurrency(amountDue)}
-                </p>
-                {invoice.dueDate && (
-                  <p className="text-muted-foreground text-sm">Due {formatDate(invoice.dueDate)}</p>
-                )}
-              </div>
-              <button 
-                onClick={handleDownloadPDF} 
-                className="p-2 rounded-lg transition-colors"
-                style={{ color: primaryColor }}
-              >
-                <FileText className="h-6 w-6" />
-              </button>
-            </div>
-
-            {/* Invoice Details */}
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Business name</span>
-                <span className="font-medium">{invoice.organization.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Customer name</span>
-                <span className="font-medium">{invoice.donor.firstName} {invoice.donor.lastName}</span>
-              </div>
-              {invoice.memo && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Memo</span>
-                  <span className="font-medium text-right max-w-[200px]">{invoice.memo}</span>
-                </div>
+    <div className="min-h-screen" style={{ backgroundColor }}>
+      <div className="max-w-6xl mx-auto px-4 py-8 lg:py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
+          
+          {/* Left Column - Invoice Details */}
+          <div className="space-y-6">
+            {/* Logo/Brand */}
+            <div>
+              {invoice.organization.logo ? (
+                <img 
+                  src={invoice.organization.logo} 
+                  alt={invoice.organization.name} 
+                  className="h-12 object-contain" 
+                />
+              ) : (
+                <h2 
+                  className="text-2xl font-bold tracking-tight"
+                  style={{ color: primaryColor }}
+                >
+                  {invoice.organization.name.toUpperCase()}
+                </h2>
               )}
             </div>
 
-            {/* Actions */}
-            <div className="mt-6 pt-4 border-t border-border space-y-2">
-              <button 
-                onClick={handleDownloadPDF}
-                className="flex items-center gap-2 text-sm font-medium"
-                style={{ color: primaryColor }}
-              >
-                <Download className="h-4 w-4" />
-                Download PDF
-              </button>
-              
-              <button 
-                onClick={() => setShowDetails(!showDetails)}
-                className="flex items-center gap-2 text-sm text-muted-foreground"
-              >
-                {showDetails ? 'Hide' : 'Show'} Invoice Details
-                {showDetails ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </button>
+            {/* Pay To */}
+            <p className="text-gray-600">
+              Pay to <span className="font-medium text-gray-900">{invoice.organization.name}</span>
+            </p>
+
+            {/* Amount */}
+            <div>
+              <p className="text-5xl font-light text-gray-900">
+                {formatCurrency(amountDue)}
+              </p>
+              <p className="text-gray-500 mt-1">
+                {invoice.dueDate ? `Due ${formatDate(invoice.dueDate)}` : 'Due today'}
+              </p>
             </div>
 
-            {/* Expandable Invoice Details */}
-            {showDetails && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-muted-foreground">
-                      <th className="text-left py-2">Item</th>
-                      <th className="text-right py-2">Qty</th>
-                      <th className="text-right py-2">Price</th>
-                      <th className="text-right py-2">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {invoice.products.map((product, idx) => (
-                      <tr key={idx}>
-                        <td className="py-2">{product.productName}</td>
-                        <td className="py-2 text-right">{product.qty}</td>
-                        <td className="py-2 text-right">{formatCurrency(Number(product.price))}</td>
-                        <td className="py-2 text-right font-medium">{formatCurrency(Number(product.subtotal))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t border-border">
-                      <td colSpan={3} className="py-2 text-right font-medium">Total</td>
-                      <td className="py-2 text-right font-bold" style={{ color: primaryColor }}>
-                        {formatCurrency(Number(invoice.totalAmount))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            {/* Divider */}
+            <hr className="border-gray-200" />
 
-        {/* Payment Section */}
-        {!isPaid && amountDue > 0 && (
-          <Card>
-            <CardContent className="pt-6">
-              <h3 className="font-semibold mb-4">Payment method</h3>
+            {/* Line Items */}
+            <div className="space-y-4">
+              {invoice.products.map((product, idx) => (
+                <div key={idx} className="flex justify-between items-start">
+                  <div>
+                    <p className="font-medium text-gray-900">{product.productName}</p>
+                    {product.qty > 1 && (
+                      <p className="text-sm text-gray-500">Qty: {product.qty} × {formatCurrency(Number(product.price))}</p>
+                    )}
+                  </div>
+                  <p className="font-medium text-gray-900">
+                    {formatCurrency(Number(product.subtotal))}
+                  </p>
+                </div>
+              ))}
               
-              {/* Payment Method Selection */}
-              <div className="flex gap-3 mb-6">
-                <button
-                  onClick={() => setPaymentMethod('card')}
-                  className="flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors"
-                  style={{
-                    borderColor: paymentMethod === 'card' ? primaryColor : undefined,
-                    backgroundColor: paymentMethod === 'card' ? `${primaryColor}10` : undefined,
-                  }}
-                >
-                  <CreditCard className="h-6 w-6" />
-                  <span className="text-xs">Card</span>
-                </button>
-                <button
-                  onClick={() => setPaymentMethod('amex')}
-                  className="flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors"
-                  style={{
-                    borderColor: paymentMethod === 'amex' ? primaryColor : undefined,
-                    backgroundColor: paymentMethod === 'amex' ? `${primaryColor}10` : undefined,
-                  }}
-                >
-                  <span className="text-xs font-bold">AMEX</span>
-                  <span className="text-xs">American Express</span>
-                </button>
-                <button
-                  onClick={() => setPaymentMethod('bank')}
-                  className="flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors"
-                  style={{
-                    borderColor: paymentMethod === 'bank' ? primaryColor : undefined,
-                    backgroundColor: paymentMethod === 'bank' ? `${primaryColor}10` : undefined,
-                  }}
-                >
-                  <Building2 className="h-6 w-6" />
-                  <span className="text-xs">Bank</span>
-                </button>
+              <hr className="border-gray-100" />
+              
+              {/* Total */}
+              <div className="flex justify-between items-center pt-2">
+                <p className="font-medium text-gray-900">Total</p>
+                <p className="text-xl font-bold" style={{ color: primaryColor }}>
+                  {formatCurrency(Number(invoice.totalAmount))}
+                </p>
               </div>
-
-              {/* Payment Form */}
-              <form onSubmit={handlePayment}>
-                <h4 className="font-semibold mb-4">Payment Info</h4>
-                
-                {paymentMethod !== 'bank' ? (
-                  <div className="space-y-4">
-                    <input
-                      type="text"
-                      placeholder="Card Number"
-                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
-                      style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
-                    />
-                    <div className="grid grid-cols-2 gap-4">
-                      <input
-                        type="text"
-                        placeholder="MM/YY"
-                        className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
-                        style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
-                      />
-                      <input
-                        type="text"
-                        placeholder="CVV"
-                        className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
-                        style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Billing ZIP Code"
-                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
-                      style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
-                    />
+              
+              {Number(invoice.paidAmount) > 0 && (
+                <>
+                  <div className="flex justify-between items-center text-sm text-gray-500">
+                    <p>Amount Paid</p>
+                    <p>-{formatCurrency(Number(invoice.paidAmount))}</p>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    <input
-                      type="text"
-                      placeholder="Routing Number"
-                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
-                      style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Account Number"
-                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
-                      style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
-                    />
-                    <select 
-                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2"
-                      style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                  <div className="flex justify-between items-center font-bold">
+                    <p>Amount Due</p>
+                    <p style={{ color: primaryColor }}>{formatCurrency(amountDue)}</p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Download PDF Link */}
+            <button 
+              onClick={handleDownloadPDF}
+              className="flex items-center gap-2 text-sm font-medium hover:underline"
+              style={{ color: primaryColor }}
+            >
+              <Download className="h-4 w-4" />
+              Download PDF
+            </button>
+
+            {/* Footer */}
+            <div className="pt-8 mt-auto">
+              <p className="text-sm text-gray-400 flex items-center gap-2">
+                Powered by <span className="font-semibold text-gray-600">Lunar<span style={{ color: primaryColor }}>Pay</span></span>
+              </p>
+            </div>
+          </div>
+
+          {/* Right Column - Payment Form */}
+          {!isPaid && amountDue > 0 ? (
+            <div className="bg-white rounded-lg shadow-sm p-6 lg:p-8 h-fit">
+              <form onSubmit={handlePayment} className="space-y-6">
+                {/* Email */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                    placeholder="you@example.com"
+                  />
+                </div>
+
+                {/* Payment Method */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Payment method</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('card')}
+                      className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
+                        paymentMethod === 'card' 
+                          ? 'border-black bg-gray-50' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
                     >
-                      <option>Checking</option>
-                      <option>Savings</option>
-                    </select>
+                      <CreditCard className="h-6 w-6" />
+                      <span className="text-xs font-medium">Credit / Debit</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('amex')}
+                      className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
+                        paymentMethod === 'amex' 
+                          ? 'border-black bg-gray-50' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="h-6 w-10 bg-blue-600 rounded text-white text-[8px] font-bold flex items-center justify-center">
+                        AMEX
+                      </div>
+                      <span className="text-xs font-medium">American Express</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('bank')}
+                      className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
+                        paymentMethod === 'bank' 
+                          ? 'border-black bg-gray-50' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <Landmark className="h-6 w-6" />
+                      <span className="text-xs font-medium">Bank Transfer</span>
+                    </button>
                   </div>
-                )}
+                </div>
 
-                <button 
-                  type="submit" 
-                  className="w-full mt-6 py-3 rounded-lg font-medium text-base transition-opacity hover:opacity-90 disabled:opacity-50"
-                  style={{ backgroundColor: primaryColor, color: buttonTextColor }}
+                {/* Payment Info */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Info</h3>
+                  
+                  {paymentMethod !== 'bank' ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Card Number</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            required
+                            value={cardNumber}
+                            onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                            maxLength={19}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none pr-12"
+                            placeholder="1234 5678 9012 3456"
+                          />
+                          <CreditCard className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Expiration Date (MM/YY)</label>
+                        <input
+                          type="text"
+                          required
+                          value={expiry}
+                          onChange={(e) => setExpiry(formatExpiry(e.target.value))}
+                          maxLength={5}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                          placeholder="MM/YY"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Name on Card</label>
+                        <input
+                          type="text"
+                          required
+                          value={cardName}
+                          onChange={(e) => setCardName(e.target.value)}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                          placeholder="John Smith"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Routing Number</label>
+                        <input
+                          type="text"
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                          placeholder="123456789"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Account Number</label>
+                        <input
+                          type="text"
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                          placeholder="1234567890"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Account Holder Name</label>
+                        <input
+                          type="text"
+                          required
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                          placeholder="John Smith"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
                   disabled={processing}
+                  className="w-full py-4 rounded-lg font-medium text-lg transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: primaryColor, color: buttonTextColor }}
                 >
                   {processing ? 'Processing...' : `Pay ${formatCurrency(amountDue)}`}
                 </button>
-              </form>
-            </CardContent>
-          </Card>
-        )}
 
-        {/* Paid Status */}
-        {isPaid && (
-          <Card style={{ backgroundColor: `${primaryColor}10`, borderColor: `${primaryColor}30` }}>
-            <CardContent className="pt-6 text-center">
+                {/* Terms */}
+                <p className="text-xs text-gray-500 text-center leading-relaxed">
+                  By clicking on "Pay", you agree to allow {invoice.organization.name} to charge your card for this payment.
+                </p>
+
+                {/* Security */}
+                <div className="text-center space-y-1">
+                  <p className="text-sm text-gray-600 flex items-center justify-center gap-1">
+                    <Lock className="h-4 w-4" />
+                    Securely encrypted by SSL
+                  </p>
+                  <a 
+                    href="https://lunarpay.com" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm hover:underline"
+                    style={{ color: primaryColor }}
+                  >
+                    LunarPay.com
+                  </a>
+                </div>
+              </form>
+            </div>
+          ) : (
+            /* Paid Status Card */
+            <div className="bg-white rounded-lg shadow-sm p-6 lg:p-8 h-fit text-center">
               <div 
-                className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-                style={{ backgroundColor: `${primaryColor}20` }}
+                className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
+                style={{ backgroundColor: `${primaryColor}15` }}
               >
-                <svg className="w-8 h-8" style={{ color: primaryColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-10 h-10" style={{ color: primaryColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold mb-2">Invoice Paid</h3>
-              <p className="text-muted-foreground">This invoice has been paid in full. Thank you!</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Footer */}
-        <p className="text-center text-sm text-muted-foreground">
-          Powered by LunarPay
-        </p>
+              <h3 className="text-2xl font-bold mb-2">Invoice Paid</h3>
+              <p className="text-gray-500 mb-6">This invoice has been paid in full.</p>
+              <p className="text-3xl font-bold mb-2" style={{ color: primaryColor }}>
+                {formatCurrency(Number(invoice.totalAmount))}
+              </p>
+              <p className="text-sm text-gray-500">Thank you for your payment!</p>
+              
+              <button 
+                onClick={handleDownloadPDF}
+                className="mt-6 w-full py-3 rounded-lg font-medium border-2 flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+                style={{ borderColor: primaryColor, color: primaryColor }}
+              >
+                <Download className="h-5 w-5" />
+                Download Receipt
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
