@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import Image from 'next/image';
 
 interface NavItem {
   name: string;
@@ -157,12 +156,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="fixed inset-y-0 left-0 w-[280px] bg-background shadow-soft">
             <div className="flex h-16 items-center justify-between px-6 border-b border-border">
               <Link href="/dashboard" className="flex items-center gap-2">
-                <Image 
+                <img 
                   src="/logo-dark.svg" 
                   alt="LunarPay" 
-                  width={72} 
-                  height={32}
-                  className="h-8 w-auto"
+                  className="h-7 w-auto"
                 />
               </Link>
               <button 
@@ -195,12 +192,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex flex-col flex-grow bg-background border-r border-border">
           <div className="flex h-16 items-center px-6 border-b border-border">
             <Link href="/dashboard" className="flex items-center gap-2">
-              <Image 
+              <img 
                 src="/logo-dark.svg" 
                 alt="LunarPay" 
-                width={72} 
-                height={32}
-                className="h-8 w-auto"
+                className="h-7 w-auto"
               />
             </Link>
           </div>
