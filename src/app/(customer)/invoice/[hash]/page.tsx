@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Download, CreditCard } from 'lucide-react';
+import { FileText, Download, CreditCard, Building2, ChevronRight, ChevronDown } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 interface Invoice {
@@ -16,6 +16,7 @@ interface Invoice {
   reference: string | null;
   memo: string | null;
   pdfUrl: string | null;
+  hash: string;
   organization: {
     name: string;
     logo: string | null;
@@ -35,13 +36,15 @@ interface Invoice {
   }>;
 }
 
-export default function InvoicePage() {
+export default function PublicInvoicePage() {
   const params = useParams();
   const hash = params?.hash as string;
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [paying, setPaying] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'amex' | 'bank'>('card');
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     fetchInvoice();
@@ -64,18 +67,29 @@ export default function InvoicePage() {
     }
   };
 
-  const handlePayment = () => {
-    setPaying(true);
-    // TODO: Open Fortis Elements payment modal
-    alert('Payment modal will open here with Fortis Elements integration');
+  const handlePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProcessing(true);
+    // TODO: Integrate with Fortis payment processing
+    alert('Payment processing will be integrated with Fortis Elements');
+    setProcessing(false);
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      // For public invoices, we need a public PDF endpoint
+      window.open(`/api/invoices/public/${hash}/pdf`, '_blank');
+    } catch (error) {
+      console.error('Failed to download PDF:', error);
+    }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-muted">
         <div className="text-center">
-          <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-gray-500">Loading invoice...</p>
+          <div className="animate-spin h-6 w-6 border-2 border-foreground border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-muted-foreground text-sm">Loading invoice...</p>
         </div>
       </div>
     );
@@ -83,12 +97,12 @@ export default function InvoicePage() {
 
   if (error || !invoice) {
     return (
-      <div className="flex items-center justify-center min-h-screen px-4">
+      <div className="flex items-center justify-center min-h-screen bg-muted px-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6 text-center">
-            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">Invoice Not Found</h2>
-            <p className="text-gray-500">{error || 'This invoice does not exist or has been removed.'}</p>
+            <p className="text-muted-foreground">{error || 'This invoice does not exist or has been removed.'}</p>
           </CardContent>
         </Card>
       </div>
@@ -99,154 +113,240 @@ export default function InvoicePage() {
   const amountDue = Number(invoice.totalAmount) - Number(invoice.paidAmount);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          {invoice.organization.logo && (
-            <img src={invoice.organization.logo} alt={invoice.organization.name} className="h-16 mx-auto mb-4" />
-          )}
-          <h1 className="text-3xl font-bold text-gray-900">{invoice.organization.name}</h1>
-          {invoice.organization.email && (
-            <p className="text-gray-600 mt-1">{invoice.organization.email}</p>
-          )}
-        </div>
-
-        {/* Invoice Card */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-start justify-between">
+    <div className="min-h-screen bg-muted py-8 px-4">
+      <div className="max-w-lg mx-auto space-y-6">
+        {/* Invoice Header Card */}
+        <Card>
+          <CardContent className="pt-6">
+            {/* Organization Logo/Name */}
+            <div className="flex items-start justify-between mb-4">
               <div>
-                <CardTitle className="text-2xl">Invoice</CardTitle>
-                {invoice.reference && (
-                  <CardDescription className="text-lg mt-1">#{invoice.reference}</CardDescription>
-                )}
-              </div>
-              <div className="text-right">
-                {isPaid ? (
-                  <span className="px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800">
-                    Paid
-                  </span>
+                {invoice.organization.logo ? (
+                  <img 
+                    src={invoice.organization.logo} 
+                    alt={invoice.organization.name} 
+                    className="h-8 mb-2" 
+                  />
                 ) : (
-                  <span className="px-3 py-1 text-sm font-medium rounded-full bg-yellow-100 text-yellow-800">
-                    {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                  </span>
+                  <h2 className="text-xl font-bold tracking-tight">{invoice.organization.name.toUpperCase()}</h2>
+                )}
+                {/* Amount */}
+                <p className="text-3xl font-bold mt-2">{formatCurrency(amountDue)}</p>
+                {invoice.dueDate && (
+                  <p className="text-muted-foreground text-sm">Due {formatDate(invoice.dueDate)}</p>
                 )}
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Bill To */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 mb-2">BILL TO</h3>
-              <p className="font-medium">
-                {invoice.donor.firstName} {invoice.donor.lastName}
-              </p>
-              {invoice.donor.email && (
-                <p className="text-gray-600">{invoice.donor.email}</p>
-              )}
+              <button onClick={handleDownloadPDF} className="p-2 hover:bg-muted rounded-lg">
+                <FileText className="h-6 w-6 text-muted-foreground" />
+              </button>
             </div>
 
             {/* Invoice Details */}
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              {invoice.dueDate && (
-                <div>
-                  <p className="text-gray-500">Due Date</p>
-                  <p className="font-medium">{formatDate(invoice.dueDate)}</p>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Business name</span>
+                <span className="font-medium">{invoice.organization.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Customer name</span>
+                <span className="font-medium">{invoice.donor.firstName} {invoice.donor.lastName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">From</span>
+                <span className="font-medium">{invoice.organization.name}</span>
+              </div>
+              {invoice.memo && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Memo</span>
+                  <span className="font-medium text-right max-w-[200px]">{invoice.memo}</span>
                 </div>
               )}
-              <div>
-                <p className="text-gray-500">Amount Due</p>
-                <p className="font-medium text-lg">{formatCurrency(amountDue)}</p>
-              </div>
             </div>
 
-            {/* Line Items */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 mb-3">ITEMS</h3>
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Price</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+            {/* Actions */}
+            <div className="mt-6 pt-4 border-t border-border space-y-2">
+              <button 
+                onClick={handleDownloadPDF}
+                className="flex items-center gap-2 text-sm font-medium underline"
+              >
+                <Download className="h-4 w-4" />
+                Download PDF
+              </button>
+              
+              <button 
+                onClick={() => setShowDetails(!showDetails)}
+                className="flex items-center gap-2 text-sm text-muted-foreground italic"
+              >
+                Show Invoice Details
+                {showDetails ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </button>
+              
+              <button className="flex items-center gap-2 text-sm text-muted-foreground italic">
+                Manage billing
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Expandable Invoice Details */}
+            {showDetails && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-muted-foreground">
+                      <th className="text-left py-2">Item</th>
+                      <th className="text-right py-2">Qty</th>
+                      <th className="text-right py-2">Price</th>
+                      <th className="text-right py-2">Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {invoice.products.map((product, index) => (
-                      <tr key={index}>
-                        <td className="px-4 py-3">{product.productName}</td>
-                        <td className="px-4 py-3 text-right">{product.qty}</td>
-                        <td className="px-4 py-3 text-right">{formatCurrency(Number(product.price))}</td>
-                        <td className="px-4 py-3 text-right font-medium">{formatCurrency(Number(product.subtotal))}</td>
+                  <tbody>
+                    {invoice.products.map((product, idx) => (
+                      <tr key={idx}>
+                        <td className="py-2">{product.productName}</td>
+                        <td className="py-2 text-right">{product.qty}</td>
+                        <td className="py-2 text-right">{formatCurrency(Number(product.price))}</td>
+                        <td className="py-2 text-right font-medium">{formatCurrency(Number(product.subtotal))}</td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="bg-gray-50">
-                    <tr>
-                      <td colSpan={3} className="px-4 py-3 text-right font-semibold">Total</td>
-                      <td className="px-4 py-3 text-right font-bold text-lg">{formatCurrency(Number(invoice.totalAmount))}</td>
+                  <tfoot>
+                    <tr className="border-t border-border">
+                      <td colSpan={3} className="py-2 text-right font-medium">Total</td>
+                      <td className="py-2 text-right font-bold">{formatCurrency(Number(invoice.totalAmount))}</td>
                     </tr>
-                    {Number(invoice.paidAmount) > 0 && (
-                      <>
-                        <tr>
-                          <td colSpan={3} className="px-4 py-2 text-right text-gray-600">Paid</td>
-                          <td className="px-4 py-2 text-right text-gray-600">-{formatCurrency(Number(invoice.paidAmount))}</td>
-                        </tr>
-                        <tr>
-                          <td colSpan={3} className="px-4 py-3 text-right font-semibold">Amount Due</td>
-                          <td className="px-4 py-3 text-right font-bold text-lg text-blue-600">{formatCurrency(amountDue)}</td>
-                        </tr>
-                      </>
-                    )}
                   </tfoot>
                 </table>
-              </div>
-            </div>
-
-            {/* Memo */}
-            {invoice.memo && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 mb-2">NOTES</h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{invoice.memo}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Actions */}
+        {/* Payment Section */}
         {!isPaid && amountDue > 0 && (
-          <div className="flex gap-4">
-            <Button size="lg" className="flex-1" onClick={handlePayment} disabled={paying}>
-              <CreditCard className="mr-2 h-5 w-5" />
-              {paying ? 'Processing...' : `Pay ${formatCurrency(amountDue)}`}
-            </Button>
-            {invoice.pdfUrl && (
-              <Button size="lg" variant="outline">
-                <Download className="mr-2 h-5 w-5" />
-                Download PDF
-              </Button>
-            )}
-          </div>
-        )}
-
-        {isPaid && (
-          <Card className="bg-green-50 border-green-200">
-            <CardContent className="pt-6 text-center">
-              <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+          <Card>
+            <CardContent className="pt-6">
+              <h3 className="font-semibold mb-4">Payment method</h3>
+              
+              {/* Payment Method Selection */}
+              <div className="flex gap-3 mb-6">
+                <button
+                  onClick={() => setPaymentMethod('card')}
+                  className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors ${
+                    paymentMethod === 'card' 
+                      ? 'border-foreground bg-muted' 
+                      : 'border-border hover:border-muted-foreground'
+                  }`}
+                >
+                  <CreditCard className="h-6 w-6" />
+                  <span className="text-xs">Regular</span>
+                </button>
+                <button
+                  onClick={() => setPaymentMethod('amex')}
+                  className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors ${
+                    paymentMethod === 'amex' 
+                      ? 'border-foreground bg-muted' 
+                      : 'border-border hover:border-muted-foreground'
+                  }`}
+                >
+                  <span className="text-xs font-bold">AMEX</span>
+                  <span className="text-xs">American Express</span>
+                </button>
+                <button
+                  onClick={() => setPaymentMethod('bank')}
+                  className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors ${
+                    paymentMethod === 'bank' 
+                      ? 'border-foreground bg-muted' 
+                      : 'border-border hover:border-muted-foreground'
+                  }`}
+                >
+                  <Building2 className="h-6 w-6" />
+                  <span className="text-xs">Bank Transfer</span>
+                </button>
               </div>
-              <h3 className="text-lg font-semibold text-green-900 mb-2">Invoice Paid</h3>
-              <p className="text-green-700">This invoice has been paid in full. Thank you!</p>
+
+              {/* Payment Form */}
+              <form onSubmit={handlePayment}>
+                <h4 className="font-semibold mb-4">Payment Info</h4>
+                
+                {paymentMethod !== 'bank' ? (
+                  <div className="space-y-4">
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="Card Number"
+                        className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <input
+                        type="text"
+                        placeholder="Expiration Date (MM/YY)"
+                        className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                      />
+                      <input
+                        type="text"
+                        placeholder="CVV"
+                        className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Billing ZIP Code"
+                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <input
+                      type="text"
+                      placeholder="Routing Number"
+                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Account Number"
+                      className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
+                    />
+                    <select className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground">
+                      <option>Checking</option>
+                      <option>Savings</option>
+                    </select>
+                  </div>
+                )}
+
+                <Button 
+                  type="submit" 
+                  className="w-full mt-6" 
+                  size="lg"
+                  disabled={processing}
+                >
+                  {processing ? 'Processing...' : `Pay ${formatCurrency(amountDue)}`}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         )}
+
+        {/* Paid Status */}
+        {isPaid && (
+          <Card className="bg-success/10 border-success/20">
+            <CardContent className="pt-6 text-center">
+              <div className="bg-success/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Invoice Paid</h3>
+              <p className="text-muted-foreground">This invoice has been paid in full. Thank you!</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Footer */}
+        <p className="text-center text-sm text-muted-foreground">
+          Powered by LunarPay
+        </p>
       </div>
     </div>
   );
 }
-
