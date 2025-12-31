@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireAuth, getUserOrganizationIds } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
 import { z } from 'zod';
 
 // Email template types
@@ -20,18 +20,21 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await requireAuth(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const currentUser = await requireAuth();
 
     const { id } = await params;
     const organizationId = parseInt(id);
     
     // Verify user has access to this organization
-    const orgIds = await getUserOrganizationIds(user.id);
-    if (!orgIds.includes(organizationId)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const organization = await prisma.organization.findFirst({
+      where: {
+        id: organizationId,
+        userId: currentUser.userId,
+      },
+    });
+    
+    if (!organization) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
     // Get all templates for this organization
@@ -59,6 +62,9 @@ export async function GET(
 
     return NextResponse.json(templatesWithDefaults);
   } catch (error) {
+    if ((error as Error).message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     console.error('Error fetching email templates:', error);
     return NextResponse.json({ error: 'Failed to fetch email templates' }, { status: 500 });
   }
@@ -80,18 +86,21 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await requireAuth(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const currentUser = await requireAuth();
 
     const { id } = await params;
     const organizationId = parseInt(id);
     
     // Verify user has access to this organization
-    const orgIds = await getUserOrganizationIds(user.id);
-    if (!orgIds.includes(organizationId)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const organization = await prisma.organization.findFirst({
+      where: {
+        id: organizationId,
+        userId: currentUser.userId,
+      },
+    });
+    
+    if (!organization) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
     const body = await request.json();
@@ -121,6 +130,9 @@ export async function PUT(
 
     return NextResponse.json(template);
   } catch (error) {
+    if ((error as Error).message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     console.error('Error updating email template:', error);
     return NextResponse.json({ error: 'Failed to update email template' }, { status: 500 });
   }
@@ -132,18 +144,21 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await requireAuth(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const currentUser = await requireAuth();
 
     const { id } = await params;
     const organizationId = parseInt(id);
     
     // Verify user has access to this organization
-    const orgIds = await getUserOrganizationIds(user.id);
-    if (!orgIds.includes(organizationId)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const organization = await prisma.organization.findFirst({
+      where: {
+        id: organizationId,
+        userId: currentUser.userId,
+      },
+    });
+    
+    if (!organization) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -163,6 +178,9 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if ((error as Error).message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     console.error('Error resetting email template:', error);
     return NextResponse.json({ error: 'Failed to reset email template' }, { status: 500 });
   }
