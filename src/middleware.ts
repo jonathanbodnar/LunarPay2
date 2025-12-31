@@ -6,7 +6,7 @@ import { verifyToken } from '@/lib/auth';
 export const runtime = 'nodejs';
 
 // Routes that don't require authentication
-const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link'];
+const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal'];
 
 // Routes that are public APIs (invoices, payment links by hash)
 const publicApiRoutes = [
@@ -21,8 +21,10 @@ const publicApiRoutes = [
   '/api/admin/test-db', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/backfill-hashes', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-branding-columns', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/add-portal-columns', // TEMPORARY - DELETE AFTER USE!
   '/api/invoices/public',
   '/api/payment-links/public',
+  '/api/portal', // Customer portal APIs
   '/api/fortis/webhooks',
   '/api/health',
   '/api/cron'

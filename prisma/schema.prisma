@@ -83,6 +83,13 @@ model Organization {
   buttonTextColor       String?   @default("#ffffff") @map("button_text_color") @db.VarChar(20)
   fortisTemplate        String?   @map("fortis_template") @db.VarChar(50)
   
+  // Customer Portal Settings
+  portalSlug            String?   @unique @map("portal_slug") @db.VarChar(100)
+  portalEnabled         Boolean   @default(false) @map("portal_enabled")
+  portalCustomDomain    String?   @map("portal_custom_domain") @db.VarChar(255)
+  portalTitle           String?   @map("portal_title") @db.VarChar(255)
+  portalDescription     String?   @map("portal_description") @db.Text
+  
   // Twilio/Text-to-Give
   twilioAccountSid      String?   @map("twilio_accountsid") @db.VarChar(100)
   twilioPhoneSid        String?   @map("twilio_phonesid") @db.VarChar(100)
@@ -236,6 +243,7 @@ model Donor {
   sources               Source[]
   subscriptions         Subscription[]
   invoices              Invoice[]
+  customerSessions      CustomerSession[]
   
   @@map("account_donor")
 }
@@ -430,6 +438,9 @@ model Product {
   
   // Digital Content
   fileHash                  String?   @map("file_hash") @db.VarChar(500)
+  
+  // Customer Portal Visibility
+  showOnPortal              Boolean   @default(false) @map("show_on_portal")
   
   // Subscription Fields
   isSubscription            Boolean   @default(false) @map("is_subscription")
@@ -708,6 +719,36 @@ model ApiSession {
   updatedAt DateTime @updatedAt @map("updated_at")
   
   @@map("api_session")
+}
+
+// ============================================
+// CUSTOMER PORTAL SESSIONS
+// ============================================
+
+model CustomerSession {
+  id              String    @id @default(uuid())
+  donorId         Int       @map("donor_id")
+  organizationId  Int       @map("organization_id")
+  token           String    @unique @db.VarChar(255)
+  expiresAt       DateTime  @map("expires_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  donor           Donor     @relation(fields: [donorId], references: [id])
+  
+  @@map("customer_sessions")
+}
+
+model CustomerOtp {
+  id              Int       @id @default(autoincrement())
+  email           String    @db.VarChar(254)
+  organizationId  Int       @map("organization_id")
+  code            String    @db.VarChar(6)
+  expiresAt       DateTime  @map("expires_at")
+  used            Boolean   @default(false)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  @@index([email, organizationId])
+  @@map("customer_otp")
 }
 
 // ============================================

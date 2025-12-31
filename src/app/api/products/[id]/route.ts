@@ -10,6 +10,7 @@ const updateProductSchema = z.object({
   qty: z.number().nullable().optional(),
   isSubscription: z.boolean().optional(),
   subscriptionInterval: z.string().nullable().optional(),
+  showOnPortal: z.boolean().optional(),
 });
 
 // GET /api/products/:id - Get single product
@@ -98,6 +99,7 @@ export async function PUT(
         qty: validatedData.qty,
         isSubscription: validatedData.isSubscription,
         subscriptionInterval: validatedData.subscriptionInterval,
+        showOnPortal: validatedData.showOnPortal,
       },
     });
 

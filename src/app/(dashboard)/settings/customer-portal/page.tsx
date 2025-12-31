@@ -1,82 +1,267 @@
 'use client';
 
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Globe, Link as LinkIcon, Check } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { 
+  Globe, 
+  Link as LinkIcon, 
+  Copy, 
+  Check, 
+  ExternalLink,
+  Loader2,
+  AlertCircle
+} from 'lucide-react';
 
-export default function CustomerPortalPage() {
+interface Organization {
+  id: number;
+  name: string;
+  slug: string | null;
+  portalSlug: string | null;
+  portalEnabled: boolean;
+  portalCustomDomain: string | null;
+  portalTitle: string | null;
+  portalDescription: string | null;
+}
+
+export default function CustomerPortalSettingsPage() {
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
   const [formData, setFormData] = useState({
-    portalEnabled: true,
-    customDomain: '',
-    allowSelfService: true,
-    allowPaymentMethodUpdate: true,
-    allowInvoiceDownload: true,
-    allowSubscriptionCancel: false,
+    portalSlug: '',
+    portalEnabled: false,
+    portalCustomDomain: '',
+    portalTitle: '',
+    portalDescription: '',
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    
-    // TODO: Implement save API
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  useEffect(() => {
+    fetchOrganizations();
+  }, []);
+
+  const fetchOrganizations = async () => {
+    try {
+      const response = await fetch('/api/organizations', {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setOrganizations(data.organizations || []);
+        if (data.organizations?.length > 0) {
+          selectOrganization(data.organizations[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Fetch organizations error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const selectOrganization = (org: Organization) => {
+    setSelectedOrg(org);
+    setFormData({
+      portalSlug: org.portalSlug || org.slug || '',
+      portalEnabled: org.portalEnabled || false,
+      portalCustomDomain: org.portalCustomDomain || '',
+      portalTitle: org.portalTitle || '',
+      portalDescription: org.portalDescription || '',
+    });
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOrg) return;
+
+    setSaving(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await fetch(`/api/organizations/${selectedOrg.id}/portal`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSuccess('Portal settings saved successfully!');
+        
+        // Update the organization in the list
+        setOrganizations(prev => prev.map(org => 
+          org.id === selectedOrg.id ? { ...org, ...data.organization } : org
+        ));
+        setSelectedOrg(prev => prev ? { ...prev, ...data.organization } : prev);
+        
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to save portal settings');
+      }
+    } catch (err) {
+      setError('Error saving portal settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getPortalUrl = () => {
+    if (formData.portalCustomDomain) {
+      return `https://${formData.portalCustomDomain}`;
+    }
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${baseUrl}/portal/${formData.portalSlug}`;
+  };
+
+  const copyPortalUrl = () => {
+    navigator.clipboard.writeText(getPortalUrl());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-semibold">Customer Portal</h1>
         <p className="mt-1 text-muted-foreground">
-          Configure the self-service portal for your customers
+          Configure a self-service portal where your customers can manage their payment methods, 
+          view subscriptions, and make purchases.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      {organizations.length > 1 && (
+        <div className="space-y-2">
+          <Label>Organization</Label>
+          <select
+            className="w-full h-10 px-3 rounded-lg border border-border bg-background"
+            value={selectedOrg?.id || ''}
+            onChange={(e) => {
+              const org = organizations.find(o => o.id === parseInt(e.target.value));
+              if (org) selectOrganization(org);
+            }}
+          >
+            {organizations.map(org => (
+              <option key={org.id} value={org.id}>{org.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+          <AlertCircle className="h-5 w-5 flex-shrink-0" />
+          <p>{error}</p>
+        </div>
+      )}
+
+      {success && (
+        <div className="flex items-center gap-2 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">
+          <Check className="h-5 w-5 flex-shrink-0" />
+          <p>{success}</p>
+        </div>
+      )}
+
+      <form onSubmit={handleSave} className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-base font-medium flex items-center gap-2">
-              <Globe className="h-4 w-4" />
-              Portal Settings
+              <Globe className="h-5 w-5" />
+              Portal Status
             </CardTitle>
+            <CardDescription>Enable or disable the customer portal</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent>
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-sm">Enable Customer Portal</p>
-                <p className="text-xs text-muted-foreground">Allow customers to access their portal</p>
+                <p className="font-medium">Customer Portal</p>
+                <p className="text-sm text-muted-foreground">
+                  Allow customers to sign in and manage their account
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, portalEnabled: !formData.portalEnabled })}
-                className={`w-11 h-6 rounded-full transition-colors ${formData.portalEnabled ? 'bg-foreground' : 'bg-muted'}`}
-              >
-                <div className={`w-5 h-5 rounded-full bg-background shadow-sm transform transition-transform ${formData.portalEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-              </button>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={formData.portalEnabled}
+                  onChange={(e) => setFormData({ ...formData, portalEnabled: e.target.checked })}
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
             </div>
+          </CardContent>
+        </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base font-medium flex items-center gap-2">
+              <LinkIcon className="h-5 w-5" />
+              Portal URL
+            </CardTitle>
+            <CardDescription>Configure your portal link</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Custom Domain</label>
+              <Label>Portal Slug</Label>
               <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    value={formData.customDomain}
-                    onChange={(e) => setFormData({ ...formData, customDomain: e.target.value })}
-                    placeholder="portal.yourdomain.com"
-                    className="pl-10"
-                  />
-                </div>
+                <Input
+                  value={formData.portalSlug}
+                  onChange={(e) => setFormData({ 
+                    ...formData, 
+                    portalSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+                  })}
+                  placeholder="your-company"
+                />
               </div>
               <p className="text-xs text-muted-foreground">
-                Point your domain's CNAME to portal.lunarpay.com
+                Your portal will be available at: {getPortalUrl()}
+              </p>
+            </div>
+
+            {formData.portalSlug && (
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <LinkIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <span className="text-sm font-mono flex-1 truncate">{getPortalUrl()}</span>
+                <Button type="button" variant="ghost" size="sm" onClick={copyPortalUrl}>
+                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => window.open(getPortalUrl(), '_blank')}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Custom Domain (Optional)</Label>
+              <Input
+                value={formData.portalCustomDomain}
+                onChange={(e) => setFormData({ ...formData, portalCustomDomain: e.target.value })}
+                placeholder="pay.yourcompany.com"
+              />
+              <p className="text-xs text-muted-foreground">
+                Point your domain's CNAME record to <code className="bg-muted px-1 rounded">portal.lunarpay.com</code>
               </p>
             </div>
           </CardContent>
@@ -84,37 +269,44 @@ export default function CustomerPortalPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-medium">Customer Permissions</CardTitle>
+            <CardTitle className="text-base font-medium">Portal Customization</CardTitle>
+            <CardDescription>Customize the portal appearance</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {[
-              { key: 'allowSelfService', label: 'Self-service access', desc: 'Customers can log in and view their data' },
-              { key: 'allowPaymentMethodUpdate', label: 'Update payment methods', desc: 'Customers can add/remove cards' },
-              { key: 'allowInvoiceDownload', label: 'Download invoices', desc: 'Customers can download PDF invoices' },
-              { key: 'allowSubscriptionCancel', label: 'Cancel subscriptions', desc: 'Customers can cancel their subscriptions' },
-            ].map((item) => (
-              <div key={item.key} className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm">{item.label}</p>
-                  <p className="text-xs text-muted-foreground">{item.desc}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, [item.key]: !(formData as any)[item.key] })}
-                  className={`w-11 h-6 rounded-full transition-colors ${(formData as any)[item.key] ? 'bg-foreground' : 'bg-muted'}`}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-background shadow-sm transform transition-transform ${(formData as any)[item.key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                </button>
-              </div>
-            ))}
+            <div className="space-y-2">
+              <Label>Portal Title</Label>
+              <Input
+                value={formData.portalTitle}
+                onChange={(e) => setFormData({ ...formData, portalTitle: e.target.value })}
+                placeholder="Customer Portal"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Welcome Message</Label>
+              <textarea
+                className="w-full min-h-[80px] px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                value={formData.portalDescription}
+                onChange={(e) => setFormData({ ...formData, portalDescription: e.target.value })}
+                placeholder="Welcome to our customer portal. Sign in to manage your account."
+              />
+            </div>
           </CardContent>
         </Card>
 
-        <Button type="submit" disabled={saving} className="gap-2">
-          {saving ? 'Saving...' : saved ? <><Check className="h-4 w-4" /> Saved!</> : 'Save Settings'}
-        </Button>
+        <div className="flex justify-end">
+          <Button type="submit" disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </Button>
+        </div>
       </form>
     </div>
   );
 }
-

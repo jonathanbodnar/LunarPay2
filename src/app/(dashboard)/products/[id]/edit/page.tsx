@@ -21,6 +21,7 @@ export default function EditProductPage() {
     recurrence: 'one_time',
     billingPeriod: 'monthly',
     organizationName: '',
+    showOnPortal: false,
   });
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function EditProductPage() {
           recurrence: product.isSubscription ? 'periodically' : 'one_time',
           billingPeriod: product.subscriptionInterval || 'monthly',
           organizationName: product.organization?.name || '',
+          showOnPortal: product.showOnPortal || false,
         });
       } else {
         alert('Product not found');
@@ -71,6 +73,7 @@ export default function EditProductPage() {
           qty: formData.qty ? parseInt(formData.qty) : null,
           isSubscription: formData.recurrence !== 'one_time',
           subscriptionInterval: formData.recurrence === 'periodically' ? formData.billingPeriod : null,
+          showOnPortal: formData.showOnPortal,
         }),
         credentials: 'include',
       });
@@ -219,6 +222,26 @@ export default function EditProductPage() {
                   </select>
                 </div>
               )}
+            </div>
+
+            <div className="space-y-4 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Show on Customer Portal</p>
+                  <p className="text-sm text-muted-foreground">
+                    Allow customers to purchase this product from their portal
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={formData.showOnPortal}
+                    onChange={(e) => setFormData({ ...formData, showOnPortal: e.target.checked })}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
             </div>
           </CardContent>
         </Card>
