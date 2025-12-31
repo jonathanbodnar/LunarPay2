@@ -7,11 +7,11 @@ export async function GET() {
     const products = await prisma.$queryRaw<Array<{
       id: number;
       name: string;
-      organization_id: number;
+      church_id: number;
       show_on_portal: boolean | null;
       trash: boolean;
     }>>`
-      SELECT id, name, organization_id, show_on_portal, trash 
+      SELECT id, name, church_id, show_on_portal, trash 
       FROM products 
       ORDER BY id DESC 
       LIMIT 20
