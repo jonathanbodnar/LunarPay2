@@ -26,6 +26,65 @@ interface Organization {
   portalDescription: string | null;
 }
 
+function CopyableValue({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="text-left hover:bg-background/50 px-1 -mx-1 rounded transition-colors group flex items-center gap-1"
+      title="Click to copy"
+    >
+      <span className="text-muted-foreground">{label}:</span>{' '}
+      <span className="text-foreground">{value}</span>
+      {copied ? (
+        <Check className="h-3 w-3 text-green-500" />
+      ) : (
+        <Copy className="h-3 w-3 opacity-0 group-hover:opacity-50" />
+      )}
+    </button>
+  );
+}
+
+function DnsInstructions({ domain }: { domain: string }) {
+  const subdomain = domain.split('.')[0];
+  
+  return (
+    <div className="text-xs text-muted-foreground space-y-3 mt-3">
+      <p className="font-medium text-foreground">Add these DNS records to your domain:</p>
+      
+      <div className="bg-muted p-3 rounded space-y-2">
+        <p className="font-medium text-foreground text-xs">1. Main CNAME (points your domain to LunarPay)</p>
+        <div className="font-mono text-xs space-y-1">
+          <CopyableValue label="Type" value="CNAME" />
+          <CopyableValue label="Name" value={subdomain} />
+          <CopyableValue label="Value" value="portal.lunarpay.com" />
+        </div>
+      </div>
+
+      <div className="bg-muted p-3 rounded space-y-2">
+        <p className="font-medium text-foreground text-xs">2. DCV CNAME (for SSL certificate validation)</p>
+        <div className="font-mono text-xs space-y-1">
+          <CopyableValue label="Type" value="CNAME" />
+          <CopyableValue label="Name" value={`_acme-challenge.${subdomain}`} />
+          <CopyableValue label="Value" value="066217d657c42286.dcv.cloudflare.com" />
+        </div>
+      </div>
+
+      <p className="text-amber-600">
+        ⚠️ Both records are required for the custom domain to work with SSL.
+      </p>
+    </div>
+  );
+}
+
 export default function CustomerPortalSettingsPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
@@ -269,31 +328,7 @@ export default function CustomerPortalSettingsPage() {
                 placeholder="pay.yourcompany.com"
               />
               {formData.portalCustomDomain ? (
-                <div className="text-xs text-muted-foreground space-y-3 mt-3">
-                  <p className="font-medium text-foreground">Add these DNS records to your domain:</p>
-                  
-                  <div className="bg-muted p-3 rounded space-y-2">
-                    <p className="font-medium text-foreground text-xs">1. Main CNAME (points your domain to LunarPay)</p>
-                    <div className="font-mono text-xs grid grid-cols-3 gap-1">
-                      <div><span className="text-muted-foreground">Type:</span> CNAME</div>
-                      <div><span className="text-muted-foreground">Name:</span> {formData.portalCustomDomain.split('.')[0]}</div>
-                      <div><span className="text-muted-foreground">Value:</span> portal.lunarpay.com</div>
-                    </div>
-                  </div>
-
-                  <div className="bg-muted p-3 rounded space-y-2">
-                    <p className="font-medium text-foreground text-xs">2. DCV CNAME (for SSL certificate validation)</p>
-                    <div className="font-mono text-xs grid grid-cols-3 gap-1">
-                      <div><span className="text-muted-foreground">Type:</span> CNAME</div>
-                      <div><span className="text-muted-foreground">Name:</span> _acme-challenge.{formData.portalCustomDomain.split('.')[0]}</div>
-                      <div className="col-span-1 break-all"><span className="text-muted-foreground">Value:</span> 066217d657c42286.dcv.cloudflare.com</div>
-                    </div>
-                  </div>
-
-                  <p className="text-amber-600">
-                    ⚠️ Both records are required for the custom domain to work with SSL.
-                  </p>
-                </div>
+                <DnsInstructions domain={formData.portalCustomDomain} />
               ) : (
                 <p className="text-xs text-muted-foreground">
                   Use your own domain for the customer portal (e.g., pay.yourcompany.com)
