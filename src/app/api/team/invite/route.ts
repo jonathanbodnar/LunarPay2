@@ -27,7 +27,12 @@ export async function POST(request: Request) {
 
     const { email, role, permissions } = validation.data;
 
-    // Get user's organization
+    // Get user info and organization
+    const user = await prisma.user.findUnique({
+      where: { id: currentUser.userId },
+      select: { firstName: true, lastName: true },
+    });
+
     const organization = await prisma.organization.findFirst({
       where: { userId: currentUser.userId },
       select: { id: true, name: true },
@@ -96,7 +101,7 @@ export async function POST(request: Request) {
     });
 
     // Send invitation email
-    const inviterName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'A team member';
+    const inviterName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'A team member';
     const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/invite/${token}`;
     
     await sendTeamInviteEmail({
