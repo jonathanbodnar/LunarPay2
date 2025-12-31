@@ -79,6 +79,8 @@ export async function POST(request: Request) {
     const currentUser = await requireAuth();
     const body = await request.json();
 
+    console.log('Creating payment link with data:', JSON.stringify(body, null, 2));
+
     const validatedData = createPaymentLinkSchema.parse(body);
 
     // Verify organization ownership
@@ -134,6 +136,7 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error('Payment link validation error:', error.issues);
       return NextResponse.json(
         { error: 'Validation error', details: error.issues },
         { status: 400 }
@@ -149,7 +152,7 @@ export async function POST(request: Request) {
 
     console.error('Create payment link error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
     );
   }

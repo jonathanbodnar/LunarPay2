@@ -5,6 +5,8 @@ import { ChevronDown, Plus, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { PhoneInput } from '@/components/ui/phone-input';
+import { SimpleAddressInput } from '@/components/ui/address-input';
 
 interface Customer {
   id: number;
@@ -36,6 +38,9 @@ export function CustomerSelect({ organizationId, value, onChange, required }: Cu
     email: '',
     phone: '',
     address: '',
+    city: '',
+    state: '',
+    zip: '',
   });
 
   const selectedCustomer = customers.find(c => c.id.toString() === value);
@@ -76,7 +81,14 @@ export function CustomerSelect({ organizationId, value, onChange, required }: Cu
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           organizationId: parseInt(organizationId),
-          ...newCustomer,
+          firstName: newCustomer.firstName,
+          lastName: newCustomer.lastName,
+          email: newCustomer.email,
+          phone: newCustomer.phone,
+          address: newCustomer.address,
+          city: newCustomer.city,
+          state: newCustomer.state,
+          zip: newCustomer.zip,
         }),
         credentials: 'include',
       });
@@ -93,6 +105,9 @@ export function CustomerSelect({ organizationId, value, onChange, required }: Cu
           email: '',
           phone: '',
           address: '',
+          city: '',
+          state: '',
+          zip: '',
         });
       } else {
         alert('Failed to create customer');
@@ -113,6 +128,9 @@ export function CustomerSelect({ organizationId, value, onChange, required }: Cu
       email: searchTerm.includes('@') ? searchTerm : '',
       phone: '',
       address: '',
+      city: '',
+      state: '',
+      zip: '',
     });
     setShowCreateModal(true);
     setIsOpen(false);
@@ -210,7 +228,7 @@ export function CustomerSelect({ organizationId, value, onChange, required }: Cu
 
       {/* Create Customer Modal */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Add New Customer</DialogTitle>
           </DialogHeader>
@@ -247,19 +265,25 @@ export function CustomerSelect({ organizationId, value, onChange, required }: Cu
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Phone</label>
-              <Input
-                type="tel"
+              <PhoneInput
                 value={newCustomer.phone}
-                onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                placeholder="+1 (555) 123-4567"
+                onChange={(value) => setNewCustomer({ ...newCustomer, phone: value })}
               />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Address</label>
-              <Input
-                value={newCustomer.address}
-                onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
-                placeholder="123 Main St"
+              <SimpleAddressInput
+                address={newCustomer.address}
+                city={newCustomer.city}
+                state={newCustomer.state}
+                zip={newCustomer.zip}
+                onChange={(data) => setNewCustomer({ 
+                  ...newCustomer, 
+                  address: data.address,
+                  city: data.city,
+                  state: data.state,
+                  zip: data.zip,
+                })}
               />
             </div>
           </div>

@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft } from 'lucide-react';
+import { PhoneInput } from '@/components/ui/phone-input';
+import { SimpleAddressInput } from '@/components/ui/address-input';
 
 export default function NewCustomerPage() {
   const router = useRouter();
@@ -79,21 +81,21 @@ export default function NewCustomerPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Add Customer</h1>
-          <p className="mt-2 text-gray-600">Create a new customer record</p>
+          <h1 className="text-2xl font-semibold">Add Customer</h1>
+          <p className="mt-1 text-muted-foreground">Create a new customer record</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Customer Information</CardTitle>
+            <CardTitle className="text-base font-medium">Customer Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Organization *</label>
               <select
-                className="w-full h-10 px-3 rounded-md border border-gray-300"
+                className="w-full h-10 px-3 rounded-lg border border-border bg-background"
                 value={formData.organizationId}
                 onChange={(e) => setFormData({ ...formData, organizationId: e.target.value })}
                 required
@@ -138,46 +140,28 @@ export default function NewCustomerPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Phone</label>
-                <Input
-                  type="tel"
+                <PhoneInput
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, phone: value })}
                 />
               </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Address</label>
-              <Input
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              <SimpleAddressInput
+                address={formData.address}
+                city={formData.city}
+                state={formData.state}
+                zip={formData.zip}
+                onChange={(data) => setFormData({ 
+                  ...formData, 
+                  address: data.address,
+                  city: data.city,
+                  state: data.state,
+                  zip: data.zip,
+                })}
               />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">City</label>
-                <Input
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">State</label>
-                <Input
-                  value={formData.state}
-                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">ZIP</label>
-                <Input
-                  value={formData.zip}
-                  onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
-                />
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -194,4 +178,3 @@ export default function NewCustomerPage() {
     </div>
   );
 }
-

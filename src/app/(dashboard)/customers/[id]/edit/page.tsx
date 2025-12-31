@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft } from 'lucide-react';
+import { PhoneInput } from '@/components/ui/phone-input';
+import { SimpleAddressInput } from '@/components/ui/address-input';
 
 export default function EditCustomerPage() {
   const params = useParams();
@@ -80,7 +82,7 @@ export default function EditCustomerPage() {
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-[400px]">
-      <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full" />
+      <div className="animate-spin h-8 w-8 border-4 border-foreground border-t-transparent rounded-full" />
     </div>;
   }
 
@@ -90,13 +92,13 @@ export default function EditCustomerPage() {
         <Button variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-3xl font-bold text-gray-900">Edit Customer</h1>
+        <h1 className="text-2xl font-semibold">Edit Customer</h1>
       </div>
 
       <form onSubmit={handleSubmit}>
         <Card>
           <CardHeader>
-            <CardTitle>Customer Information</CardTitle>
+            <CardTitle className="text-base font-medium">Customer Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -132,47 +134,28 @@ export default function EditCustomerPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Phone</label>
-                <Input
-                  type="tel"
+                <PhoneInput
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, phone: value })}
                 />
               </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Address</label>
-              <Input
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              <SimpleAddressInput
+                address={formData.address}
+                city={formData.city}
+                state={formData.state}
+                zip={formData.zip}
+                onChange={(data) => setFormData({ 
+                  ...formData, 
+                  address: data.address,
+                  city: data.city,
+                  state: data.state,
+                  zip: data.zip,
+                })}
               />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">City</label>
-                <Input
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">State</label>
-                <Input
-                  value={formData.state}
-                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                  placeholder="TX"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">ZIP</label>
-                <Input
-                  value={formData.zip}
-                  onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
-                />
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -189,4 +172,3 @@ export default function EditCustomerPage() {
     </div>
   );
 }
-

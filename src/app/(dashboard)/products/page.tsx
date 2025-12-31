@@ -96,17 +96,16 @@ export default function ProductsPage() {
                 )}
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold text-blue-600">
+                  <span className="text-2xl font-bold" style={{ color: 'hsl(var(--primary))' }}>
                     {formatCurrency(Number(product.price))}
                   </span>
-                  {product.qty !== null && (
-                    <span className="text-sm text-gray-500">
-                      {product.qty} available
+                  {product.qty !== null ? (
+                    <span className="text-sm text-muted-foreground">
+                      {product.qty} in stock
                     </span>
-                  )}
-                  {product.qty === null && (
-                    <span className="text-sm text-green-600 font-medium">
-                      Unlimited
+                  ) : (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                      No limit
                     </span>
                   )}
                 </div>

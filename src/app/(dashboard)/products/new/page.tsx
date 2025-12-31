@@ -164,14 +164,17 @@ export default function NewProductPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Quantity (blank = unlimited)</label>
+                <label className="text-sm font-medium">Inventory (blank = no limit)</label>
                 <Input
                   type="number"
                   min="0"
                   value={formData.qty}
                   onChange={(e) => setFormData({ ...formData, qty: e.target.value })}
-                  placeholder="Unlimited"
+                  placeholder="No limit"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Leave blank for unlimited inventory. Set a number to track stock.
+                </p>
               </div>
             </div>
 
