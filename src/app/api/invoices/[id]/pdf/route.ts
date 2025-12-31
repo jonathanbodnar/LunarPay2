@@ -34,14 +34,47 @@ export async function GET(
       );
     }
 
-    // Generate PDF
-    const pdfBuffer = await generateInvoicePDF(invoice as any);
+    // Format invoice data for PDF generation
+    const invoiceData = {
+      id: invoice.id,
+      reference: invoice.reference,
+      totalAmount: Number(invoice.totalAmount),
+      fee: Number(invoice.fee || 0),
+      dueDate: invoice.dueDate?.toISOString() || null,
+      memo: invoice.memo,
+      footer: invoice.footer,
+      createdAt: invoice.createdAt.toISOString(),
+      donor: {
+        firstName: invoice.donor?.firstName || null,
+        lastName: invoice.donor?.lastName || null,
+        email: invoice.donor?.email || null,
+        address: invoice.donor?.address || null,
+      },
+      organization: {
+        name: invoice.organization?.name || 'Unknown',
+        phone: invoice.organization?.phoneNumber || null,
+        email: invoice.organization?.email || null,
+        address: invoice.organization ? 
+          [invoice.organization.streetAddress, invoice.organization.city, invoice.organization.state, invoice.organization.postal]
+            .filter(Boolean)
+            .join(', ') : null,
+      },
+      products: invoice.products.map(p => ({
+        productName: p.productName,
+        qty: Number(p.qty),
+        price: Number(p.price),
+        subtotal: Number(p.subtotal),
+      })),
+    };
 
-    // Return PDF
-    return new NextResponse(pdfBuffer as any, {
+    // Generate PDF
+    const pdfBuffer = await generateInvoicePDF(invoiceData);
+
+    // Return PDF - convert Buffer to Uint8Array for NextResponse compatibility
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="invoice-${invoice.reference || invoice.id}.pdf"`,
+        'Content-Disposition': `attachment; filename="invoice-${invoice.reference || invoice.id}.pdf"`,
       },
     });
   } catch (error) {
