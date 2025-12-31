@@ -28,7 +28,19 @@ export async function GET(
         id: productId,
         userId: currentUser.userId,
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        qty: true,
+        isSubscription: true,
+        subscriptionInterval: true,
+        subscriptionIntervalCount: true,
+        subscriptionTrialDays: true,
+        showOnPortal: true,
+        trash: true,
+        createdAt: true,
         organization: {
           select: {
             id: true,
