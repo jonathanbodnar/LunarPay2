@@ -130,8 +130,8 @@ export default function NewInvoicePage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Create Invoice</h1>
-          <p className="mt-2 text-gray-600">Create a new invoice for a customer</p>
+          <h1 className="text-2xl font-semibold">Create Invoice</h1>
+          <p className="mt-1 text-muted-foreground">Create a new invoice for a customer</p>
         </div>
       </div>
 
@@ -145,7 +145,7 @@ export default function NewInvoicePage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Organization *</label>
                 <select
-                  className="w-full h-10 px-3 rounded-md border border-gray-300"
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-background"
                   value={formData.organizationId}
                   onChange={(e) => setFormData({ ...formData, organizationId: e.target.value })}
                   required
@@ -159,12 +159,18 @@ export default function NewInvoicePage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Customer *</label>
-                <CustomerSelect
-                  organizationId={formData.organizationId}
-                  value={formData.donorId}
-                  onChange={(value) => setFormData({ ...formData, donorId: value })}
-                  required
-                />
+                {formData.organizationId ? (
+                  <CustomerSelect
+                    organizationId={formData.organizationId}
+                    value={formData.donorId}
+                    onChange={(value) => setFormData({ ...formData, donorId: value })}
+                    required
+                  />
+                ) : (
+                  <div className="h-10 px-3 rounded-lg border border-border bg-muted flex items-center text-muted-foreground text-sm">
+                    Select an organization first
+                  </div>
+                )}
               </div>
             </div>
 
@@ -181,7 +187,7 @@ export default function NewInvoicePage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Payment Options</label>
                 <select
-                  className="w-full h-10 px-3 rounded-md border border-gray-300"
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-background"
                   value={formData.paymentOptions}
                   onChange={(e) => setFormData({ ...formData, paymentOptions: e.target.value })}
                 >
@@ -195,7 +201,7 @@ export default function NewInvoicePage() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Memo / Notes</label>
               <textarea
-                className="w-full min-h-[80px] px-3 py-2 rounded-md border border-gray-300"
+                className="w-full min-h-[80px] px-3 py-2 rounded-lg border border-border bg-background text-sm"
                 value={formData.memo}
                 onChange={(e) => setFormData({ ...formData, memo: e.target.value })}
                 placeholder="Add internal notes..."
@@ -219,15 +225,21 @@ export default function NewInvoicePage() {
               {lineItems.map((item, index) => (
                 <div key={index} className="grid grid-cols-12 gap-3 items-end">
                   <div className="col-span-5">
-                    <label className="text-xs text-gray-500">Product/Description *</label>
-                    <ProductSelect
-                      organizationId={formData.organizationId}
-                      value={item.productId}
-                      onSelect={(product) => handleProductSelect(index, product)}
-                    />
+                    <label className="text-xs text-muted-foreground">Product/Description *</label>
+                    {formData.organizationId ? (
+                      <ProductSelect
+                        organizationId={formData.organizationId}
+                        value={item.productId}
+                        onSelect={(product) => handleProductSelect(index, product)}
+                      />
+                    ) : (
+                      <div className="h-10 px-3 rounded-lg border border-border bg-muted flex items-center text-muted-foreground text-sm">
+                        Select organization
+                      </div>
+                    )}
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs text-gray-500">Quantity *</label>
+                    <label className="text-xs text-muted-foreground">Quantity *</label>
                     <Input
                       type="number"
                       min="1"
@@ -237,7 +249,7 @@ export default function NewInvoicePage() {
                     />
                   </div>
                   <div className="col-span-3">
-                    <label className="text-xs text-gray-500">Price *</label>
+                    <label className="text-xs text-muted-foreground">Price *</label>
                     <Input
                       type="number"
                       step="0.01"
@@ -248,7 +260,7 @@ export default function NewInvoicePage() {
                     />
                   </div>
                   <div className="col-span-1">
-                    <label className="text-xs text-gray-500 invisible">Del</label>
+                    <label className="text-xs text-muted-foreground invisible">Del</label>
                     <Button
                       type="button"
                       variant="ghost"
@@ -260,7 +272,7 @@ export default function NewInvoicePage() {
                     </Button>
                   </div>
                   <div className="col-span-1 text-right">
-                    <label className="text-xs text-gray-500">Total</label>
+                    <label className="text-xs text-muted-foreground">Total</label>
                     <p className="font-medium">${(item.qty * item.price).toFixed(2)}</p>
                   </div>
                 </div>
@@ -307,11 +319,11 @@ export default function NewInvoicePage() {
                 <div className="flex justify-between items-center pt-3">
                   <span className="text-lg font-semibold">Total</span>
                   <div className="text-right">
-                    <span className="text-2xl font-bold text-blue-600">
+                    <span className="text-2xl font-bold">
                       ${calculateTotal().toFixed(2)}
                     </span>
                     {formData.coverFee && (
-                      <p className="text-xs text-gray-500">Includes transaction fee</p>
+                      <p className="text-xs text-muted-foreground">Includes transaction fee</p>
                     )}
                   </div>
                 </div>
