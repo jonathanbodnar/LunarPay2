@@ -6,7 +6,7 @@ import { verifyToken } from '@/lib/auth';
 export const runtime = 'nodejs';
 
 // Routes that don't require authentication
-const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
+const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link'];
 
 // Routes that are public APIs (invoices, payment links by hash)
 const publicApiRoutes = [
@@ -45,7 +45,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Define protected routes
-  const protectedRoutes = ['/dashboard', '/organizations', '/invoices', '/customers', '/transactions', '/subscriptions', '/funds', '/settings', '/payment-links'];
+  const protectedRoutes = ['/dashboard', '/organizations', '/invoices', '/customers', '/transactions', '/subscriptions', '/funds', '/payouts', '/settings', '/payment-links'];
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
   const isProtectedApi = pathname.startsWith('/api') && !publicApiRoutes.some(route => pathname.startsWith(route));
 

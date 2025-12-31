@@ -40,8 +40,8 @@ const navigation: NavItem[] = [
       { name: 'Invoices', href: '/invoices' },
       { name: 'Payment Links', href: '/payment-links' },
       { name: 'Transactions', href: '/transactions' },
-      { name: 'Recurring', href: '/subscriptions' },
-      { name: 'Payouts', href: '/funds' },
+      { name: 'Subscriptions', href: '/subscriptions' },
+      { name: 'Payouts', href: '/payouts' },
     ]
   },
   { name: 'Customers', href: '/customers', icon: Users },
@@ -256,9 +256,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Footer */}
         <footer className="py-6 px-4 lg:px-8">
-          <div className="text-center text-sm text-muted-foreground">
-            @ LunarPay
-          </div>
         </footer>
       </div>
     </div>
