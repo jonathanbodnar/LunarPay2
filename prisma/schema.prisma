@@ -132,28 +132,37 @@ model FortisOnboarding {
   userId                Int       @map("user_id")
   organizationId        Int       @unique @map("church_id")
   
-  // Signer Information
+  // Step 1: Primary Principal (Signer) Information
   signFirstName         String?   @map("sign_first_name") @db.VarChar(100)
   signLastName          String?   @map("sign_last_name") @db.VarChar(100)
   signPhoneNumber       String?   @map("sign_phone_number") @db.VarChar(50)
   email                 String?   @db.VarChar(255)
   
-  // Merchant Address
+  // Step 1: Merchant Address
   merchantAddressLine1  String?   @map("merchant_address_line_1") @db.VarChar(255)
   merchantState         String?   @map("merchant_state") @db.VarChar(50)
   merchantCity          String?   @map("merchant_city") @db.VarChar(100)
   merchantPostalCode    String?   @map("merchant_postal_code") @db.VarChar(20)
   
-  // Bank Account Information (Last 4 digits only)
+  // Step 2: Primary Bank Account Information (Full numbers stored encrypted, last 4 for display)
+  achAccountNumber      String?   @map("ach_account_number") @db.VarChar(500) // Encrypted full number (format: salt:iv:tag:encrypted ~215 chars)
+  achRoutingNumber      String?   @map("ach_routing_number") @db.VarChar(500) // Encrypted full number (format: salt:iv:tag:encrypted ~215 chars)
   accountNumberLast4    String?   @map("account_number_last4") @db.VarChar(4)
-  routingNumberLast4    String?   @map("routing_number_last4") @db.VarChar(4)
+  routingNumberLast4   String?   @map("routing_number_last4") @db.VarChar(4)
   accountHolderName     String?   @map("account_holder_name") @db.VarChar(255)
+  
+  // Step 2: Alternative Bank Account Information
+  achAccountNumber2     String?   @map("ach_account_number2") @db.VarChar(500) // Encrypted full number (format: salt:iv:tag:encrypted ~215 chars)
+  achRoutingNumber2     String?   @map("ach_routing_number2") @db.VarChar(500) // Encrypted full number (format: salt:iv:tag:encrypted ~215 chars)
   account2NumberLast4   String?   @map("account2_number_last4") @db.VarChar(4)
   routing2NumberLast4   String?   @map("routing2_number_last4") @db.VarChar(4)
   account2HolderName    String?   @map("account2_holder_name") @db.VarChar(255)
   
+  // Onboarding Step Tracking
+  stepCompleted         Int?      @default(0) @map("step_completed") // 0=none, 1=step1, 2=step2, etc.
+  
   // Fortis Application Status
-  appStatus             String?   @map("app_status") @db.VarChar(50)
+  appStatus             String?   @map("app_status") @db.VarChar(50) // BANK_INFORMATION_SENT, FORM_ERROR, ACTIVE
   mpaLink               String?   @map("mpa_link") @db.Text
   
   // API Credentials (from webhook)
