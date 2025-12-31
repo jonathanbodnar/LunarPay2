@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Decimal } from '@prisma/client/runtime/library';
+
+type AggregateResult = {
+  _sum: { totalAmount: Decimal | null; fee: Decimal | null };
+};
 
 export async function GET() {
   try {
@@ -13,10 +18,10 @@ export async function GET() {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     // Initialize default values
-    let totalRevenue = { _sum: { totalAmount: null, fee: null } };
-    let monthlyRevenue = { _sum: { totalAmount: null, fee: null } };
-    let yearlyRevenue = { _sum: { totalAmount: null, fee: null } };
-    let last30DaysRevenue = { _sum: { totalAmount: null, fee: null } };
+    let totalRevenue: AggregateResult = { _sum: { totalAmount: null, fee: null } };
+    let monthlyRevenue: AggregateResult = { _sum: { totalAmount: null, fee: null } };
+    let yearlyRevenue: AggregateResult = { _sum: { totalAmount: null, fee: null } };
+    let last30DaysRevenue: AggregateResult = { _sum: { totalAmount: null, fee: null } };
     let totalTransactions = 0;
     let monthlyTransactions = 0;
     let pendingInvoices = 0;
