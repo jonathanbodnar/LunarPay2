@@ -269,13 +269,30 @@ export default function CustomerPortalSettingsPage() {
                 placeholder="pay.yourcompany.com"
               />
               {formData.portalCustomDomain ? (
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p>To use your custom domain, add this DNS record:</p>
-                  <div className="bg-muted p-2 rounded font-mono text-xs">
-                    <div><span className="text-muted-foreground">Type:</span> CNAME</div>
-                    <div><span className="text-muted-foreground">Name:</span> {formData.portalCustomDomain.split('.')[0] || formData.portalCustomDomain}</div>
-                    <div><span className="text-muted-foreground">Value:</span> portal.lunarpay.com</div>
+                <div className="text-xs text-muted-foreground space-y-3 mt-3">
+                  <p className="font-medium text-foreground">Add these DNS records to your domain:</p>
+                  
+                  <div className="bg-muted p-3 rounded space-y-2">
+                    <p className="font-medium text-foreground text-xs">1. Main CNAME (points your domain to LunarPay)</p>
+                    <div className="font-mono text-xs grid grid-cols-3 gap-1">
+                      <div><span className="text-muted-foreground">Type:</span> CNAME</div>
+                      <div><span className="text-muted-foreground">Name:</span> {formData.portalCustomDomain.split('.')[0]}</div>
+                      <div><span className="text-muted-foreground">Value:</span> portal.lunarpay.com</div>
+                    </div>
                   </div>
+
+                  <div className="bg-muted p-3 rounded space-y-2">
+                    <p className="font-medium text-foreground text-xs">2. DCV CNAME (for SSL certificate validation)</p>
+                    <div className="font-mono text-xs grid grid-cols-3 gap-1">
+                      <div><span className="text-muted-foreground">Type:</span> CNAME</div>
+                      <div><span className="text-muted-foreground">Name:</span> _acme-challenge.{formData.portalCustomDomain.split('.')[0]}</div>
+                      <div className="col-span-1 break-all"><span className="text-muted-foreground">Value:</span> 066217d657c42286.dcv.cloudflare.com</div>
+                    </div>
+                  </div>
+
+                  <p className="text-amber-600">
+                    ⚠️ Both records are required for the custom domain to work with SSL.
+                  </p>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">

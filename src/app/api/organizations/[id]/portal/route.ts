@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { addCustomHostname, deleteCustomHostname, getDcvDelegationTarget, getPortalCnameTarget } from '@/lib/cloudflare';
 
 const portalSettingsSchema = z.object({
   portalSlug: z.string()
@@ -110,6 +111,31 @@ export async function PUT(
       }
     }
 
+    // Handle custom domain changes with Cloudflare
+    let cloudflareResult = null;
+    const oldCustomDomain = organization.portalCustomDomain;
+    const newCustomDomain = validatedData.portalCustomDomain;
+
+    // If custom domain changed
+    if (oldCustomDomain !== newCustomDomain) {
+      // Delete old custom hostname from Cloudflare if it existed
+      if (oldCustomDomain) {
+        console.log('[PORTAL] Removing old custom domain from Cloudflare:', oldCustomDomain);
+        await deleteCustomHostname(oldCustomDomain);
+      }
+
+      // Add new custom hostname to Cloudflare if provided
+      if (newCustomDomain) {
+        console.log('[PORTAL] Adding new custom domain to Cloudflare:', newCustomDomain);
+        cloudflareResult = await addCustomHostname(newCustomDomain);
+        
+        if (!cloudflareResult.success) {
+          console.error('[PORTAL] Failed to add custom domain to Cloudflare:', cloudflareResult.error);
+          // Don't fail the request, just warn
+        }
+      }
+    }
+
     // Update organization with portal settings
     const updatedOrganization = await prisma.organization.update({
       where: { id: organizationId },
@@ -132,7 +158,22 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json({ organization: updatedOrganization });
+    // Include DNS instructions in the response if a custom domain was added
+    const dnsInstructions = newCustomDomain ? {
+      cnameTarget: getPortalCnameTarget(),
+      dcvTarget: getDcvDelegationTarget(),
+      steps: [
+        `Add CNAME record: ${newCustomDomain} → ${getPortalCnameTarget()}`,
+        `Add DCV CNAME record: _acme-challenge.${newCustomDomain} → ${getDcvDelegationTarget()}`,
+      ],
+      cloudflareStatus: cloudflareResult?.success ? 'added' : 'failed',
+      cloudflareError: cloudflareResult?.error,
+    } : null;
+
+    return NextResponse.json({ 
+      organization: updatedOrganization,
+      customDomain: dnsInstructions,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
