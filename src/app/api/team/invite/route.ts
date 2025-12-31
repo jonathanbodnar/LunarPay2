@@ -64,41 +64,44 @@ export async function POST(request: Request) {
       }
     }
 
-    // Check for existing pending invite
-    const existingInvite = await prisma.teamInvite.findFirst({
-      where: {
-        email,
-        organizationId: organization.id,
-        status: 'pending',
-        expiresAt: { gt: new Date() },
-      },
-    });
+    // Check for existing pending invite (use raw SQL for reliability)
+    const existingInvites = await prisma.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM team_invites 
+      WHERE email = ${email} 
+      AND organization_id = ${organization.id} 
+      AND status = 'pending' 
+      AND expires_at > NOW()
+    `;
 
-    if (existingInvite) {
+    if (existingInvites.length > 0) {
       return NextResponse.json(
         { error: 'An invitation has already been sent to this email' },
         { status: 400 }
       );
     }
 
+    // Delete any old/cancelled invites for this email to avoid duplicates
+    await prisma.$executeRaw`
+      DELETE FROM team_invites 
+      WHERE email = ${email} AND organization_id = ${organization.id}
+    `;
+
     // Create invite token
     const token = generateRandomToken(48);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
 
-    // Create the invitation
-    const invite = await prisma.teamInvite.create({
-      data: {
-        organizationId: organization.id,
-        invitedBy: currentUser.userId,
-        email,
-        role,
-        permissions: permissions && permissions.length > 0 ? JSON.stringify(permissions) : null,
-        token,
-        status: 'pending',
-        expiresAt,
-      },
-    });
+    // Create the invitation (use raw SQL)
+    await prisma.$executeRaw`
+      INSERT INTO team_invites (organization_id, invited_by, email, role, permissions, token, status, expires_at, created_at)
+      VALUES (${organization.id}, ${currentUser.userId}, ${email}, ${role}, ${permissions && permissions.length > 0 ? JSON.stringify(permissions) : null}, ${token}, 'pending', ${expiresAt}, NOW())
+    `;
+
+    // Get the created invite
+    const inviteResult = await prisma.$queryRaw<Array<{ id: number; email: string; role: string; status: string; expires_at: Date }>>`
+      SELECT id, email, role, status, expires_at FROM team_invites WHERE token = ${token}
+    `;
+    const invite = inviteResult[0];
 
     // Send invitation email
     const inviterName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'A team member';
@@ -119,7 +122,7 @@ export async function POST(request: Request) {
         email: invite.email,
         role: invite.role,
         status: invite.status,
-        expiresAt: invite.expiresAt,
+        expiresAt: invite.expires_at,
       },
     });
   } catch (error) {
@@ -152,13 +155,11 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'No organization found' }, { status: 404 });
     }
 
-    // Delete the invite
-    await prisma.teamInvite.deleteMany({
-      where: {
-        id: parseInt(inviteId),
-        organizationId: organization.id,
-      },
-    });
+    // Delete the invite (use raw SQL for reliability)
+    await prisma.$executeRaw`
+      DELETE FROM team_invites 
+      WHERE id = ${parseInt(inviteId)} AND organization_id = ${organization.id}
+    `;
 
     return NextResponse.json({ success: true });
   } catch (error) {
