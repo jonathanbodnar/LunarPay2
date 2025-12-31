@@ -76,17 +76,87 @@ function IntegrationsContent() {
   // Stripe connect modal
   const [showStripeModal, setShowStripeModal] = useState(false);
   const [stripeApiKey, setStripeApiKey] = useState('');
+  
+  // API Key for Zapier
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
     fetchIntegrations();
     fetchZapierInfo();
     fetchStripeStatus();
+    fetchApiKey();
     
     if (searchParams.get('connected') === 'true') {
       setSuccess('Integration connected successfully!');
       setTimeout(() => setSuccess(''), 5000);
     }
   }, [searchParams]);
+
+  const fetchApiKey = async () => {
+    try {
+      const response = await fetch('/api/user/api-key', { credentials: 'include' });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.hasKey) {
+          setApiKey(data.apiKey); // This is the masked key
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch API key:', err);
+    }
+  };
+
+  const generateApiKey = async () => {
+    setApiKeyLoading(true);
+    try {
+      const response = await fetch('/api/user/api-key', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setApiKey(data.apiKey);
+        setShowApiKey(true);
+        setSuccess('API key generated! Copy it now - it won\'t be shown again.');
+        setTimeout(() => setSuccess(''), 10000);
+      } else {
+        setError('Failed to generate API key');
+      }
+    } catch (err) {
+      setError('Error generating API key');
+    } finally {
+      setApiKeyLoading(false);
+    }
+  };
+
+  const revokeApiKey = async () => {
+    if (!confirm('Are you sure? This will disconnect any Zapier integrations using this key.')) return;
+    
+    try {
+      const response = await fetch('/api/user/api-key', {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (response.ok) {
+        setApiKey(null);
+        setShowApiKey(false);
+        setSuccess('API key revoked');
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (err) {
+      setError('Error revoking API key');
+    }
+  };
+
+  const copyApiKey = () => {
+    if (apiKey) {
+      navigator.clipboard.writeText(apiKey);
+      setSuccess('API key copied to clipboard!');
+      setTimeout(() => setSuccess(''), 3000);
+    }
+  };
 
   const fetchIntegrations = async () => {
     try {
@@ -602,10 +672,10 @@ function IntegrationsContent() {
               </p>
               <Button 
                 className="bg-white text-orange-600 hover:bg-orange-50"
-                onClick={() => window.open('https://zapier.com/apps/webhook/integrations', '_blank')}
+                onClick={() => window.open('https://zapier.com/developer/public-invite/215942/your-invite-code', '_blank')}
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
-                Set Up Zap
+                Connect with Zapier
               </Button>
             </div>
             <div className="p-6">
@@ -646,6 +716,43 @@ function IntegrationsContent() {
                   </div>
                 </div>
               </div>
+              {/* API Key Section */}
+              <div className="mt-6 pt-6 border-t">
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  <Key className="h-4 w-4" />
+                  Your API Key
+                </h4>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Use this key to connect LunarPay with Zapier or other automation tools.
+                </p>
+                {apiKey ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono">
+                        {showApiKey ? apiKey : apiKey.substring(0, 8) + '••••••••••••' + apiKey.substring(apiKey.length - 4)}
+                      </code>
+                      <Button size="sm" variant="outline" onClick={copyApiKey}>
+                        Copy
+                      </Button>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={generateApiKey} disabled={apiKeyLoading}>
+                        {apiKeyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+                        Regenerate
+                      </Button>
+                      <Button size="sm" variant="ghost" className="text-red-600" onClick={revokeApiKey}>
+                        Revoke
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button onClick={generateApiKey} disabled={apiKeyLoading}>
+                    {apiKeyLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Key className="h-4 w-4 mr-2" />}
+                    Generate API Key
+                  </Button>
+                )}
+              </div>
+
               {zapierWebhooks.length > 0 && (
                 <div className="mt-6 pt-6 border-t">
                   <h4 className="font-medium mb-3">Active Zaps</h4>
