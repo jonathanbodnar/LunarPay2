@@ -22,6 +22,7 @@ const publicApiRoutes = [
   '/api/admin/backfill-hashes', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-branding-columns', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-portal-columns', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/add-email-templates-table', // TEMPORARY - DELETE AFTER USE!
   '/api/invoices/public',
   '/api/payment-links/public',
   '/api/portal', // Customer portal APIs

@@ -1,4 +1,5 @@
 import sgMail from '@sendgrid/mail';
+import { prisma } from '@/lib/prisma';
 
 // Initialize SendGrid with API key
 if (process.env.SENDGRID_API_KEY) {
@@ -14,6 +15,44 @@ interface EmailOptions {
   text?: string;
   html: string;
   replyTo?: string;
+}
+
+// ============================================
+// CUSTOM TEMPLATE SUPPORT
+// ============================================
+
+interface CustomTemplate {
+  subject?: string | null;
+  heading?: string | null;
+  bodyText?: string | null;
+  buttonText?: string | null;
+  footerText?: string | null;
+  isActive: boolean;
+}
+
+async function getCustomTemplate(organizationId: number, templateType: string): Promise<CustomTemplate | null> {
+  try {
+    const template = await prisma.emailTemplate.findUnique({
+      where: {
+        organizationId_templateType: {
+          organizationId,
+          templateType,
+        },
+      },
+    });
+    return template;
+  } catch (error) {
+    console.error('[EMAIL] Failed to fetch custom template:', error);
+    return null;
+  }
+}
+
+function replaceVariables(text: string, variables: Record<string, string>): string {
+  let result = text;
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replace(new RegExp(`{{${key}}}`, 'g'), value);
+  }
+  return result;
 }
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
@@ -90,23 +129,49 @@ export async function sendPortalLoginCode(
   to: string,
   code: string,
   organizationName: string,
-  brandColor?: string
+  brandColor?: string,
+  organizationId?: number
 ): Promise<boolean> {
+  const variables = {
+    organization: organizationName,
+    code: code,
+    customer_name: to.split('@')[0], // Basic fallback
+  };
+
+  // Check for custom template
+  let subject = `Your ${organizationName} verification code: ${code}`;
+  let heading = 'Your Verification Code';
+  let bodyText = 'Use this code to sign in to your customer portal:';
+  let footerText = 'This code expires in 10 minutes. If you didn\'t request this code, you can safely ignore this email.';
+
+  if (organizationId) {
+    const customTemplate = await getCustomTemplate(organizationId, 'portal_login');
+    if (customTemplate && customTemplate.isActive) {
+      if (customTemplate.subject) subject = replaceVariables(customTemplate.subject, variables);
+      if (customTemplate.heading) heading = replaceVariables(customTemplate.heading, variables);
+      if (customTemplate.bodyText) bodyText = replaceVariables(customTemplate.bodyText, variables);
+      if (customTemplate.footerText) footerText = replaceVariables(customTemplate.footerText, variables);
+    } else if (customTemplate && !customTemplate.isActive) {
+      console.log('[EMAIL] Portal login template disabled, skipping email');
+      return false;
+    }
+  }
+
   const html = baseTemplate(`
     <div class="header">
       <div class="logo">${organizationName}</div>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">Your Verification Code</h2>
-      <p>Use this code to sign in to your customer portal:</p>
+      <h2 style="margin-top: 0;">${heading}</h2>
+      <p>${bodyText}</p>
       <div class="code">${code}</div>
-      <p style="color: #666; font-size: 14px;">This code expires in 10 minutes. If you didn't request this code, you can safely ignore this email.</p>
+      <p style="color: #666; font-size: 14px;">${footerText}</p>
     </div>
   `, brandColor);
 
   return sendEmail({
     to,
-    subject: `Your ${organizationName} verification code: ${code}`,
+    subject,
     html,
   });
 }
@@ -124,19 +189,50 @@ interface InvoiceEmailData {
   invoiceUrl: string;
   organizationName: string;
   organizationEmail?: string;
+  organizationId?: number;
   memo?: string;
   brandColor?: string;
 }
 
 export async function sendInvoiceEmail(data: InvoiceEmailData): Promise<boolean> {
+  const variables = {
+    organization: data.organizationName,
+    customer_name: data.customerName,
+    invoice_number: data.invoiceNumber,
+    amount: data.totalAmount,
+    due_date: data.dueDate || 'N/A',
+  };
+
+  // Default values
+  let subject = `Invoice ${data.invoiceNumber} from ${data.organizationName} - ${data.totalAmount}`;
+  let heading = `Invoice ${data.invoiceNumber}`;
+  let bodyText = `You have a new invoice from ${data.organizationName}.`;
+  let buttonText = 'View & Pay Invoice';
+  let footerText = '';
+
+  // Check for custom template
+  if (data.organizationId) {
+    const customTemplate = await getCustomTemplate(data.organizationId, 'invoice');
+    if (customTemplate && customTemplate.isActive) {
+      if (customTemplate.subject) subject = replaceVariables(customTemplate.subject, variables);
+      if (customTemplate.heading) heading = replaceVariables(customTemplate.heading, variables);
+      if (customTemplate.bodyText) bodyText = replaceVariables(customTemplate.bodyText, variables);
+      if (customTemplate.buttonText) buttonText = replaceVariables(customTemplate.buttonText, variables);
+      if (customTemplate.footerText) footerText = replaceVariables(customTemplate.footerText, variables);
+    } else if (customTemplate && !customTemplate.isActive) {
+      console.log('[EMAIL] Invoice template disabled, skipping email');
+      return false;
+    }
+  }
+
   const html = baseTemplate(`
     <div class="header">
       <div class="logo">${data.organizationName}</div>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">Invoice ${data.invoiceNumber}</h2>
+      <h2 style="margin-top: 0;">${heading}</h2>
       <p>Hi ${data.customerName},</p>
-      <p>You have a new invoice from ${data.organizationName}.</p>
+      <p>${bodyText}</p>
       
       <div class="details">
         <table>
@@ -155,8 +251,10 @@ export async function sendInvoiceEmail(data: InvoiceEmailData): Promise<boolean>
       ${data.memo ? `<p style="color: #666; font-style: italic;">"${data.memo}"</p>` : ''}
       
       <div style="text-align: center;">
-        <a href="${data.invoiceUrl}" class="button">View & Pay Invoice</a>
+        <a href="${data.invoiceUrl}" class="button">${buttonText}</a>
       </div>
+      
+      ${footerText ? `<p style="font-size: 14px; color: #666;">${footerText}</p>` : ''}
       
       <p style="font-size: 14px; color: #666;">
         Questions? Contact ${data.organizationName}${data.organizationEmail ? ` at ${data.organizationEmail}` : ''}.
@@ -166,7 +264,7 @@ export async function sendInvoiceEmail(data: InvoiceEmailData): Promise<boolean>
 
   return sendEmail({
     to: data.customerEmail,
-    subject: `Invoice ${data.invoiceNumber} from ${data.organizationName} - ${data.totalAmount}`,
+    subject,
     html,
     replyTo: data.organizationEmail,
   });
@@ -186,6 +284,7 @@ interface PaymentConfirmationData {
   date: string;
   organizationName: string;
   organizationEmail?: string;
+  organizationId?: number;
   items?: Array<{ name: string; amount: string }>;
   brandColor?: string;
 }
@@ -195,14 +294,42 @@ export async function sendPaymentConfirmation(data: PaymentConfirmationData): Pr
     ? `Card ending in ${data.lastFour}` 
     : `Bank account ending in ${data.lastFour}`;
 
+  const variables = {
+    organization: data.organizationName,
+    customer_name: data.customerName,
+    amount: data.amount,
+    date: data.date,
+    payment_method: paymentMethodText,
+  };
+
+  // Default values
+  let subject = `Payment receipt from ${data.organizationName} - ${data.amount}`;
+  let heading = 'Payment Successful';
+  let bodyText = `Your payment to ${data.organizationName} has been processed successfully.`;
+  let footerText = 'This is your receipt. Keep it for your records.';
+
+  // Check for custom template
+  if (data.organizationId) {
+    const customTemplate = await getCustomTemplate(data.organizationId, 'payment_confirmation');
+    if (customTemplate && customTemplate.isActive) {
+      if (customTemplate.subject) subject = replaceVariables(customTemplate.subject, variables);
+      if (customTemplate.heading) heading = replaceVariables(customTemplate.heading, variables);
+      if (customTemplate.bodyText) bodyText = replaceVariables(customTemplate.bodyText, variables);
+      if (customTemplate.footerText) footerText = replaceVariables(customTemplate.footerText, variables);
+    } else if (customTemplate && !customTemplate.isActive) {
+      console.log('[EMAIL] Payment confirmation template disabled, skipping email');
+      return false;
+    }
+  }
+
   const html = baseTemplate(`
     <div class="header">
       <div class="logo">${data.organizationName}</div>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0; color: #16a34a;">Payment Successful</h2>
+      <h2 style="margin-top: 0; color: #16a34a;">${heading}</h2>
       <p>Hi ${data.customerName},</p>
-      <p>Your payment to ${data.organizationName} has been processed successfully.</p>
+      <p>${bodyText}</p>
       
       <div class="details">
         <table>
@@ -239,15 +366,13 @@ export async function sendPaymentConfirmation(data: PaymentConfirmationData): Pr
         </div>
       ` : ''}
       
-      <p style="font-size: 14px; color: #666;">
-        This is your receipt. Keep it for your records.
-      </p>
+      <p style="font-size: 14px; color: #666;">${footerText}</p>
     </div>
   `, data.brandColor);
 
   return sendEmail({
     to: data.customerEmail,
-    subject: `Payment receipt from ${data.organizationName} - ${data.amount}`,
+    subject,
     html,
     replyTo: data.organizationEmail,
   });
@@ -432,20 +557,49 @@ interface SubscriptionConfirmationData {
   nextPaymentDate: string;
   organizationName: string;
   organizationEmail?: string;
+  organizationId?: number;
   productName?: string;
   trialDays?: number;
   brandColor?: string;
 }
 
 export async function sendSubscriptionConfirmation(data: SubscriptionConfirmationData): Promise<boolean> {
+  const variables = {
+    organization: data.organizationName,
+    customer_name: data.customerName,
+    amount: data.amount,
+    frequency: data.frequency,
+    next_payment_date: data.nextPaymentDate,
+  };
+
+  // Default values
+  let subject = `Subscription confirmed with ${data.organizationName}`;
+  let heading = 'Subscription Confirmed';
+  let bodyText = `Your subscription ${data.productName ? `to ${data.productName} ` : ''}with ${data.organizationName} is now active.`;
+  let footerText = 'You can manage your subscription at any time from your customer portal.';
+
+  // Check for custom template
+  if (data.organizationId) {
+    const customTemplate = await getCustomTemplate(data.organizationId, 'subscription_confirmation');
+    if (customTemplate && customTemplate.isActive) {
+      if (customTemplate.subject) subject = replaceVariables(customTemplate.subject, variables);
+      if (customTemplate.heading) heading = replaceVariables(customTemplate.heading, variables);
+      if (customTemplate.bodyText) bodyText = replaceVariables(customTemplate.bodyText, variables);
+      if (customTemplate.footerText) footerText = replaceVariables(customTemplate.footerText, variables);
+    } else if (customTemplate && !customTemplate.isActive) {
+      console.log('[EMAIL] Subscription confirmation template disabled, skipping email');
+      return false;
+    }
+  }
+
   const html = baseTemplate(`
     <div class="header">
       <div class="logo">${data.organizationName}</div>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0; color: #16a34a;">Subscription Confirmed</h2>
+      <h2 style="margin-top: 0; color: #16a34a;">${heading}</h2>
       <p>Hi ${data.customerName},</p>
-      <p>Your subscription ${data.productName ? `to ${data.productName} ` : ''}with ${data.organizationName} is now active.</p>
+      <p>${bodyText}</p>
       
       ${data.trialDays ? `
         <div style="background: #f0fdf4; border: 1px solid #16a34a; border-radius: 8px; padding: 15px; margin: 20px 0;">
@@ -471,15 +625,13 @@ export async function sendSubscriptionConfirmation(data: SubscriptionConfirmatio
         </table>
       </div>
       
-      <p style="font-size: 14px; color: #666;">
-        You can manage your subscription at any time from your customer portal.
-      </p>
+      <p style="font-size: 14px; color: #666;">${footerText}</p>
     </div>
   `, data.brandColor);
 
   return sendEmail({
     to: data.customerEmail,
-    subject: `Subscription confirmed with ${data.organizationName}`,
+    subject,
     html,
     replyTo: data.organizationEmail,
   });
@@ -494,24 +646,49 @@ export async function sendSubscriptionCancelledEmail(
   customerName: string,
   organizationName: string,
   organizationEmail?: string,
-  brandColor?: string
+  brandColor?: string,
+  organizationId?: number
 ): Promise<boolean> {
+  const variables = {
+    organization: organizationName,
+    customer_name: customerName,
+  };
+
+  // Default values
+  let subject = `Subscription cancelled - ${organizationName}`;
+  let heading = 'Subscription Cancelled';
+  let bodyText = `Your subscription with ${organizationName} has been cancelled as requested. You will not be charged again. If you change your mind, you can always subscribe again from our website or customer portal.`;
+  let footerText = 'Thank you for being a customer!';
+
+  // Check for custom template
+  if (organizationId) {
+    const customTemplate = await getCustomTemplate(organizationId, 'subscription_cancelled');
+    if (customTemplate && customTemplate.isActive) {
+      if (customTemplate.subject) subject = replaceVariables(customTemplate.subject, variables);
+      if (customTemplate.heading) heading = replaceVariables(customTemplate.heading, variables);
+      if (customTemplate.bodyText) bodyText = replaceVariables(customTemplate.bodyText, variables);
+      if (customTemplate.footerText) footerText = replaceVariables(customTemplate.footerText, variables);
+    } else if (customTemplate && !customTemplate.isActive) {
+      console.log('[EMAIL] Subscription cancelled template disabled, skipping email');
+      return false;
+    }
+  }
+
   const html = baseTemplate(`
     <div class="header">
       <div class="logo">${organizationName}</div>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">Subscription Cancelled</h2>
+      <h2 style="margin-top: 0;">${heading}</h2>
       <p>Hi ${customerName},</p>
-      <p>Your subscription with ${organizationName} has been cancelled as requested.</p>
-      <p>You will not be charged again. If you change your mind, you can always subscribe again from our website or customer portal.</p>
-      <p>Thank you for being a customer!</p>
+      <p>${bodyText}</p>
+      ${footerText ? `<p>${footerText}</p>` : ''}
     </div>
   `, brandColor);
 
   return sendEmail({
     to: customerEmail,
-    subject: `Subscription cancelled - ${organizationName}`,
+    subject,
     html,
     replyTo: organizationEmail,
   });
@@ -530,18 +707,48 @@ interface PaymentFailedData {
   updatePaymentUrl: string;
   organizationName: string;
   organizationEmail?: string;
+  organizationId?: number;
   brandColor?: string;
 }
 
 export async function sendPaymentFailedEmail(data: PaymentFailedData): Promise<boolean> {
+  const variables = {
+    organization: data.organizationName,
+    customer_name: data.customerName,
+    amount: data.amount,
+    reason: data.reason,
+  };
+
+  // Default values
+  let subject = `Action required: Payment failed - ${data.organizationName}`;
+  let heading = 'Payment Failed';
+  let bodyText = `We were unable to process your payment of ${data.amount} to ${data.organizationName}.`;
+  let buttonText = 'Update Payment Method';
+  let footerText = '';
+
+  // Check for custom template
+  if (data.organizationId) {
+    const customTemplate = await getCustomTemplate(data.organizationId, 'payment_failed');
+    if (customTemplate && customTemplate.isActive) {
+      if (customTemplate.subject) subject = replaceVariables(customTemplate.subject, variables);
+      if (customTemplate.heading) heading = replaceVariables(customTemplate.heading, variables);
+      if (customTemplate.bodyText) bodyText = replaceVariables(customTemplate.bodyText, variables);
+      if (customTemplate.buttonText) buttonText = replaceVariables(customTemplate.buttonText, variables);
+      if (customTemplate.footerText) footerText = replaceVariables(customTemplate.footerText, variables);
+    } else if (customTemplate && !customTemplate.isActive) {
+      console.log('[EMAIL] Payment failed template disabled, skipping email');
+      return false;
+    }
+  }
+
   const html = baseTemplate(`
     <div class="header">
       <div class="logo">${data.organizationName}</div>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0; color: #dc2626;">Payment Failed</h2>
+      <h2 style="margin-top: 0; color: #dc2626;">${heading}</h2>
       <p>Hi ${data.customerName},</p>
-      <p>We were unable to process your payment of <strong>${data.amount}</strong> to ${data.organizationName}.</p>
+      <p>${bodyText}</p>
       
       <div class="details">
         <table>
@@ -560,8 +767,10 @@ export async function sendPaymentFailedEmail(data: PaymentFailedData): Promise<b
       <p>Please update your payment method to avoid service interruption:</p>
       
       <div style="text-align: center;">
-        <a href="${data.updatePaymentUrl}" class="button">Update Payment Method</a>
+        <a href="${data.updatePaymentUrl}" class="button">${buttonText}</a>
       </div>
+      
+      ${footerText ? `<p style="font-size: 14px; color: #666;">${footerText}</p>` : ''}
       
       <p style="font-size: 14px; color: #666;">
         Questions? Contact ${data.organizationName}${data.organizationEmail ? ` at ${data.organizationEmail}` : ''}.
@@ -571,7 +780,7 @@ export async function sendPaymentFailedEmail(data: PaymentFailedData): Promise<b
 
   return sendEmail({
     to: data.customerEmail,
-    subject: `Action required: Payment failed - ${data.organizationName}`,
+    subject,
     html,
     replyTo: data.organizationEmail,
   });

@@ -57,6 +57,7 @@ const navigation: NavItem[] = [
     children: [
       { name: 'Customer Portal', href: '/settings/customer-portal' },
       { name: 'Branding', href: '/settings/branding' },
+      { name: 'Email Templates', href: '/settings/email-templates' },
       { name: 'Integrations', href: '/settings/integrations' },
       { name: 'Team', href: '/settings/team' },
       { name: 'Notifications', href: '/settings/notifications' },
