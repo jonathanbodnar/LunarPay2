@@ -49,8 +49,7 @@ export async function POST(request: Request) {
             lastName: true,
             email: true,
             phone: true,
-            address1: true,
-            address2: true,
+            address: true,
             city: true,
             state: true,
             zip: true,
@@ -66,10 +65,9 @@ export async function POST(request: Request) {
             last_name: customer.lastName || undefined,
             email: customer.email || undefined,
             phone: customer.phone || undefined,
-            addresses: customer.address1 ? [{
+            addresses: customer.address ? [{
               type: 'primary',
-              line1: customer.address1,
-              line2: customer.address2 || undefined,
+              line1: customer.address,
               city: customer.city || undefined,
               state: customer.state || undefined,
               postal_code: customer.zip || undefined,
@@ -104,7 +102,7 @@ export async function POST(request: Request) {
             organizationId: organization.id,
           },
           include: {
-            items: true,
+            products: true,
             donor: true,
           },
         });
@@ -118,16 +116,16 @@ export async function POST(request: Request) {
 
         const result = await createInvoice(consumerId, serviceId, {
           customer_id: externalCustomerId,
-          invoice_date: invoice.invoiceDate?.toISOString().split('T')[0],
+          invoice_date: invoice.createdAt?.toISOString().split('T')[0],
           due_date: invoice.dueDate?.toISOString().split('T')[0],
           currency: 'USD',
-          line_items: invoice.items.map(item => ({
-            description: item.description || 'Item',
+          line_items: invoice.products.map(item => ({
+            description: item.productName || 'Item',
             quantity: item.qty || 1,
             unit_price: item.price ? Number(item.price) : 0,
-            total_amount: item.price && item.qty ? Number(item.price) * item.qty : 0,
+            total_amount: item.subtotal ? Number(item.subtotal) : 0,
           })),
-          memo: invoice.notes || undefined,
+          memo: invoice.memo || undefined,
         });
 
         return NextResponse.json({
@@ -165,14 +163,14 @@ export async function POST(request: Request) {
 
         const result = await createPayment(consumerId, serviceId, {
           customer_id: externalCustomerId,
-          total_amount: transaction.amount ? Number(transaction.amount) : 0,
+          total_amount: transaction.totalAmount ? Number(transaction.totalAmount) : 0,
           transaction_date: transaction.createdAt?.toISOString().split('T')[0],
           currency: 'USD',
           reference: transaction.fortisTransactionId || `LUNAR-${transaction.id}`,
           allocations: externalInvoiceId ? [{
             id: externalInvoiceId,
             type: 'invoice',
-            amount: transaction.amount ? Number(transaction.amount) : 0,
+            amount: transaction.totalAmount ? Number(transaction.totalAmount) : 0,
           }] : undefined,
         });
 
@@ -212,6 +210,7 @@ export async function POST(request: Request) {
             if (!existing) {
               const newCustomer = await prisma.donor.create({
                 data: {
+                  userId: currentUser.userId,
                   organizationId: organization.id,
                   firstName: (extCustomer.first_name as string) || (extCustomer.display_name as string)?.split(' ')[0] || null,
                   lastName: (extCustomer.last_name as string) || (extCustomer.display_name as string)?.split(' ').slice(1).join(' ') || null,

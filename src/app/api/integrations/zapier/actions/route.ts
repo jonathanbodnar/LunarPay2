@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import crypto from 'crypto';
 
 const createCustomerSchema = z.object({
   action: z.literal('create_customer'),
@@ -90,12 +91,13 @@ export async function POST(request: Request) {
 
         const customer = await prisma.donor.create({
           data: {
+            userId: currentUser.userId,
             organizationId: organization.id,
             firstName: data.first_name || null,
             lastName: data.last_name || null,
             email: data.email || null,
             phone: data.phone || null,
-            address1: data.address || null,
+            address: data.address || null,
             city: data.city || null,
             state: data.state || null,
             zip: data.zip || null,
@@ -132,6 +134,7 @@ export async function POST(request: Request) {
         if (!customer) {
           customer = await prisma.donor.create({
             data: {
+              userId: currentUser.userId,
               organizationId: organization.id,
               email: data.customer_email,
             },
@@ -139,7 +142,10 @@ export async function POST(request: Request) {
         }
 
         // Calculate total
-        const total = data.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const totalAmount = data.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+        // Generate unique hash for invoice
+        const hash = crypto.randomBytes(16).toString('hex');
 
         // Create invoice
         const invoice = await prisma.invoice.create({
@@ -147,14 +153,16 @@ export async function POST(request: Request) {
             organizationId: organization.id,
             donorId: customer.id,
             status: 'draft',
-            total,
+            totalAmount,
             dueDate: data.due_date ? new Date(data.due_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-            notes: data.notes || null,
-            items: {
+            memo: data.notes || null,
+            hash,
+            products: {
               create: data.items.map(item => ({
-                description: item.description,
+                productName: item.description,
                 qty: item.quantity,
                 price: item.price,
+                subtotal: item.price * item.quantity,
               })),
             },
           },
@@ -165,7 +173,7 @@ export async function POST(request: Request) {
           action: 'create_invoice',
           invoice_id: invoice.id,
           customer_id: customer.id,
-          total,
+          total: totalAmount,
           message: 'Invoice created successfully',
         });
       }
@@ -183,6 +191,7 @@ export async function POST(request: Request) {
 
         const product = await prisma.product.create({
           data: {
+            userId: currentUser.userId,
             organizationId: organization.id,
             name: data.name,
             description: data.description || null,
@@ -217,4 +226,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

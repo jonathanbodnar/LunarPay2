@@ -90,7 +90,7 @@ export function formatCustomerForZapier(customer: {
   lastName?: string | null;
   email?: string | null;
   phone?: string | null;
-  address1?: string | null;
+  address?: string | null;
   city?: string | null;
   state?: string | null;
   zip?: string | null;
@@ -103,7 +103,7 @@ export function formatCustomerForZapier(customer: {
     full_name: `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
     email: customer.email || '',
     phone: customer.phone || '',
-    address: customer.address1 || '',
+    address: customer.address || '',
     city: customer.city || '',
     state: customer.state || '',
     zip: customer.zip || '',
@@ -113,11 +113,10 @@ export function formatCustomerForZapier(customer: {
 
 export function formatInvoiceForZapier(invoice: {
   id: number;
-  invoiceNumber?: string | null;
+  reference?: string | null;
   status?: string | null;
-  total?: number | null;
+  totalAmount?: number | null;
   dueDate?: Date | null;
-  invoiceDate?: Date | null;
   createdAt?: Date | null;
   donor?: {
     id: number;
@@ -126,14 +125,14 @@ export function formatInvoiceForZapier(invoice: {
     email?: string | null;
   } | null;
 }) {
+  const total = invoice.totalAmount ? Number(invoice.totalAmount) : 0;
   return {
     id: invoice.id,
-    invoice_number: invoice.invoiceNumber || `INV-${invoice.id}`,
+    invoice_number: invoice.reference || `INV-${invoice.id}`,
     status: invoice.status || 'draft',
-    total: invoice.total || 0,
-    total_formatted: `$${((invoice.total || 0) / 100).toFixed(2)}`,
+    total: total,
+    total_formatted: `$${(total / 100).toFixed(2)}`,
     due_date: invoice.dueDate?.toISOString() || null,
-    invoice_date: invoice.invoiceDate?.toISOString() || null,
     created_at: invoice.createdAt?.toISOString() || new Date().toISOString(),
     customer: invoice.donor ? {
       id: invoice.donor.id,
@@ -144,10 +143,10 @@ export function formatInvoiceForZapier(invoice: {
 }
 
 export function formatTransactionForZapier(transaction: {
-  id: number;
-  amount?: number | null;
+  id: number | bigint;
+  totalAmount?: number | null;
   status?: string | null;
-  type?: string | null;
+  transactionType?: string | null;
   fortisTransactionId?: string | null;
   createdAt?: Date | null;
   donor?: {
@@ -157,12 +156,13 @@ export function formatTransactionForZapier(transaction: {
     email?: string | null;
   } | null;
 }) {
+  const amount = transaction.totalAmount ? Number(transaction.totalAmount) : 0;
   return {
-    id: transaction.id,
-    amount: transaction.amount || 0,
-    amount_formatted: `$${((transaction.amount || 0) / 100).toFixed(2)}`,
+    id: Number(transaction.id),
+    amount: amount,
+    amount_formatted: `$${(amount / 100).toFixed(2)}`,
     status: transaction.status || 'pending',
-    type: transaction.type || 'charge',
+    type: transaction.transactionType || 'charge',
     external_id: transaction.fortisTransactionId || null,
     created_at: transaction.createdAt?.toISOString() || new Date().toISOString(),
     customer: transaction.donor ? {
