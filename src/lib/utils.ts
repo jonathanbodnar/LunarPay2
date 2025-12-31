@@ -126,20 +126,49 @@ export function getLast4(value: string): string {
 /**
  * Get subscription frequency display text
  */
-export function getSubscriptionFrequencyText(frequency: string | null | undefined): string {
+export function getSubscriptionFrequencyText(
+  frequency: string | null | undefined,
+  intervalCount?: number | null
+): string {
   if (!frequency) return 'One-time';
   
+  const freq = frequency.toLowerCase();
+  
+  // Handle interval count for custom frequencies
+  if (intervalCount && intervalCount > 1) {
+    const intervalMap: Record<string, string> = {
+      'day': intervalCount === 1 ? 'Daily' : `Every ${intervalCount} days`,
+      'daily': intervalCount === 1 ? 'Daily' : `Every ${intervalCount} days`,
+      'week': intervalCount === 1 ? 'Weekly' : `Every ${intervalCount} weeks`,
+      'weekly': intervalCount === 1 ? 'Weekly' : `Every ${intervalCount} weeks`,
+      'month': intervalCount === 1 ? 'Monthly' : `Every ${intervalCount} months`,
+      'monthly': intervalCount === 1 ? 'Monthly' : `Every ${intervalCount} months`,
+      'year': intervalCount === 1 ? 'Yearly' : `Every ${intervalCount} years`,
+      'yearly': intervalCount === 1 ? 'Yearly' : `Every ${intervalCount} years`,
+      'annual': intervalCount === 1 ? 'Yearly' : `Every ${intervalCount} years`,
+    };
+    
+    if (intervalMap[freq]) {
+      return intervalMap[freq];
+    }
+  }
+  
   const frequencyMap: Record<string, string> = {
+    'daily': 'Daily',
+    'day': 'Daily',
     'weekly': 'Weekly',
+    'week': 'Weekly',
     'biweekly': 'Every 2 Weeks',
     'monthly': 'Monthly',
+    'month': 'Monthly',
     'quarterly': 'Quarterly',
     'semiannual': 'Every 6 Months',
     'annual': 'Yearly',
     'yearly': 'Yearly',
+    'year': 'Yearly',
     'one-time': 'One-time',
     'onetime': 'One-time',
   };
   
-  return frequencyMap[frequency.toLowerCase()] || frequency;
+  return frequencyMap[freq] || frequency;
 }
