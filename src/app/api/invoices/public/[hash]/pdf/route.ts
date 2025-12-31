@@ -45,10 +45,10 @@ export async function GET(
       );
     }
 
-    // Don't allow access to draft invoices
-    if (invoice.status === 'draft') {
+    // Don't allow access to canceled invoices
+    if (invoice.status === 'canceled') {
       return NextResponse.json(
-        { error: 'Invoice not available' },
+        { error: 'This invoice has been canceled' },
         { status: 404 }
       );
     }
