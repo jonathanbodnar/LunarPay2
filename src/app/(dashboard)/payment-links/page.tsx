@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Link as LinkIcon, Plus, ExternalLink } from 'lucide-react';
+import { Link as LinkIcon, Plus, ExternalLink, Pencil } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -110,15 +110,26 @@ export default function PaymentLinksPage() {
                   <span className="text-gray-500">{link.products.length} products</span>
                   <span className="text-gray-500">{link._count.productsPaid} purchases</span>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => window.open(`/payment-link/${link.hash}`, '_blank')}
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  View Link
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => router.push(`/payment-links/${link.id}/edit`)}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => window.open(`/payment-link/${link.hash}`, '_blank')}
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    View
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
