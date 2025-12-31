@@ -22,6 +22,7 @@ export async function GET(
             city: true,
             state: true,
             postal: true,
+            logo: true,
           },
         },
         donor: {
