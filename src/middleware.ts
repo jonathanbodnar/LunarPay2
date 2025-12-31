@@ -39,6 +39,7 @@ const publicApiRoutes = [
   '/api/admin/add-customer-sessions-table', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-zapier-table', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-customer-otp-table', // TEMPORARY - DELETE AFTER USE!
+  '/api/zapier', // Zapier integration endpoints (use API key auth)
   '/api/team/invite', // Public invite endpoints
   '/api/invoices/public',
   '/api/payment-links/public',
