@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { addCustomHostname, deleteCustomHostname, getDcvDelegationTarget, getPortalCnameTarget } from '@/lib/cloudflare';
+import { addCustomHostname, deleteCustomHostname, getCustomHostnameStatus, getDcvDelegationTarget, getPortalCnameTarget } from '@/lib/cloudflare';
 
 const portalSettingsSchema = z.object({
   portalSlug: z.string()
@@ -50,7 +50,19 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ organization });
+    // If custom domain exists, fetch validation records from Cloudflare
+    let customDomain = null;
+    if (organization.portalCustomDomain) {
+      const cfStatus = await getCustomHostnameStatus(organization.portalCustomDomain);
+      customDomain = {
+        cnameTarget: getPortalCnameTarget(),
+        validationRecords: cfStatus.validationRecords || [],
+        status: cfStatus.status,
+        sslStatus: cfStatus.sslStatus,
+      };
+    }
+
+    return NextResponse.json({ organization, customDomain });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

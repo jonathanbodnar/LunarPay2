@@ -179,12 +179,13 @@ export async function deleteCustomHostname(hostname: string): Promise<{
 }
 
 /**
- * Get the status of a custom hostname
+ * Get the status and validation records of a custom hostname
  */
 export async function getCustomHostnameStatus(hostname: string): Promise<{
   success: boolean;
   status?: string;
   sslStatus?: string;
+  validationRecords?: Array<{ name: string; value: string }>;
   error?: string;
 }> {
   const zoneId = process.env.CLOUDFLARE_ZONE_ID;
@@ -211,10 +212,33 @@ export async function getCustomHostnameStatus(hostname: string): Promise<{
     }
 
     const hostnameData = data.result[0];
+    
+    // Extract all validation records
+    const validationRecords: Array<{ name: string; value: string }> = [];
+    
+    // SSL/TLS validation records (for certificate)
+    if (hostnameData.ssl?.validation_records) {
+      hostnameData.ssl.validation_records.forEach(record => {
+        validationRecords.push({
+          name: record.txt_name,
+          value: record.txt_value,
+        });
+      });
+    }
+    
+    // Ownership verification TXT record (for hostname ownership)
+    if (hostnameData.ownership_verification) {
+      validationRecords.push({
+        name: hostnameData.ownership_verification.name,
+        value: hostnameData.ownership_verification.value,
+      });
+    }
+    
     return {
       success: true,
       status: hostnameData.status,
       sslStatus: hostnameData.ssl?.status,
+      validationRecords,
     };
   } catch (error) {
     console.error('[CLOUDFLARE] Error getting hostname status:', error);

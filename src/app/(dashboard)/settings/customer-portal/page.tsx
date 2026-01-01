@@ -171,13 +171,32 @@ export default function CustomerPortalSettingsPage() {
     }
   };
 
-  const selectOrganization = (org: Organization) => {
+  const selectOrganization = async (org: Organization) => {
     setSelectedOrg(org);
     setFormData({
       portalSlug: org.portalSlug || org.slug || '',
       portalEnabled: org.portalEnabled || false,
       portalCustomDomain: org.portalCustomDomain || '',
     });
+    
+    // Fetch validation records if custom domain exists
+    if (org.portalCustomDomain) {
+      try {
+        const response = await fetch(`/api/organizations/${org.id}/portal`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.customDomain?.validationRecords) {
+            setValidationRecords(data.customDomain.validationRecords);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch validation records:', err);
+      }
+    } else {
+      setValidationRecords([]);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
