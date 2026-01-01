@@ -79,6 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>(['Payments']);
   const [setupProgress, setSetupProgress] = useState<SetupProgress | null>(null);
+  const [organizationName, setOrganizationName] = useState<string>('');
 
   useEffect(() => {
     checkSetupProgress();
@@ -108,6 +109,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         productsRes?.ok ? productsRes.json().catch(() => ({ products: [] })) : { products: [] },
         invoicesRes?.ok ? invoicesRes.json().catch(() => ({ invoices: [] })) : { invoices: [] },
       ]);
+
+      // Set organization name from first org
+      if (orgs.organizations?.length > 0) {
+        setOrganizationName(orgs.organizations[0].name || '');
+      }
 
       const steps = [
         orgs.organizations?.length > 0,
@@ -296,10 +302,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
               <Menu className="h-5 w-5" />
           </button>
-            {/* Organization selector placeholder */}
-            <div className="hidden sm:block">
-              <span className="text-sm font-medium">Apollo Eleven Inc</span>
-            </div>
+            {/* Organization name */}
+            {organizationName && (
+              <div className="hidden sm:block">
+                <span className="text-sm font-medium">{organizationName}</span>
+              </div>
+            )}
         </div>
           
           <div className="flex items-center gap-3">
