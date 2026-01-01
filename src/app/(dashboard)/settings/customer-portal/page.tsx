@@ -51,9 +51,17 @@ function CopyableValue({ value, label }: { value: string; label: string }) {
   );
 }
 
-function DnsInstructions({ domain }: { domain: string }) {
+interface ValidationRecord {
+  name: string;
+  value: string;
+}
+
+function DnsInstructions({ domain, validationRecords }: { domain: string; validationRecords?: ValidationRecord[] }) {
   const subdomain = domain.split('.')[0];
   const baseDomain = domain.split('.').slice(1).join('.');
+  
+  // Find TXT validation record if available
+  const txtRecord = validationRecords?.find(r => r.name.includes('_cf-custom-hostname') || r.name.includes(subdomain));
   
   return (
     <div className="text-xs text-muted-foreground space-y-3 mt-3">
@@ -75,11 +83,33 @@ function DnsInstructions({ domain }: { domain: string }) {
         </p>
       </div>
 
-      {/* Record 2: SSL Validation CNAME */}
+      {/* Record 2: Hostname Validation TXT */}
       <div className="bg-muted p-3 rounded space-y-2">
         <p className="font-medium text-foreground text-xs flex items-center gap-2">
-          <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">2</span>
-          SSL Certificate Validation
+          <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px]">2</span>
+          Hostname Validation TXT Record
+        </p>
+        <div className="font-mono text-xs space-y-1">
+          <CopyableValue label="Type" value="TXT" />
+          <CopyableValue label="Name" value={txtRecord?.name || `_cf-custom-hostname.${subdomain}`} />
+          {txtRecord?.value ? (
+            <CopyableValue label="Value" value={txtRecord.value} />
+          ) : (
+            <p className="text-amber-600">
+              <span className="text-muted-foreground">Value:</span> Save settings to get this value
+            </p>
+          )}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-2">
+          Verifies domain ownership with Cloudflare
+        </p>
+      </div>
+
+      {/* Record 3: SSL Validation CNAME */}
+      <div className="bg-muted p-3 rounded space-y-2">
+        <p className="font-medium text-foreground text-xs flex items-center gap-2">
+          <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">3</span>
+          SSL Certificate CNAME (DCV Delegation)
         </p>
         <div className="font-mono text-xs space-y-1">
           <CopyableValue label="Type" value="CNAME" />
@@ -87,15 +117,18 @@ function DnsInstructions({ domain }: { domain: string }) {
           <CopyableValue label="Value" value="066217d657c42286.dcv.cloudflare.com" />
         </div>
         <p className="text-[10px] text-muted-foreground mt-2">
-          Required for automatic SSL certificate provisioning
+          Enables automatic SSL certificate provisioning and renewal
         </p>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
         <p className="font-medium text-amber-800 text-xs">Important Notes:</p>
         <ul className="text-[10px] text-amber-700 list-disc pl-4 space-y-1">
-          <li>Add both records to your DNS provider (Cloudflare, GoDaddy, Namecheap, etc.)</li>
-          <li>If using Cloudflare, set proxy status to <strong>DNS only</strong> (gray cloud)</li>
+          <li>Add all 3 records to your DNS provider (Cloudflare, GoDaddy, Namecheap, etc.)</li>
+          <li>If using Cloudflare, set proxy status to <strong>DNS only</strong> (gray cloud) for all records</li>
+          {!txtRecord?.value && (
+            <li className="text-purple-700 font-medium">Save your settings first to get the TXT validation value</li>
+          )}
           <li>DNS changes may take up to 24 hours to propagate</li>
           <li>SSL certificate will be provisioned automatically once DNS is configured</li>
         </ul>
@@ -118,6 +151,7 @@ export default function CustomerPortalSettingsPage() {
     portalEnabled: false,
     portalCustomDomain: '',
   });
+  const [validationRecords, setValidationRecords] = useState<ValidationRecord[]>([]);
 
   useEffect(() => {
     fetchOrganizations();
@@ -176,6 +210,11 @@ export default function CustomerPortalSettingsPage() {
           org.id === selectedOrg.id ? { ...org, ...data.organization } : org
         ));
         setSelectedOrg(prev => prev ? { ...prev, ...data.organization } : prev);
+        
+        // Store validation records if provided
+        if (data.customDomain?.validationRecords) {
+          setValidationRecords(data.customDomain.validationRecords);
+        }
         
         setTimeout(() => setSuccess(''), 3000);
       } else {
@@ -343,7 +382,7 @@ export default function CustomerPortalSettingsPage() {
                 placeholder="pay.yourcompany.com"
               />
               {formData.portalCustomDomain ? (
-                <DnsInstructions domain={formData.portalCustomDomain} />
+                <DnsInstructions domain={formData.portalCustomDomain} validationRecords={validationRecords} />
               ) : (
                 <p className="text-xs text-muted-foreground">
                   Use your own domain for the customer portal (e.g., pay.yourcompany.com)

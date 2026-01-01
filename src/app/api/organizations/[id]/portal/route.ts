@@ -164,8 +164,10 @@ export async function PUT(
       dcvTarget: getDcvDelegationTarget(),
       steps: [
         `Add CNAME record: ${newCustomDomain} → ${getPortalCnameTarget()}`,
+        `Add TXT record for hostname validation (value provided by Cloudflare)`,
         `Add DCV CNAME record: _acme-challenge.${newCustomDomain} → ${getDcvDelegationTarget()}`,
       ],
+      validationRecords: cloudflareResult?.validationRecords || [],
       cloudflareStatus: cloudflareResult?.success ? 'added' : 'failed',
       cloudflareError: cloudflareResult?.error,
     } : null;

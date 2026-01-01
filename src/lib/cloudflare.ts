@@ -23,6 +23,15 @@ interface CustomHostname {
   };
   status: string;
   created_at: string;
+  ownership_verification?: {
+    type: string;
+    name: string;
+    value: string;
+  };
+  ownership_verification_http?: {
+    http_url: string;
+    http_body: string;
+  };
 }
 
 /**
@@ -75,12 +84,28 @@ export async function addCustomHostname(hostname: string): Promise<{
     }
 
     console.log('[CLOUDFLARE] Custom hostname added:', data.result.id);
+    console.log('[CLOUDFLARE] Full response:', JSON.stringify(data.result, null, 2));
 
-    // Extract validation records if present
-    const validationRecords = data.result.ssl?.validation_records?.map(record => ({
-      name: record.txt_name,
-      value: record.txt_value,
-    })) || [];
+    // Extract all validation records
+    const validationRecords: Array<{ name: string; value: string }> = [];
+    
+    // SSL/TLS validation records (for certificate)
+    if (data.result.ssl?.validation_records) {
+      data.result.ssl.validation_records.forEach(record => {
+        validationRecords.push({
+          name: record.txt_name,
+          value: record.txt_value,
+        });
+      });
+    }
+    
+    // Ownership verification TXT record (for hostname ownership)
+    if (data.result.ownership_verification) {
+      validationRecords.push({
+        name: data.result.ownership_verification.name,
+        value: data.result.ownership_verification.value,
+      });
+    }
 
     return {
       success: true,
