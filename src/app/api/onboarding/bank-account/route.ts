@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { encrypt, getLast4Digits } from '@/lib/encryption';
 import { z } from 'zod';
 
@@ -76,17 +77,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if merchant info is completed
+    // Check if merchant info is completed (stepCompleted defaults to 0, so < 1 means not started)
     if (!organization.fortisOnboarding || 
-        (organization.fortisOnboarding.stepCompleted !== null && organization.fortisOnboarding.stepCompleted < 1)) {
+        (organization.fortisOnboarding.stepCompleted ?? 0) < 1) {
       return NextResponse.json(
         { status: false, message: 'Please complete merchant information first' },
         { status: 400 }
       );
     }
 
-    // Check if already completed onboarding
-    if (organization.fortisOnboarding.appStatus === 'ACTIVE') {
+    // Check if already completed onboarding (future-proof for additional statuses)
+    const completedStatuses = ['ACTIVE'];
+    if (organization.fortisOnboarding.appStatus && 
+        completedStatuses.includes(organization.fortisOnboarding.appStatus)) {
       return NextResponse.json(
         { status: false, message: 'Organization already onboarded' },
         { status: 400 }
@@ -99,20 +102,17 @@ export async function POST(request: Request) {
     const accountNumberLast4 = getLast4Digits(validatedData.achAccountNumber);
     const routingNumberLast4 = getLast4Digits(validatedData.achRoutingNumber);
 
-    // Prepare update data
-    const updateData: any = {
+    // Prepare update data with type safety
+    const updateData: Prisma.FortisOnboardingUpdateInput = {
       achAccountNumber: encryptedAccountNumber,
       achRoutingNumber: encryptedRoutingNumber,
       accountNumberLast4,
       routingNumberLast4,
       accountHolderName: validatedData.accountHolderName,
+      stepCompleted: 2, // Bank account step completed
     };
-    
-    // Add stepCompleted - will work after Prisma Client is regenerated and server restarted
-    // If you get an error, restart the Next.js dev server after running: npx prisma generate
-    updateData.stepCompleted = 2;
 
-    // Handle alternative bank account if provided
+    // Handle alternative bank account if provided (consistent naming with primary account)
     if (validatedData.achAccountNumber2 && validatedData.achRoutingNumber2 && validatedData.accountHolderName2) {
       updateData.achAccountNumber2 = encrypt(validatedData.achAccountNumber2);
       updateData.achRoutingNumber2 = encrypt(validatedData.achRoutingNumber2);
