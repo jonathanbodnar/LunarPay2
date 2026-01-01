@@ -68,12 +68,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if already onboarded
+    // Check if already onboarded (ACTIVE status)
     if (organization.fortisOnboarding?.appStatus === 'ACTIVE') {
       return NextResponse.json(
         { error: 'Organization already onboarded' },
         { status: 400 }
       );
+    }
+
+    // Check if we already have an MPA link stored (user started but didn't finish)
+    // Return the existing link instead of calling Fortis again (which would fail with duplicate client_app_id)
+    if (organization.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' && organization.fortisOnboarding?.mpaLink) {
+      console.log('[Fortis Onboard] Returning existing MPA link for org:', organizationId);
+      return NextResponse.json({
+        status: true,
+        appLink: organization.fortisOnboarding.mpaLink,
+        appStatus: 'BANK_INFORMATION_SENT',
+        message: 'Returning existing merchant application link',
+      });
     }
 
     // Determine test mode (fortis_environment: 'dev' or 'prd')
