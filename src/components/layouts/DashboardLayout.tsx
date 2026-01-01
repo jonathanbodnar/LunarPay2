@@ -18,8 +18,7 @@ import {
   X,
   HelpCircle,
   ChevronDown,
-  Rocket,
-  ArrowRight
+  Rocket
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -295,20 +294,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Top header */}
         <header className="sticky top-0 z-40 flex h-16 items-center justify-between bg-background px-4 lg:px-8">
           <div className="flex items-center gap-4">
-          <button
-            type="button"
+            <button
+              type="button"
               className="lg:hidden p-2 rounded-lg hover:bg-muted"
-            onClick={() => setSidebarOpen(true)}
-          >
+              onClick={() => setSidebarOpen(true)}
+            >
               <Menu className="h-5 w-5" />
-          </button>
-            {/* Organization name */}
-            {organizationName && (
-              <div className="hidden sm:block">
+            </button>
+            {/* Organization name with setup badge */}
+            <div className="hidden sm:flex items-center gap-3">
+              {organizationName && (
                 <span className="text-sm font-medium">{organizationName}</span>
-              </div>
-            )}
-        </div>
+              )}
+              {/* Setup Progress Badge */}
+              {setupProgress && !setupProgress.isComplete && pathname !== '/getting-started' && (
+                <Link
+                  href="/getting-started"
+                  className="flex items-center gap-2 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full text-xs font-medium text-blue-700 transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Rocket className="h-3 w-3" />
+                    <span>{setupProgress.completed}/{setupProgress.total}</span>
+                  </div>
+                  <div className="w-12 h-1.5 bg-blue-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                      style={{ width: `${(setupProgress.completed / setupProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </Link>
+              )}
+            </div>
+          </div>
           
           <div className="flex items-center gap-3">
             <Button
@@ -322,41 +339,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Button>
           </div>
         </header>
-
-        {/* Setup Progress Banner */}
-        {setupProgress && !setupProgress.isComplete && pathname !== '/getting-started' && (
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex-shrink-0 p-1.5 bg-white/20 rounded-full">
-                    <Rocket className="h-4 w-4" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">Complete your setup</span>
-                    <span className="hidden sm:inline text-white/80">
-                      – {setupProgress.completed}/{setupProgress.total} steps done
-                    </span>
-                  </div>
-                </div>
-                <Link
-                  href="/getting-started"
-                  className="flex items-center gap-1 text-sm font-medium bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  Continue
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-              {/* Progress bar */}
-              <div className="mt-2 h-1 bg-white/20 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-white rounded-full transition-all duration-500"
-                  style={{ width: `${(setupProgress.completed / setupProgress.total) * 100}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
 
         <main className="py-8">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
