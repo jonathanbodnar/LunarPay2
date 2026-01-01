@@ -60,11 +60,17 @@ function DnsInstructions({ domain, validationRecords }: { domain: string; valida
   const subdomain = domain.split('.')[0];
   const baseDomain = domain.split('.').slice(1).join('.');
   
+  // Debug logging
+  console.log('[DNS] Validation records:', validationRecords);
+  
   // Find ownership TXT record (_cf-custom-hostname)
   const ownershipRecord = validationRecords?.find(r => r.name.includes('_cf-custom-hostname'));
   
   // Find SSL certificate TXT record (_acme-challenge)
   const sslRecord = validationRecords?.find(r => r.name.includes('_acme-challenge'));
+  
+  console.log('[DNS] Ownership record:', ownershipRecord);
+  console.log('[DNS] SSL record:', sslRecord);
   
   return (
     <div className="text-xs text-muted-foreground space-y-3 mt-3">
