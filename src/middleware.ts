@@ -43,6 +43,7 @@ const publicApiRoutes = [
   '/api/admin/debug-portals', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/debug-email', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/test-email', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/debug-sessions', // TEMPORARY - DELETE AFTER USE!
   '/api/zapier', // Zapier integration endpoints (use API key auth)
   '/api/team/invite', // Public invite endpoints
   '/api/invoices/public',
