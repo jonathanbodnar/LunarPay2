@@ -56,16 +56,19 @@ export interface MerchantOnboardingData {
   // Application delivery method
   app_delivery: 'link_iframe' | 'link_full_page';
   
-  // Bank accounts for deposits (account_type not allowed via API)
+  // Bank accounts for deposits
+  // deposit_type: 'checking' or 'savings'
   bank_account: {
     routing_number: string;
     account_number: string;
     account_holder_name: string;
+    deposit_type: 'checking' | 'savings';
   };
   alt_bank_account: {
     routing_number: string;
     account_number: string;
     account_holder_name: string;
+    deposit_type: 'checking' | 'savings';
   };
   
   // Contact information (email not allowed via API)

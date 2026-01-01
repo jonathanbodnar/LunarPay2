@@ -76,6 +76,7 @@ export default function PaymentSetupPage() {
     achAccountNumber: '',
     achRoutingNumber: '',
     accountHolderName: '',
+    accountType: 'checking' as 'checking' | 'savings',
   });
 
   useEffect(() => {
@@ -247,6 +248,7 @@ export default function PaymentSetupPage() {
           routingNumber: bankInfo.achRoutingNumber,
           accountNumber: bankInfo.achAccountNumber,
           accountHolderName: bankInfo.accountHolderName,
+          accountType: bankInfo.accountType,
           // Use primary bank account for alternative as well (Fortis requires both)
           altRoutingNumber: bankInfo.achRoutingNumber,
           altAccountNumber: bankInfo.achAccountNumber,
@@ -657,6 +659,18 @@ export default function PaymentSetupPage() {
                     maxLength={9}
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Account Type *</Label>
+                <select
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-background"
+                  value={bankInfo.accountType}
+                  onChange={(e) => setBankInfo({ ...bankInfo, accountType: e.target.value as 'checking' | 'savings' })}
+                >
+                  <option value="checking">Checking</option>
+                  <option value="savings">Savings</option>
+                </select>
               </div>
 
               <div className="flex justify-between pt-4">

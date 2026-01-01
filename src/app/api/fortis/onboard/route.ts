@@ -140,16 +140,18 @@ export async function POST(request: Request) {
       // Application delivery as embedded iframe
       app_delivery: 'link_iframe',
       
-      // Bank accounts (no account_type field)
+      // Bank accounts - deposit_type is required (checking or savings)
       bank_account: {
         routing_number: routingNumber,
         account_number: accountNumber,
         account_holder_name: accountHolderName,
+        deposit_type: (accountType as 'checking' | 'savings') || 'checking',
       },
       alt_bank_account: {
-        routing_number: altRoutingNumber,
-        account_number: altAccountNumber,
-        account_holder_name: altAccountHolderName,
+        routing_number: altRoutingNumber || routingNumber,
+        account_number: altAccountNumber || accountNumber,
+        account_holder_name: altAccountHolderName || accountHolderName,
+        deposit_type: (accountType as 'checking' | 'savings') || 'checking',
       },
       
       // Contact information
