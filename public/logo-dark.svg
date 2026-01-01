@@ -1,0 +1,16 @@
+<svg viewBox="0 0 80 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Moon/Circle accent -->
+  <circle cx="10" cy="8" r="6" stroke="#0a0a0a" stroke-width="2" fill="none"/>
+  <circle cx="13" cy="5.5" r="4" fill="#0a0a0a"/>
+  
+  <!-- Letter 'p' -->
+  <path d="M6 14 L6 38" stroke="#0a0a0a" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M6 22 C6 16 10 14 16 14 C22 14 26 16 26 22 C26 28 22 30 16 30 L6 30" stroke="#0a0a0a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  
+  <!-- Letter 'a' -->
+  <path d="M48 30 C48 36 44 38 38 38 C32 38 28 36 28 30 C28 24 32 22 38 22 C44 22 48 24 48 30 L48 38" stroke="#0a0a0a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  
+  <!-- Letter 'y' -->
+  <path d="M52 22 L62 34" stroke="#0a0a0a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M72 22 L62 34 L56 46" stroke="#0a0a0a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

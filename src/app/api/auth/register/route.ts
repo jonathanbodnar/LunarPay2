@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword, generateToken, setAuthCookie, generateRandomToken } from '@/lib/auth';
+import { sendWelcomeEmail } from '@/lib/email';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -164,6 +165,12 @@ export async function POST(request: Request) {
 
     // Set cookie
     await setAuthCookie(token);
+
+    // Send welcome email (don't block on this)
+    sendWelcomeEmail(
+      result.user.email,
+      result.user.firstName || 'there'
+    ).catch(err => console.error('Failed to send welcome email:', err));
 
     return NextResponse.json(
       {

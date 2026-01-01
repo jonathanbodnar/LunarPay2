@@ -10,6 +10,7 @@ const createPaymentLinkSchema = z.object({
   description: z.string().optional(),
   paymentMethods: z.enum(['cc', 'ach', 'both']).default('both'),
   status: z.enum(['active', 'inactive']).default('active'),
+  webhookUrl: z.string().url().optional().or(z.literal('')),
   products: z.array(z.object({
     productId: z.number(),
     qty: z.number().nullable(),
@@ -79,6 +80,8 @@ export async function POST(request: Request) {
     const currentUser = await requireAuth();
     const body = await request.json();
 
+    console.log('Creating payment link with data:', JSON.stringify(body, null, 2));
+
     const validatedData = createPaymentLinkSchema.parse(body);
 
     // Verify organization ownership
@@ -111,6 +114,7 @@ export async function POST(request: Request) {
         status: validatedData.status,
         hash,
         paymentMethods: validatedData.paymentMethods,
+        webhookUrl: validatedData.webhookUrl || null,
         products: {
           create: validatedData.products.map((product) => ({
             productId: product.productId,
@@ -134,6 +138,7 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error('Payment link validation error:', error.issues);
       return NextResponse.json(
         { error: 'Validation error', details: error.issues },
         { status: 400 }
@@ -149,7 +154,7 @@ export async function POST(request: Request) {
 
     console.error('Create payment link error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
     );
   }

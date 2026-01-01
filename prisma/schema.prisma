@@ -78,7 +78,17 @@ model Organization {
   token                 String    @unique @db.VarChar(255)
   slug                  String?   @unique @db.VarChar(255)
   logo                  String?   @db.VarChar(500)
+  primaryColor          String?   @default("#000000") @map("primary_color") @db.VarChar(20)
+  backgroundColor       String?   @default("#ffffff") @map("background_color") @db.VarChar(20)
+  buttonTextColor       String?   @default("#ffffff") @map("button_text_color") @db.VarChar(20)
   fortisTemplate        String?   @map("fortis_template") @db.VarChar(50)
+  
+  // Customer Portal Settings
+  portalSlug            String?   @unique @map("portal_slug") @db.VarChar(100)
+  portalEnabled         Boolean   @default(false) @map("portal_enabled")
+  portalCustomDomain    String?   @map("portal_custom_domain") @db.VarChar(255)
+  portalTitle           String?   @map("portal_title") @db.VarChar(255)
+  portalDescription     String?   @map("portal_description") @db.Text
   
   // Twilio/Text-to-Give
   twilioAccountSid      String?   @map("twilio_accountsid") @db.VarChar(100)
@@ -242,6 +252,7 @@ model Donor {
   sources               Source[]
   subscriptions         Subscription[]
   invoices              Invoice[]
+  customerSessions      CustomerSession[]
   
   @@map("account_donor")
 }
@@ -437,6 +448,9 @@ model Product {
   // Digital Content
   fileHash                  String?   @map("file_hash") @db.VarChar(500)
   
+  // Customer Portal Visibility
+  showOnPortal              Boolean   @default(false) @map("show_on_portal")
+  
   // Subscription Fields
   isSubscription            Boolean   @default(false) @map("is_subscription")
   subscriptionInterval      String?   @map("subscription_interval") @db.VarChar(20)
@@ -530,6 +544,7 @@ model PaymentLink {
   status          String    @db.VarChar(20) // active, inactive
   hash            String    @unique @db.VarChar(255)
   paymentMethods  String?   @map("payment_methods") @db.VarChar(20) // cc, ach, both
+  webhookUrl      String?   @map("webhook_url") @db.VarChar(500)
   createdAt       DateTime  @default(now()) @map("created_at")
   
   organization    Organization @relation(fields: [organizationId], references: [id])
@@ -716,6 +731,36 @@ model ApiSession {
 }
 
 // ============================================
+// CUSTOMER PORTAL SESSIONS
+// ============================================
+
+model CustomerSession {
+  id              String    @id @default(uuid())
+  donorId         Int       @map("donor_id")
+  organizationId  Int       @map("organization_id")
+  token           String    @unique @db.VarChar(255)
+  expiresAt       DateTime  @map("expires_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  donor           Donor     @relation(fields: [donorId], references: [id])
+  
+  @@map("customer_sessions")
+}
+
+model CustomerOtp {
+  id              Int       @id @default(autoincrement())
+  email           String    @db.VarChar(254)
+  organizationId  Int       @map("organization_id")
+  code            String    @db.VarChar(6)
+  expiresAt       DateTime  @map("expires_at")
+  used            Boolean   @default(false)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  @@index([email, organizationId])
+  @@map("customer_otp")
+}
+
+// ============================================
 // REFERRALS
 // ============================================
 
@@ -752,4 +797,63 @@ model Integration {
   
   @@unique([userId, provider], name: "userId_provider")
   @@map("integrations")
+}
+
+// ============================================
+// EMAIL TEMPLATES
+// ============================================
+
+model EmailTemplate {
+  id              Int       @id @default(autoincrement())
+  organizationId  Int       @map("organization_id")
+  templateType    String    @map("template_type") @db.VarChar(50)
+  // Types: portal_login, invoice, payment_confirmation, payment_notification, 
+  //        subscription_confirmation, subscription_cancelled, payment_failed
+  
+  subject         String?   @db.VarChar(255)
+  heading         String?   @db.VarChar(255)
+  bodyText        String?   @map("body_text") @db.Text
+  buttonText      String?   @map("button_text") @db.VarChar(100)
+  footerText      String?   @map("footer_text") @db.Text
+  
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  @@unique([organizationId, templateType])
+  @@map("email_templates")
+}
+
+// ============================================
+// TEAM INVITES
+// ============================================
+
+model TeamInvite {
+  id              Int       @id @default(autoincrement())
+  organizationId  Int       @map("organization_id")
+  invitedBy       Int       @map("invited_by")
+  email           String    @db.VarChar(254)
+  role            String    @db.VarChar(20) // admin, member
+  permissions     String?   @db.Text // JSON array of allowed menu items
+  token           String    @unique @db.VarChar(255)
+  status          String    @default("pending") @db.VarChar(20) // pending, accepted, expired
+  expiresAt       DateTime  @map("expires_at")
+  acceptedAt      DateTime? @map("accepted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  @@index([email, organizationId])
+  @@map("team_invites")
+}
+
+model TeamMember {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @map("user_id")
+  organizationId  Int       @map("organization_id")
+  role            String    @db.VarChar(20) // owner, admin, member
+  permissions     String?   @db.Text // JSON array of allowed menu items for members
+  invitedBy       Int?      @map("invited_by")
+  joinedAt        DateTime  @default(now()) @map("joined_at")
+  
+  @@unique([userId, organizationId])
+  @@map("team_members")
 }

@@ -24,6 +24,9 @@ export async function GET(
             city: true,
             state: true,
             postal: true,
+            primaryColor: true,
+            backgroundColor: true,
+            buttonTextColor: true,
           },
         },
         donor: {
@@ -38,6 +41,16 @@ export async function GET(
         },
         products: {
           orderBy: { id: 'asc' },
+          include: {
+            product: {
+              select: {
+                isSubscription: true,
+                subscriptionInterval: true,
+                subscriptionIntervalCount: true,
+                subscriptionTrialDays: true,
+              },
+            },
+          },
         },
       },
     });
@@ -49,10 +62,10 @@ export async function GET(
       );
     }
 
-    // Don't allow access to draft invoices
-    if (invoice.status === 'draft') {
+    // Don't allow access to canceled invoices
+    if (invoice.status === 'canceled') {
       return NextResponse.json(
-        { error: 'Invoice not available' },
+        { error: 'This invoice has been canceled' },
         { status: 404 }
       );
     }

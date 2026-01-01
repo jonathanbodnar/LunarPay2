@@ -1,0 +1,27 @@
+Traceback (most recent call last):
+  File "/Users/jonathanbodnar/Lunarpay/auto_import.py", line 49, in <module>
+    cursor.execute(sql1)
+psycopg2.errors.UndefinedObject: type "_binary" does not exist
+LINE 608: ...928f2078c7e58bc285ea35bb','172.18.0.1',1756312122,_binary '_...
+                                                               ^
+
+🚀 Automated Supabase Import
+============================================================
+
+1️⃣  Connecting to Supabase...
+   ✅ Connected!
+
+2️⃣  Resetting database schema...
+   ✅ Database reset complete
+
+3️⃣  Reading SQL files...
+   ✅ Loaded 921.2 KB of SQL
+
+4️⃣  Importing File 1 (tables + data)...
+
+❌ Error: type "_binary" does not exist
+LINE 608: ...928f2078c7e58bc285ea35bb','172.18.0.1',1756312122,_binary '_...
+                                                               ^
+
+
+Error type: UndefinedObject

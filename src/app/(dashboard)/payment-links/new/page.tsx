@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Webhook, HelpCircle } from 'lucide-react';
 
 interface Product {
   id: number;
@@ -25,6 +25,7 @@ export default function NewPaymentLinkPage() {
     description: '',
     paymentMethods: 'both',
     status: 'active',
+    webhookUrl: '',
   });
 
   const [selectedProducts, setSelectedProducts] = useState<Array<{
@@ -106,29 +107,56 @@ export default function NewPaymentLinkPage() {
       alert('Please add at least one product to the payment link');
       return;
     }
+
+    if (!formData.organizationId) {
+      alert('Please select an organization');
+      return;
+    }
+
+    if (!formData.name.trim()) {
+      alert('Please enter a name for the payment link');
+      return;
+    }
     
     setLoading(true);
 
     try {
+      const payload = {
+        organizationId: parseInt(formData.organizationId),
+        name: formData.name,
+        description: formData.description || undefined,
+        paymentMethods: formData.paymentMethods,
+        status: formData.status,
+        webhookUrl: formData.webhookUrl || undefined,
+        products: selectedProducts
+          .filter(p => p.productId !== null)
+          .map(p => ({
+            productId: p.productId!,
+            qty: p.unlimitedQty ? null : (p.qty || 1),
+            unlimitedQty: p.unlimitedQty,
+          })),
+      };
+
+      console.log('Creating payment link:', payload);
+
       const response = await fetch('/api/payment-links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          organizationId: parseInt(formData.organizationId),
-          products: selectedProducts.filter(p => p.productId !== null),
-        }),
+        body: JSON.stringify(payload),
         credentials: 'include',
       });
+
+      const data = await response.json();
 
       if (response.ok) {
         router.push(`/payment-links`);
       } else {
-        const errorData = await response.json();
-        alert(errorData.error || 'Failed to create payment link');
+        console.error('Payment link creation failed:', data);
+        alert(data.error || data.details?.map((d: any) => d.message).join(', ') || 'Failed to create payment link');
       }
     } catch (error) {
-      alert('Error creating payment link');
+      console.error('Payment link error:', error);
+      alert('Error creating payment link: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -141,21 +169,21 @@ export default function NewPaymentLinkPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Create Payment Link</h1>
-          <p className="mt-2 text-gray-600">Create a shareable payment collection page</p>
+          <h1 className="text-2xl font-semibold">Create Payment Link</h1>
+          <p className="mt-1 text-muted-foreground">Create a shareable payment collection page</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Payment Link Details</CardTitle>
+            <CardTitle className="text-base font-medium">Payment Link Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Organization *</label>
               <select
-                className="w-full h-10 px-3 rounded-md border border-gray-300"
+                className="w-full h-10 px-3 rounded-lg border border-border bg-background"
                 value={formData.organizationId}
                 onChange={(e) => setFormData({ ...formData, organizationId: e.target.value })}
                 required
@@ -180,7 +208,7 @@ export default function NewPaymentLinkPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Description</label>
               <textarea
-                className="w-full min-h-[80px] px-3 py-2 rounded-md border border-gray-300"
+                className="w-full min-h-[80px] px-3 py-2 rounded-lg border border-border bg-background text-sm"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Describe what this payment link is for..."
@@ -191,7 +219,7 @@ export default function NewPaymentLinkPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Payment Methods</label>
                 <select
-                  className="w-full h-10 px-3 rounded-md border border-gray-300"
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-background"
                   value={formData.paymentMethods}
                   onChange={(e) => setFormData({ ...formData, paymentMethods: e.target.value })}
                 >
@@ -204,7 +232,7 @@ export default function NewPaymentLinkPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Status</label>
                 <select
-                  className="w-full h-10 px-3 rounded-md border border-gray-300"
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-background"
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 >
@@ -212,6 +240,60 @@ export default function NewPaymentLinkPage() {
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Webhook className="h-5 w-5" />
+              <CardTitle className="text-base font-medium">Webhook Integration</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                Webhook URL
+                <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Input
+                type="url"
+                value={formData.webhookUrl}
+                onChange={(e) => setFormData({ ...formData, webhookUrl: e.target.value })}
+                placeholder="https://your-server.com/webhook"
+              />
+              <p className="text-xs text-muted-foreground">
+                We'll send a POST request with customer and payment data to this URL after each successful payment.
+              </p>
+            </div>
+            
+            <div className="bg-muted/50 rounded-lg p-4">
+              <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                <HelpCircle className="h-4 w-4" />
+                Webhook Payload Example
+              </p>
+              <pre className="text-xs bg-background p-3 rounded border overflow-x-auto">
+{`{
+  "event": "payment.completed",
+  "payment_link_id": 123,
+  "payment_link_name": "Event Registration",
+  "customer": {
+    "email": "john@example.com",
+    "name": "John Doe"
+  },
+  "payment": {
+    "amount": 50.00,
+    "currency": "USD",
+    "method": "card",
+    "transaction_id": "txn_abc123"
+  },
+  "products": [
+    { "name": "General Admission", "qty": 2, "price": 25.00 }
+  ],
+  "timestamp": "2025-01-01T12:00:00Z"
+}`}
+              </pre>
             </div>
           </CardContent>
         </Card>
@@ -235,11 +317,11 @@ export default function NewPaymentLinkPage() {
             ) : (
               <div className="space-y-4">
                 {selectedProducts.map((item, index) => (
-                  <div key={index} className="grid grid-cols-12 gap-3 items-end p-4 border rounded-lg">
+                  <div key={index} className="grid grid-cols-12 gap-3 items-end p-4 border border-border rounded-lg">
                     <div className="col-span-5">
-                      <label className="text-xs text-gray-500">Product *</label>
+                      <label className="text-xs text-muted-foreground">Product *</label>
                       <select
-                        className="w-full h-10 px-3 rounded-md border border-gray-300"
+                        className="w-full h-10 px-3 rounded-lg border border-border bg-background"
                         value={item.productId || ''}
                         onChange={(e) => updateProduct(index, 'productId', e.target.value)}
                         required
@@ -254,19 +336,19 @@ export default function NewPaymentLinkPage() {
                     </div>
                     
                     <div className="col-span-3">
-                      <label className="text-xs text-gray-500">Quantity</label>
+                      <label className="text-xs text-muted-foreground">Available qty</label>
                       <Input
                         type="number"
                         min="1"
                         value={item.qty || ''}
-                        onChange={(e) => updateProduct(index, 'qty', parseInt(e.target.value))}
+                        onChange={(e) => updateProduct(index, 'qty', parseInt(e.target.value) || null)}
                         disabled={item.unlimitedQty}
-                        placeholder="Qty"
+                        placeholder={item.unlimitedQty ? "∞" : "Qty"}
                       />
                     </div>
                     
                     <div className="col-span-3">
-                      <label className="text-xs text-gray-500">Options</label>
+                      <label className="text-xs text-muted-foreground">Limit</label>
                       <div className="flex items-center gap-2 h-10">
                         <input
                           type="checkbox"
@@ -275,8 +357,8 @@ export default function NewPaymentLinkPage() {
                           onChange={(e) => updateProduct(index, 'unlimitedQty', e.target.checked)}
                           className="h-4 w-4"
                         />
-                        <label htmlFor={`unlimited-${index}`} className="text-sm">
-                          Unlimited
+                        <label htmlFor={`unlimited-${index}`} className="text-sm text-muted-foreground">
+                          No limit
                         </label>
                       </div>
                     </div>

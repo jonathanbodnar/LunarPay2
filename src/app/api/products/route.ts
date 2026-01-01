@@ -16,6 +16,7 @@ const createProductSchema = z.object({
     date: z.string(),
     amount: z.string(),
   })).nullable().optional(),
+  showOnPortal: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -65,6 +66,7 @@ export async function POST(request: Request) {
         qty: validatedData.qty ?? null,
         isSubscription: validatedData.isSubscription || false,
         subscriptionInterval: validatedData.subscriptionInterval || null,
+        showOnPortal: validatedData.showOnPortal || false,
       },
     });
 

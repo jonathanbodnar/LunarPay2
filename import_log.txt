@@ -1,0 +1,22 @@
+============================================================
+SUPABASE DIRECT IMPORT
+============================================================
+
+Project: ucjkwcpzqqqrvfrtkrhy
+URL: https://ucjkwcpzqqqrvfrtkrhy.supabase.co
+Connection: aws-0-us-east-1.pooler.supabase.com:6543
+
+✅ psycopg2 found - using native PostgreSQL connection
+
+📁 SQL File: OldDB/POSTGRES_FINAL.sql
+   Lines: 2231
+   Size: 922.8 KB
+
+🚀 Starting import with psycopg2...
+   ✅ Connected to Supabase PostgreSQL
+   ⏳ Executing SQL statements...
+
+❌ Error during import: syntax error at or near ")"
+LINE 59:   "created_at" TIMESTAMP DEFAULT current_timestamp(),
+                                                            ^
+

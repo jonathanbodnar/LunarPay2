@@ -22,27 +22,82 @@ export async function GET() {
   try {
     const currentUser = await requireAuth();
 
-    const organizations = await prisma.organization.findMany({
-      where: {
-        userId: currentUser.userId,
-      },
-      include: {
-        fortisOnboarding: {
-          select: {
-            appStatus: true,
-            mpaLink: true,
+    // Query organizations - use try/catch for graceful handling
+    let organizations;
+    try {
+      organizations = await prisma.organization.findMany({
+        where: {
+          userId: currentUser.userId,
+        },
+        include: {
+          fortisOnboarding: {
+            select: {
+              appStatus: true,
+              mpaLink: true,
+            },
+          },
+          _count: {
+            select: {
+              invoices: true,
+              donors: true,
+              funds: true,
+            },
           },
         },
-        _count: {
-          select: {
-            invoices: true,
-            donors: true,
-            funds: true,
-          },
-        },
-      },
-      orderBy: { id: 'asc' },
-    });
+        orderBy: { id: 'asc' },
+      });
+    } catch (prismaError) {
+      // If there's a column error, try a simpler query
+      console.error('Prisma query failed, trying fallback:', prismaError);
+      
+      // Raw SQL fallback that only uses core columns
+      const rawOrgs = await prisma.$queryRaw<Array<{
+        ch_id: number;
+        client_id: number;
+        church_name: string;
+        legal_name: string | null;
+        phone_no: string | null;
+        website: string | null;
+        email: string | null;
+        street_address: string | null;
+        city: string | null;
+        state: string | null;
+        country: string | null;
+        postal: string | null;
+        token: string;
+        slug: string | null;
+        logo: string | null;
+        primary_color: string | null;
+      }>>`
+        SELECT ch_id, client_id, church_name, legal_name, phone_no, website, 
+               email, street_address, city, state, country, postal, token, 
+               slug, logo, primary_color
+        FROM church_detail 
+        WHERE client_id = ${currentUser.userId}
+        ORDER BY ch_id ASC
+      `;
+      
+      organizations = rawOrgs.map(org => ({
+        id: org.ch_id,
+        userId: org.client_id,
+        name: org.church_name,
+        legalName: org.legal_name,
+        phoneNumber: org.phone_no,
+        website: org.website,
+        email: org.email,
+        streetAddress: org.street_address,
+        city: org.city,
+        state: org.state,
+        country: org.country,
+        postal: org.postal,
+        token: org.token,
+        slug: org.slug,
+        logo: org.logo,
+        primaryColor: org.primary_color,
+        fortisOnboarding: null,
+        _count: { invoices: 0, donors: 0, funds: 0 },
+      }));
+    }
 
     return NextResponse.json({ organizations });
   } catch (error) {
@@ -54,8 +109,9 @@ export async function GET() {
     }
 
     console.error('Get organizations error:', error);
+    console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
     );
   }

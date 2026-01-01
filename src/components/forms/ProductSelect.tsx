@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ChevronDown, Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -23,8 +23,12 @@ interface ProductSelectProps {
 export function ProductSelect({ organizationId, value, onSelect }: ProductSelectProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  
   const [newProduct, setNewProduct] = useState({
     name: '',
     price: '',
@@ -33,11 +37,23 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
     subscriptionInterval: 'monthly',
   });
 
+  const selectedProduct = products.find(p => p.id === value);
+
   useEffect(() => {
     if (organizationId) {
       fetchProducts();
     }
   }, [organizationId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const fetchProducts = async () => {
     try {
@@ -46,7 +62,7 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
         const data = await response.json();
         const productsList = (data.products || []).filter((p: any) => p.id !== 0).map((p: any) => ({
           ...p,
-          price: Number(p.price), // Convert Decimal to number
+          price: Number(p.price),
         }));
         setProducts(productsList);
       }
@@ -74,13 +90,18 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
 
       if (response.ok) {
         const data = await response.json();
-        setProducts([...products, data.product]);
-        onSelect({
-          id: data.product.id,
-          name: data.product.name,
+        const createdProduct = {
+          ...data.product,
           price: Number(data.product.price),
+        };
+        setProducts([...products, createdProduct]);
+        onSelect({
+          id: createdProduct.id,
+          name: createdProduct.name,
+          price: createdProduct.price,
         });
         setShowCreateModal(false);
+        setSearchTerm('');
         setNewProduct({
           name: '',
           price: '',
@@ -90,73 +111,127 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
         });
       } else {
         const errorData = await response.json();
-        console.error('Product creation failed:', errorData);
         alert(`Failed to create product: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Product creation error:', error);
       alert(`Error creating product: ${error}`);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleOpenCreate = () => {
+    setNewProduct({ ...newProduct, name: searchTerm });
+    setShowCreateModal(true);
+    setIsOpen(false);
+  };
+
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(price);
+  };
+
   return (
     <>
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <Input
-            type="text"
-            placeholder="Search products or create new..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="mb-2"
-          />
-          <select
-            className="w-full h-10 px-3 rounded-md border border-gray-300"
-            value={value || ''}
-            onChange={(e) => {
-              if (!e.target.value) return;
-              const product = products.find(p => p.id === parseInt(e.target.value));
-              if (product) {
-                onSelect({
-                  id: product.id,
-                  name: product.name,
-                  price: Number(product.price),
-                });
-              }
-            }}
-          >
-            <option value="">Select product...</option>
-            {filteredProducts.map(product => (
-              <option key={product.id} value={product.id}>
-                {product.name} (${Number(product.price).toFixed(2)})
-                {product.isSubscription && ` - ${product.subscriptionInterval}`}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Button
+      <div className="relative" ref={dropdownRef}>
+        {/* Single-line dropdown trigger */}
+        <button
           type="button"
-          variant="outline"
           onClick={() => {
-            setNewProduct({ ...newProduct, name: searchTerm });
-            setShowCreateModal(true);
+            setIsOpen(!isOpen);
+            setTimeout(() => inputRef.current?.focus(), 0);
           }}
-          className="h-10 mt-8"
+          className="w-full h-10 px-3 rounded-lg border border-border bg-background text-left flex items-center justify-between hover:bg-muted/50 transition-colors"
         >
-          <Plus className="h-4 w-4" />
-        </Button>
+          <span className={selectedProduct ? 'text-foreground' : 'text-muted-foreground'}>
+            {selectedProduct 
+              ? `${selectedProduct.name} (${formatPrice(selectedProduct.price)})`
+              : 'Select product...'
+            }
+          </span>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {/* Dropdown menu */}
+        {isOpen && (
+          <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-lg shadow-lg overflow-hidden">
+            {/* Search input */}
+            <div className="p-2 border-b border-border">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full h-9 pl-9 pr-3 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            </div>
+
+            {/* Options list */}
+            <div className="max-h-60 overflow-y-auto">
+              {/* Add New Product option - always at top */}
+              <button
+                type="button"
+                onClick={handleOpenCreate}
+                className="w-full px-3 py-2.5 text-left flex items-center gap-2 hover:bg-muted text-primary font-medium border-b border-border"
+              >
+                <Plus className="h-4 w-4" />
+                Add New Product
+              </button>
+
+              {filteredProducts.length > 0 ? (
+                filteredProducts.map(product => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => {
+                      onSelect({
+                        id: product.id,
+                        name: product.name,
+                        price: product.price,
+                      });
+                      setIsOpen(false);
+                      setSearchTerm('');
+                    }}
+                    className={`w-full px-3 py-2.5 text-left hover:bg-muted transition-colors ${
+                      value === product.id ? 'bg-muted' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm">{product.name}</span>
+                      <span className="text-sm text-muted-foreground">{formatPrice(product.price)}</span>
+                    </div>
+                    {product.isSubscription && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {product.subscriptionInterval} subscription
+                      </div>
+                    )}
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                  No products found
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* Create Product Modal */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Product</DialogTitle>
+            <DialogTitle>Add New Product</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -183,7 +258,7 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
             <div className="space-y-2">
               <label className="text-sm font-medium">Description</label>
               <textarea
-                className="w-full min-h-[80px] px-3 py-2 rounded-md border border-gray-300"
+                className="w-full min-h-[80px] px-3 py-2 rounded-md border border-border bg-background text-sm"
                 value={newProduct.description}
                 onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
                 placeholder="Product description..."
@@ -206,7 +281,7 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Billing Frequency</label>
                   <select
-                    className="w-full h-10 px-3 rounded-md border border-gray-300"
+                    className="w-full h-10 px-3 rounded-md border border-border bg-background"
                     value={newProduct.subscriptionInterval}
                     onChange={(e) => setNewProduct({ ...newProduct, subscriptionInterval: e.target.value })}
                   >
@@ -227,7 +302,7 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
               onClick={handleCreateProduct}
               disabled={loading || !newProduct.name || !newProduct.price}
             >
-              {loading ? 'Creating...' : 'Create Product'}
+              {loading ? 'Creating...' : 'Add Product'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -235,5 +310,3 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
     </>
   );
 }
-
-
