@@ -108,9 +108,16 @@ export async function POST(request: Request) {
       },
     });
 
+    // Always use secure for HTTPS (Railway uses HTTPS)
+    const isSecure = process.env.NODE_ENV === 'production' || 
+                     process.env.RAILWAY_ENVIRONMENT !== undefined ||
+                     true; // Force secure for now
+    
+    console.log('[PORTAL] Setting cookie, secure:', isSecure, 'NODE_ENV:', process.env.NODE_ENV);
+    
     response.cookies.set('portal_session', sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
       path: '/',
