@@ -56,7 +56,7 @@ export interface MerchantOnboardingData {
   // Application delivery method
   app_delivery: 'link_iframe' | 'link_full_page';
   
-  // Bank accounts for deposits
+  // Bank accounts - primary for deposits, alt for fees/adjustments
   bank_account: {
     routing_number: string;
     account_number: string;
@@ -66,6 +66,7 @@ export interface MerchantOnboardingData {
     routing_number: string;
     account_number: string;
     account_holder_name: string;
+    deposit_type: 'fees_adjustments'; // Required - indicates this account is for fees/adjustments
   };
   
   // Contact information (email not allowed via API)
