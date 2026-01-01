@@ -57,7 +57,7 @@ export async function getPortalSession(): Promise<PortalSession | null> {
       email: string | null;
     }>>`
       SELECT id, first_name, last_name, email
-      FROM donors
+      FROM account_donor
       WHERE id = ${session.donor_id}
       LIMIT 1
     `;
