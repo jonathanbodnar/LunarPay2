@@ -556,12 +556,12 @@ export default function PaymentSetupPage() {
         </form>
       )}
 
-      {/* Step 3: Complete */}
+      {/* Step 3: Complete MPA / Active */}
       {currentStep === 3 && (
         <Card>
-          <CardContent className="py-8 text-center">
+          <CardContent className="py-6">
             {selectedOrg?.fortisOnboarding?.appStatus === 'ACTIVE' ? (
-              <>
+              <div className="text-center">
                 <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
                 <h2 className="text-2xl font-semibold mb-2">Payment Processing Active!</h2>
                 <p className="text-muted-foreground mb-6">
@@ -570,32 +570,54 @@ export default function PaymentSetupPage() {
                 <Button onClick={() => router.push('/dashboard')}>
                   Go to Dashboard
                 </Button>
-              </>
+              </div>
+            ) : selectedOrg?.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' && selectedOrg?.fortisOnboarding?.mpaLink ? (
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <h2 className="text-xl font-semibold mb-2">Complete Merchant Processing Agreement</h2>
+                  <p className="text-muted-foreground text-sm">
+                    Please complete the form below to finalize your merchant account setup.
+                    A verification code will be sent to your email.
+                  </p>
+                </div>
+                <div className="border rounded-lg overflow-hidden bg-white">
+                  <iframe
+                    src={selectedOrg.fortisOnboarding.mpaLink}
+                    className="w-full"
+                    style={{ height: '700px', border: 'none' }}
+                    title="Fortis MPA Form"
+                    allow="payment"
+                  />
+                </div>
+                <div className="flex justify-between items-center pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back
+                  </Button>
+                  <Button variant="ghost" onClick={() => window.open(selectedOrg.fortisOnboarding!.mpaLink!, '_blank')}>
+                    Open in New Tab
+                    <ExternalLink className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
+              </div>
             ) : selectedOrg?.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' ? (
-              <>
+              <div className="text-center">
                 <div className="h-16 w-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Loader2 className="h-8 w-8 text-yellow-600 animate-spin" />
                 </div>
                 <h2 className="text-2xl font-semibold mb-2">Application Submitted</h2>
                 <p className="text-muted-foreground mb-6">
-                  Your application has been submitted to Fortis for review. 
-                  Please complete the Merchant Processing Agreement (MPA) to continue.
+                  Your application is being processed. Please wait...
                 </p>
-                {selectedOrg?.fortisOnboarding?.mpaLink && (
-                  <Button onClick={() => window.open(selectedOrg.fortisOnboarding!.mpaLink!, '_blank')}>
-                    Complete MPA Form
-                    <ExternalLink className="h-4 w-4 ml-2" />
-                  </Button>
-                )}
-              </>
+              </div>
             ) : (
-              <>
+              <div className="text-center">
                 <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                 <h2 className="text-2xl font-semibold mb-2">Status: {getStatusBadge(selectedOrg?.fortisOnboarding?.appStatus)}</h2>
                 <p className="text-muted-foreground mb-6">
                   Please contact support if you need assistance.
                 </p>
-              </>
+              </div>
             )}
           </CardContent>
         </Card>
