@@ -36,6 +36,7 @@ interface Organization {
     merchantCity: string | null;
     merchantState: string | null;
     merchantPostalCode: string | null;
+    processorResponse: string | null; // JSON with additional fields
   };
 }
 
@@ -101,6 +102,28 @@ export default function PaymentSetupPage() {
   };
 
   const loadOrgData = (org: Organization) => {
+    // Parse additional fields from processorResponse JSON
+    let additionalFields = {
+      fedTaxId: '',
+      ownershipType: '',
+      ownerTitle: '',
+      ownershipPercent: '100',
+      dateOfBirth: '',
+      addressLine2: '',
+    };
+    
+    if (org.fortisOnboarding?.processorResponse) {
+      try {
+        const parsed = JSON.parse(org.fortisOnboarding.processorResponse);
+        // Only use parsed data if it's not a Fortis API response (which would have different structure)
+        if (parsed.ownershipPercent !== undefined || parsed.fedTaxId !== undefined) {
+          additionalFields = { ...additionalFields, ...parsed };
+        }
+      } catch (e) {
+        // processorResponse might contain Fortis API response, not our saved data
+      }
+    }
+
     // Pre-populate all saved data from organization and fortisOnboarding
     setMerchantInfo({
       signFirstName: org.fortisOnboarding?.signFirstName || '',
@@ -110,13 +133,13 @@ export default function PaymentSetupPage() {
       dbaName: org.name || '',
       legalName: org.legalName || org.name || '',
       website: org.website || '',
-      fedTaxId: '',
-      ownershipType: '',
-      ownerTitle: '',
-      ownershipPercent: '100',
-      dateOfBirth: '',
+      fedTaxId: additionalFields.fedTaxId || '',
+      ownershipType: additionalFields.ownershipType || '',
+      ownerTitle: additionalFields.ownerTitle || '',
+      ownershipPercent: additionalFields.ownershipPercent || '100',
+      dateOfBirth: additionalFields.dateOfBirth || '',
       merchantAddressLine1: org.fortisOnboarding?.merchantAddressLine1 || '',
-      merchantAddressLine2: '',
+      merchantAddressLine2: additionalFields.addressLine2 || '',
       merchantCity: org.fortisOnboarding?.merchantCity || '',
       merchantState: org.fortisOnboarding?.merchantState || '',
       merchantPostalCode: org.fortisOnboarding?.merchantPostalCode || '',
@@ -157,6 +180,11 @@ export default function PaymentSetupPage() {
           dbaName: merchantInfo.dbaName,
           legalName: merchantInfo.legalName,
           website: merchantInfo.website,
+          fedTaxId: merchantInfo.fedTaxId,
+          ownershipType: merchantInfo.ownershipType,
+          ownerTitle: merchantInfo.ownerTitle,
+          ownershipPercent: merchantInfo.ownershipPercent,
+          dateOfBirth: merchantInfo.dateOfBirth,
           addressLine1: merchantInfo.merchantAddressLine1,
           addressLine2: merchantInfo.merchantAddressLine2,
           state: merchantInfo.merchantState,
@@ -480,6 +508,11 @@ export default function PaymentSetupPage() {
                         onChange={(e) => setMerchantInfo({ ...merchantInfo, ownershipPercent: e.target.value })}
                         placeholder="100"
                       />
+                      {parseInt(merchantInfo.ownershipPercent) < 100 && (
+                        <p className="text-xs text-amber-600">
+                          Additional owners will need to be added in the Fortis MPA form.
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label>Date of Birth</Label>

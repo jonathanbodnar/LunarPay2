@@ -21,7 +21,13 @@ export async function POST(request: Request) {
       dbaName,
       legalName,
       website,
+      fedTaxId,
+      ownershipType,
+      ownerTitle,
+      ownershipPercent,
+      dateOfBirth,
       addressLine1,
+      addressLine2,
       state,
       city,
       postalCode,
@@ -55,7 +61,16 @@ export async function POST(request: Request) {
       },
     });
 
-    // Save onboarding step data
+    // Save onboarding step data (store additional fields in processorResponse as JSON for now)
+    const additionalData = JSON.stringify({
+      fedTaxId,
+      ownershipType,
+      ownerTitle,
+      ownershipPercent,
+      dateOfBirth,
+      addressLine2,
+    });
+
     const onboardingData = {
       signFirstName,
       signLastName,
@@ -66,6 +81,7 @@ export async function POST(request: Request) {
       merchantCity: city,
       merchantPostalCode: postalCode,
       stepCompleted: step,
+      processorResponse: additionalData, // Store extra fields as JSON
     };
 
     if (organization.fortisOnboarding) {

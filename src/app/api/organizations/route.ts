@@ -43,6 +43,7 @@ export async function GET() {
               merchantCity: true,
               merchantState: true,
               merchantPostalCode: true,
+              processorResponse: true, // Contains additional saved fields as JSON
             },
           },
           _count: {
