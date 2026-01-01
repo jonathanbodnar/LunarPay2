@@ -28,6 +28,14 @@ interface Organization {
     stepCompleted: number;
     appStatus: string | null;
     mpaLink: string | null;
+    signFirstName: string | null;
+    signLastName: string | null;
+    signPhoneNumber: string | null;
+    email: string | null;
+    merchantAddressLine1: string | null;
+    merchantCity: string | null;
+    merchantState: string | null;
+    merchantPostalCode: string | null;
   };
 }
 
@@ -76,21 +84,7 @@ export default function PaymentSetupPage() {
         if (data.organizations?.length > 0) {
           const org = data.organizations[0];
           setSelectedOrg(org);
-          // Pre-populate company info from organization
-          setMerchantInfo(prev => ({
-            ...prev,
-            dbaName: org.name || '',
-            legalName: org.legalName || org.name || '',
-            website: org.website || '',
-          }));
-          // Set current step based on progress
-          if (org.fortisOnboarding?.stepCompleted >= 1) {
-            setCurrentStep(2);
-          }
-          if (org.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' || 
-              org.fortisOnboarding?.appStatus === 'ACTIVE') {
-            setCurrentStep(3);
-          }
+          loadOrgData(org);
         }
       }
     } catch (err) {
@@ -100,12 +94,75 @@ export default function PaymentSetupPage() {
     }
   };
 
-  const handleMerchantInfoSubmit = (e: React.FormEvent) => {
+  const loadOrgData = (org: Organization) => {
+    // Pre-populate all saved data from organization and fortisOnboarding
+    setMerchantInfo({
+      signFirstName: org.fortisOnboarding?.signFirstName || '',
+      signLastName: org.fortisOnboarding?.signLastName || '',
+      signPhoneNumber: org.fortisOnboarding?.signPhoneNumber || '',
+      email: org.fortisOnboarding?.email || '',
+      dbaName: org.name || '',
+      legalName: org.legalName || org.name || '',
+      website: org.website || '',
+      merchantAddressLine1: org.fortisOnboarding?.merchantAddressLine1 || '',
+      merchantCity: org.fortisOnboarding?.merchantCity || '',
+      merchantState: org.fortisOnboarding?.merchantState || '',
+      merchantPostalCode: org.fortisOnboarding?.merchantPostalCode || '',
+    });
+
+    // Set current step based on progress
+    if (org.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' || 
+        org.fortisOnboarding?.appStatus === 'ACTIVE') {
+      setCurrentStep(3);
+    } else if (org.fortisOnboarding?.stepCompleted && org.fortisOnboarding.stepCompleted >= 1) {
+      setCurrentStep(2);
+    } else {
+      setCurrentStep(1);
+    }
+  };
+
+  const handleMerchantInfoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Just validate and move to step 2 - we'll submit everything to Fortis at the end
+    if (!selectedOrg) return;
+
+    setSaving(true);
     setError('');
     setSuccess('');
-    setCurrentStep(2);
+
+    try {
+      // Save step 1 data to database so it persists on refresh
+      const res = await fetch('/api/onboarding/save-step', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          organizationId: selectedOrg.id,
+          step: 1,
+          signFirstName: merchantInfo.signFirstName,
+          signLastName: merchantInfo.signLastName,
+          signPhoneNumber: merchantInfo.signPhoneNumber,
+          email: merchantInfo.email,
+          dbaName: merchantInfo.dbaName,
+          legalName: merchantInfo.legalName,
+          website: merchantInfo.website,
+          addressLine1: merchantInfo.merchantAddressLine1,
+          state: merchantInfo.merchantState,
+          city: merchantInfo.merchantCity,
+          postalCode: merchantInfo.merchantPostalCode,
+        }),
+      });
+
+      if (res.ok) {
+        setCurrentStep(2);
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to save merchant info');
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleBankInfoSubmit = async (e: React.FormEvent) => {
@@ -205,14 +262,7 @@ export default function PaymentSetupPage() {
               const org = organizations.find(o => o.id === parseInt(e.target.value));
               if (org) {
                 setSelectedOrg(org);
-                setMerchantInfo(prev => ({
-                  ...prev,
-                  dbaName: org.name || '',
-                  legalName: org.legalName || org.name || '',
-                  website: org.website || '',
-                }));
-                setCurrentStep(org.fortisOnboarding?.stepCompleted ? 
-                  Math.min(org.fortisOnboarding.stepCompleted + 1, 3) : 1);
+                loadOrgData(org);
               }
             }}
           >

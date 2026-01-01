@@ -34,6 +34,15 @@ export async function GET() {
             select: {
               appStatus: true,
               mpaLink: true,
+              stepCompleted: true,
+              signFirstName: true,
+              signLastName: true,
+              signPhoneNumber: true,
+              email: true,
+              merchantAddressLine1: true,
+              merchantCity: true,
+              merchantState: true,
+              merchantPostalCode: true,
             },
           },
           _count: {
