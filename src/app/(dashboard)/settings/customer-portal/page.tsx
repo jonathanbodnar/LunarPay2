@@ -97,16 +97,21 @@ function DnsInstructions({ domain, validationRecords }: { domain: string; valida
         </div>
       </div>
 
-      {/* Record 3: SSL DCV Delegation CNAME */}
+      {/* Record 3: SSL Certificate TXT */}
       <div className="bg-muted p-3 rounded space-y-2">
         <div className="flex items-center gap-2 mb-2">
           <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-medium">3</span>
-          <span className="font-medium text-foreground text-xs">CNAME</span>
+          <span className="font-medium text-foreground text-xs">TXT</span>
         </div>
         <div className="font-mono text-xs space-y-1">
           <CopyableValue label="Name" value={`_acme-challenge.${subdomain}`} />
-          <CopyableValue label="Value" value="066217d657c42286.dcv.cloudflare.com" />
+          <p className="text-amber-600 text-xs">
+            <span className="text-muted-foreground">Value:</span> Copy from Cloudflare Dashboard
+          </p>
         </div>
+        <p className="text-[10px] text-muted-foreground">
+          Find this in: SSL/TLS → Custom Hostnames → Click your hostname
+        </p>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
