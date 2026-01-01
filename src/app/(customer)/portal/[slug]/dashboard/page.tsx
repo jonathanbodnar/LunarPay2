@@ -16,7 +16,8 @@ import {
   Calendar,
   CheckCircle,
   XCircle,
-  Building2
+  Building2,
+  X
 } from 'lucide-react';
 import { formatCurrency, formatDate, getSubscriptionFrequencyText } from '@/lib/utils';
 
@@ -83,6 +84,13 @@ export default function PortalDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  
+  // Checkout modal state
+  const [checkoutProduct, setCheckoutProduct] = useState<Product | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<number | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutSuccess, setCheckoutSuccess] = useState(false);
 
   // Branding
   const primaryColor = customer?.organization?.primaryColor || '#000000';
@@ -195,6 +203,71 @@ export default function PortalDashboard() {
       console.error('Cancel error:', error);
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  // Open checkout modal
+  const handleOpenCheckout = (product: Product) => {
+    setCheckoutProduct(product);
+    setCheckoutError(null);
+    setCheckoutSuccess(false);
+    // Pre-select default payment method
+    const defaultPm = paymentMethods.find(pm => pm.isDefault);
+    setSelectedPaymentMethod(defaultPm?.id || paymentMethods[0]?.id || null);
+  };
+
+  // Close checkout modal
+  const handleCloseCheckout = () => {
+    setCheckoutProduct(null);
+    setSelectedPaymentMethod(null);
+    setCheckoutError(null);
+    setCheckoutSuccess(false);
+  };
+
+  // Process checkout/purchase
+  const handleCheckout = async () => {
+    if (!checkoutProduct || !selectedPaymentMethod) return;
+    
+    setCheckoutLoading(true);
+    setCheckoutError(null);
+    
+    try {
+      const response = await fetch('/api/portal/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: checkoutProduct.id,
+          paymentMethodId: selectedPaymentMethod,
+        }),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Payment failed');
+      }
+
+      setCheckoutSuccess(true);
+      
+      // Refresh subscriptions if it was a subscription product
+      if (checkoutProduct.isSubscription) {
+        const subRes = await fetch('/api/portal/subscriptions', { credentials: 'include' });
+        if (subRes.ok) {
+          const subData = await subRes.json();
+          setSubscriptions(subData.subscriptions || []);
+        }
+      }
+      
+      // Close modal after brief success message
+      setTimeout(() => {
+        handleCloseCheckout();
+      }, 2000);
+      
+    } catch (error) {
+      setCheckoutError((error as Error).message);
+    } finally {
+      setCheckoutLoading(false);
     }
   };
 
@@ -581,6 +654,7 @@ export default function PortalDashboard() {
                         <Button 
                           size="sm"
                           style={{ backgroundColor: primaryColor, color: buttonTextColor }}
+                          onClick={() => handleOpenCheckout(product)}
                         >
                           {product.isSubscription ? 'Subscribe' : 'Buy Now'}
                         </Button>
@@ -598,6 +672,177 @@ export default function PortalDashboard() {
       <footer className="mt-auto py-6 text-center text-sm text-muted-foreground">
         Powered by LunarPay
       </footer>
+
+      {/* Checkout Modal */}
+      {checkoutProduct && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold">
+                {checkoutProduct.isSubscription ? 'Subscribe' : 'Complete Purchase'}
+              </h3>
+              <button 
+                onClick={handleCloseCheckout}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-4">
+              {/* Product Summary */}
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-medium">{checkoutProduct.name}</h4>
+                {checkoutProduct.description && (
+                  <p className="text-sm text-muted-foreground mt-1">{checkoutProduct.description}</p>
+                )}
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="text-2xl font-bold" style={{ color: primaryColor }}>
+                    {formatCurrency(Number(checkoutProduct.price))}
+                  </span>
+                  {checkoutProduct.isSubscription && (
+                    <span className="text-sm text-muted-foreground">
+                      / {getSubscriptionFrequencyText(
+                        checkoutProduct.subscriptionInterval,
+                        checkoutProduct.subscriptionIntervalCount
+                      )}
+                    </span>
+                  )}
+                </div>
+                {checkoutProduct.isSubscription && checkoutProduct.subscriptionTrialDays && checkoutProduct.subscriptionTrialDays > 0 && (
+                  <p className="text-sm text-green-600 mt-1">
+                    Includes {checkoutProduct.subscriptionTrialDays} day free trial
+                  </p>
+                )}
+              </div>
+
+              {/* Payment Method Selection */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Payment Method</label>
+                {paymentMethods.length === 0 ? (
+                  <div className="p-4 border rounded-lg text-center">
+                    <CreditCard className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground mb-3">No payment methods saved</p>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        handleCloseCheckout();
+                        setActiveTab('payment-methods');
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Payment Method
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {paymentMethods.map(pm => (
+                      <label 
+                        key={pm.id}
+                        className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                          selectedPaymentMethod === pm.id 
+                            ? 'border-2 bg-gray-50' 
+                            : 'hover:bg-gray-50'
+                        }`}
+                        style={selectedPaymentMethod === pm.id ? { borderColor: primaryColor } : {}}
+                      >
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          checked={selectedPaymentMethod === pm.id}
+                          onChange={() => setSelectedPaymentMethod(pm.id)}
+                          className="sr-only"
+                        />
+                        <CreditCard className="h-5 w-5 text-muted-foreground" />
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">
+                            {pm.sourceType === 'CC' ? 'Card' : 'Bank'} •••• {pm.lastDigits}
+                          </p>
+                          {pm.expMonth && pm.expYear && (
+                            <p className="text-xs text-muted-foreground">
+                              Expires {pm.expMonth}/{pm.expYear}
+                            </p>
+                          )}
+                        </div>
+                        {pm.isDefault && (
+                          <span className="text-xs px-2 py-0.5 bg-gray-100 rounded-full">Default</span>
+                        )}
+                        {selectedPaymentMethod === pm.id && (
+                          <CheckCircle className="h-5 w-5" style={{ color: primaryColor }} />
+                        )}
+                      </label>
+                    ))}
+                    <button
+                      onClick={() => {
+                        handleCloseCheckout();
+                        setActiveTab('payment-methods');
+                      }}
+                      className="w-full p-3 border border-dashed rounded-lg text-sm text-muted-foreground hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add New Payment Method
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Error Message */}
+              {checkoutError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {checkoutError}
+                </div>
+              )}
+
+              {/* Success Message */}
+              {checkoutSuccess && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5" />
+                  {checkoutProduct.isSubscription ? 'Subscription started!' : 'Payment successful!'}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t space-y-3">
+              <Button
+                className="w-full"
+                style={{ backgroundColor: primaryColor, color: buttonTextColor }}
+                disabled={!selectedPaymentMethod || checkoutLoading || checkoutSuccess || paymentMethods.length === 0}
+                onClick={handleCheckout}
+              >
+                {checkoutLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : checkoutSuccess ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Done
+                  </>
+                ) : (
+                  <>
+                    Pay {formatCurrency(Number(checkoutProduct.price))}
+                    {checkoutProduct.isSubscription && checkoutProduct.subscriptionTrialDays && checkoutProduct.subscriptionTrialDays > 0 
+                      ? ' after trial' 
+                      : ''
+                    }
+                  </>
+                )}
+              </Button>
+              <button
+                onClick={handleCloseCheckout}
+                className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
