@@ -89,9 +89,10 @@ export async function POST(request: Request) {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     // Create session using raw SQL for reliability
+    // Use gen_random_uuid() for PostgreSQL UUID generation
     await prisma.$executeRaw`
       INSERT INTO customer_sessions (id, donor_id, organization_id, token, expires_at, created_at)
-      VALUES (${crypto.randomUUID()}, ${customer.id}, ${organization.id}, ${sessionToken}, ${expiresAt}, NOW())
+      VALUES (gen_random_uuid(), ${customer.id}, ${organization.id}, ${sessionToken}, ${expiresAt}::timestamp, NOW())
     `;
 
     console.log('[PORTAL] Session created for customer:', customer.email, 'token:', sessionToken.substring(0, 10) + '...');
