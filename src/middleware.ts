@@ -13,7 +13,7 @@ const APP_DOMAINS = [
   'new.lunarpay.com',
   'app.lunarpay.com',
   'lunarpay.com',
-  'portal.lunarpay.com',
+  // Note: portal.lunarpay.com is NOT included - it's the CNAME target for custom domains
 ];
 
 // Routes that don't require authentication
