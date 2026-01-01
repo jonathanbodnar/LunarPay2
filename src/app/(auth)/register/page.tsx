@@ -17,30 +17,32 @@ function RegisterForm() {
   const firstNameParam = searchParams.get('firstName') || searchParams.get('first_name') || '';
   const lastNameParam = searchParams.get('lastName') || searchParams.get('last_name') || '';
   const phoneParam = searchParams.get('phone') || '';
+  const businessNameParam = searchParams.get('businessName') || searchParams.get('business_name') || '';
   
   const [formData, setFormData] = useState({
     email: emailParam,
     password: '',
-    confirmPassword: '',
     firstName: firstNameParam,
     lastName: lastNameParam,
     phone: phoneParam,
+    businessName: businessNameParam,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   // Update form if URL params change
   useEffect(() => {
-    if (emailParam || firstNameParam || lastNameParam || phoneParam) {
+    if (emailParam || firstNameParam || lastNameParam || phoneParam || businessNameParam) {
       setFormData(prev => ({
         ...prev,
         email: emailParam || prev.email,
         firstName: firstNameParam || prev.firstName,
         lastName: lastNameParam || prev.lastName,
         phone: phoneParam || prev.phone,
+        businessName: businessNameParam || prev.businessName,
       }));
     }
-  }, [emailParam, firstNameParam, lastNameParam, phoneParam]);
+  }, [emailParam, firstNameParam, lastNameParam, phoneParam, businessNameParam]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -50,13 +52,6 @@ function RegisterForm() {
     e.preventDefault();
     setLoading(true);
     setError('');
-
-    // Validate passwords match
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
 
     try {
       const response = await fetch('/api/auth/register', {
@@ -68,6 +63,7 @@ function RegisterForm() {
           firstName: formData.firstName,
           lastName: formData.lastName,
           phone: formData.phone,
+          businessName: formData.businessName,
           paymentProcessor: 'FTS', // Default to Fortis
         }),
       });
@@ -173,7 +169,7 @@ function RegisterForm() {
 
             <div className="space-y-2">
               <label htmlFor="phone" className="text-sm font-medium">
-                Phone Number (Optional)
+                Phone Number
               </label>
               <Input
                 id="phone"
@@ -182,6 +178,22 @@ function RegisterForm() {
                 placeholder="+1 (555) 000-0000"
                 value={formData.phone}
                 onChange={handleChange}
+                required
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="businessName" className="text-sm font-medium">
+                Business Name
+              </label>
+              <Input
+                id="businessName"
+                name="businessName"
+                placeholder="Your Company Inc"
+                value={formData.businessName}
+                onChange={handleChange}
+                required
                 disabled={loading}
               />
             </div>
@@ -204,22 +216,6 @@ function RegisterForm() {
               <p className="text-xs text-gray-500">
                 Must be at least 8 characters
               </p>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirm Password
-              </label>
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                required
-                disabled={loading}
-              />
             </div>
 
             <Button
