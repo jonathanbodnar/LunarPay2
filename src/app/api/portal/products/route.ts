@@ -7,6 +7,8 @@ export async function GET() {
   try {
     const session = await getPortalSession();
 
+    console.log('[PORTAL PRODUCTS] Session:', session ? `orgId=${session.organizationId}` : 'null');
+
     if (!session) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -14,32 +16,50 @@ export async function GET() {
       );
     }
 
-    const products = await prisma.product.findMany({
-      where: {
-        organizationId: session.organizationId,
-        showOnPortal: true,
-        trash: false,
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        price: true,
-        qty: true,
-        isSubscription: true,
-        subscriptionInterval: true,
-        subscriptionIntervalCount: true,
-        subscriptionTrialDays: true,
-        fileHash: true,
-      },
-      orderBy: { name: 'asc' },
-    });
+    // Use raw SQL to avoid any Prisma mapping issues
+    const products = await prisma.$queryRaw<Array<{
+      id: number;
+      name: string;
+      description: string | null;
+      price: string;
+      qty: number | null;
+      is_subscription: boolean;
+      subscription_interval: string | null;
+      subscription_interval_count: number | null;
+      subscription_trial_days: number | null;
+      file_hash: string | null;
+    }>>`
+      SELECT id, name, description, price, qty, is_subscription, 
+             subscription_interval, subscription_interval_count, 
+             subscription_trial_days, file_hash
+      FROM products
+      WHERE church_id = ${session.organizationId}
+      AND show_on_portal = true
+      AND (trash = false OR trash IS NULL)
+      ORDER BY name ASC
+    `;
 
-    return NextResponse.json({ products });
+    console.log('[PORTAL PRODUCTS] Found:', products.length, 'products');
+
+    // Transform to camelCase for frontend
+    const formattedProducts = products.map(p => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      price: parseFloat(p.price),
+      qty: p.qty,
+      isSubscription: p.is_subscription,
+      subscriptionInterval: p.subscription_interval,
+      subscriptionIntervalCount: p.subscription_interval_count,
+      subscriptionTrialDays: p.subscription_trial_days,
+      fileHash: p.file_hash,
+    }));
+
+    return NextResponse.json({ products: formattedProducts });
   } catch (error) {
     console.error('Get portal products error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: String(error) },
       { status: 500 }
     );
   }
