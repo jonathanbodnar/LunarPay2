@@ -91,38 +91,12 @@ export default function PaymentSetupPage() {
     }
   };
 
-  const handleMerchantInfoSubmit = async (e: React.FormEvent) => {
+  const handleMerchantInfoSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrg) return;
-
-    setSaving(true);
+    // Just validate and move to step 2 - we'll submit everything to Fortis at the end
     setError('');
     setSuccess('');
-
-    try {
-      const res = await fetch('/api/onboarding/merchant-info', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          organizationId: selectedOrg.id,
-          ...merchantInfo,
-        }),
-      });
-
-      if (res.ok) {
-        setSuccess('Merchant information saved successfully!');
-        setCurrentStep(2);
-        await fetchOrganizations();
-      } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to save merchant information');
-      }
-    } catch (err) {
-      setError('An error occurred. Please try again.');
-    } finally {
-      setSaving(false);
-    }
+    setCurrentStep(2);
   };
 
   const handleBankInfoSubmit = async (e: React.FormEvent) => {
@@ -134,37 +108,43 @@ export default function PaymentSetupPage() {
     setSuccess('');
 
     try {
-      const res = await fetch('/api/onboarding/bank-account', {
+      // Submit directly to Fortis with all data
+      const fortisRes = await fetch('/api/fortis/onboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           organizationId: selectedOrg.id,
-          ...bankInfo,
+          // Merchant info
+          signFirstName: merchantInfo.signFirstName,
+          signLastName: merchantInfo.signLastName,
+          signPhoneNumber: merchantInfo.signPhoneNumber,
+          email: merchantInfo.email,
+          dbaName: selectedOrg.name,
+          legalName: selectedOrg.name,
+          website: '',
+          addressLine1: merchantInfo.merchantAddressLine1,
+          state: merchantInfo.merchantState,
+          city: merchantInfo.merchantCity,
+          postalCode: merchantInfo.merchantPostalCode,
+          // Bank info
+          routingNumber: bankInfo.achRoutingNumber,
+          accountNumber: bankInfo.achAccountNumber,
+          accountHolderName: bankInfo.accountHolderName,
+          altRoutingNumber: bankInfo.achRoutingNumber2 || bankInfo.achRoutingNumber,
+          altAccountNumber: bankInfo.achAccountNumber2 || bankInfo.achAccountNumber,
+          altAccountHolderName: bankInfo.accountHolderName2 || bankInfo.accountHolderName,
         }),
       });
 
-      if (res.ok) {
-        setSuccess('Bank account information saved! Submitting to Fortis...');
-        // Now submit to Fortis
-        const fortisRes = await fetch('/api/fortis/onboard', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ organizationId: selectedOrg.id }),
-        });
+      const data = await fortisRes.json();
 
-        if (fortisRes.ok) {
-          setSuccess('Application submitted to Fortis successfully!');
-          setCurrentStep(3);
-          await fetchOrganizations();
-        } else {
-          const data = await fortisRes.json();
-          setError(data.error || 'Failed to submit to Fortis');
-        }
+      if (fortisRes.ok && data.status) {
+        setSuccess('Application submitted to Fortis successfully!');
+        setCurrentStep(3);
+        await fetchOrganizations();
       } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to save bank information');
+        setError(data.error || 'Failed to submit to Fortis');
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
