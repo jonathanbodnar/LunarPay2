@@ -118,8 +118,13 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error('Verify code error:', error);
+    // Log more details
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     return NextResponse.json(
-      { error: 'Failed to verify code' },
+      { error: 'Failed to verify code', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
