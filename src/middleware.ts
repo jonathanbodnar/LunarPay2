@@ -57,7 +57,11 @@ const publicApiRoutes = [
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const hostname = request.headers.get('host') || '';
+  // Check X-Original-Host first (set by Cloudflare Transform Rule for custom domains),
+  // then X-Forwarded-Host, then fall back to Host header
+  const hostname = request.headers.get('x-original-host') || 
+                   request.headers.get('x-forwarded-host') || 
+                   request.headers.get('host') || '';
   
   // Check if this is a custom domain request (not our app domains)
   // Skip custom domain check for API routes (they need normal routing)
