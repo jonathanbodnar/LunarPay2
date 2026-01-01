@@ -77,8 +77,12 @@ export async function POST(request: Request) {
     }
 
     // Determine test mode (fortis_environment: 'dev' or 'prd')
-    const isTest = process.env.fortis_environment !== 'prd';
+    const fortisEnv = process.env.fortis_environment;
+    const isTest = fortisEnv !== 'prd';
     const templateCode = isTest ? 'Testing1234' : (organization.fortisTemplate || process.env.FORTIS_TPL_DEFAULT || 'ActiveBase4');
+    
+    console.log('[Fortis Onboard] Environment:', fortisEnv, 'isTest:', isTest, 'templateCode:', templateCode);
+    console.log('[Fortis Onboard] Bank info received - routing:', routingNumber?.slice(-4), 'account:', accountNumber?.slice(-4));
 
     // Prepare Fortis onboarding data (only allowed fields)
     const merchantData: MerchantOnboardingData = {
