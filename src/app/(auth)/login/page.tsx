@@ -156,13 +156,22 @@ export default function LoginPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex justify-center">
+        <CardFooter className="flex flex-col items-center gap-3">
           <p className="text-sm text-gray-600">
             Don't have an account?{' '}
             <Link href="/register" className="text-blue-600 hover:underline font-medium">
               Sign up
             </Link>
           </p>
+          <div className="flex items-center gap-4 text-xs text-gray-500">
+            <Link href="/privacy" className="hover:text-gray-700">
+              Privacy Policy
+            </Link>
+            <span>•</span>
+            <Link href="/terms" className="hover:text-gray-700">
+              Terms of Use
+            </Link>
+          </div>
         </CardFooter>
       </Card>
 

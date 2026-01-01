@@ -200,11 +200,21 @@ export default function RegisterPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex justify-center">
+        <CardFooter className="flex flex-col items-center gap-3">
           <p className="text-sm text-gray-600">
             Already have an account?{' '}
             <Link href="/login" className="text-blue-600 hover:underline font-medium">
               Sign in
+            </Link>
+          </p>
+          <p className="text-xs text-gray-500 text-center">
+            By creating an account, you agree to our{' '}
+            <Link href="/terms" className="text-blue-600 hover:underline">
+              Terms of Use
+            </Link>
+            {' '}and{' '}
+            <Link href="/privacy" className="text-blue-600 hover:underline">
+              Privacy Policy
             </Link>
           </p>
         </CardFooter>
