@@ -293,7 +293,7 @@ export default function PortalDashboard() {
   ];
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor }}>
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor }}>
       {/* Header */}
       <header className="border-b bg-white">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -346,7 +346,7 @@ export default function PortalDashboard() {
       </nav>
 
       {/* Content */}
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-5xl mx-auto px-4 py-8 flex-1">
         {activeTab === 'overview' && (
           <div className="space-y-6">
             <h2 className="text-2xl font-semibold">
@@ -628,29 +628,35 @@ export default function PortalDashboard() {
                 {products.map(product => (
                   <Card key={product.id} className="overflow-hidden">
                     <CardContent className="p-6">
-                      <h3 className="font-semibold text-lg mb-2">{product.name}</h3>
-                      {product.description && (
-                        <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                          {product.description}
+                      <h3 className="font-semibold text-lg mb-1">{product.name}</h3>
+                      <p className="text-sm text-muted-foreground mb-4 min-h-[20px]">
+                        {product.description || (product.isSubscription ? (
+                          <>
+                            {getSubscriptionFrequencyText(
+                              product.subscriptionInterval, 
+                              product.subscriptionIntervalCount
+                            )}
+                            {product.subscriptionTrialDays && product.subscriptionTrialDays > 0 && (
+                              <> • {product.subscriptionTrialDays} day trial</>
+                            )}
+                          </>
+                        ) : '\u00A0')}
+                      </p>
+                      {product.description && product.isSubscription && (
+                        <p className="text-sm text-muted-foreground mb-4">
+                          {getSubscriptionFrequencyText(
+                            product.subscriptionInterval, 
+                            product.subscriptionIntervalCount
+                          )}
+                          {product.subscriptionTrialDays && product.subscriptionTrialDays > 0 && (
+                            <> • {product.subscriptionTrialDays} day trial</>
+                          )}
                         </p>
                       )}
                       <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-2xl font-bold" style={{ color: primaryColor }}>
-                            {formatCurrency(Number(product.price))}
-                          </p>
-                          {product.isSubscription && (
-                            <p className="text-sm text-muted-foreground">
-                              {getSubscriptionFrequencyText(
-                                product.subscriptionInterval, 
-                                product.subscriptionIntervalCount
-                              )}
-                              {product.subscriptionTrialDays && product.subscriptionTrialDays > 0 && (
-                                <> • {product.subscriptionTrialDays} day trial</>
-                              )}
-                            </p>
-                          )}
-                        </div>
+                        <p className="text-2xl font-bold" style={{ color: primaryColor }}>
+                          {formatCurrency(Number(product.price))}
+                        </p>
                         <Button 
                           size="sm"
                           style={{ backgroundColor: primaryColor, color: buttonTextColor }}
@@ -668,10 +674,13 @@ export default function PortalDashboard() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="mt-auto py-6 text-center text-sm text-muted-foreground">
-        Powered by LunarPay
+      {/* Footer - Fixed at bottom */}
+      <footer className="fixed bottom-0 left-0 right-0 py-3 text-center text-xs text-muted-foreground bg-white/80 backdrop-blur-sm border-t">
+        Powered by <span className="font-medium">LunarPay</span>
       </footer>
+      
+      {/* Spacer for fixed footer */}
+      <div className="h-12" />
 
       {/* Checkout Modal */}
       {checkoutProduct && (
