@@ -63,7 +63,9 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   }
 
   try {
-    await sgMail.send({
+    console.log('[EMAIL] Sending email to:', options.to, 'from:', FROM_EMAIL, 'subject:', options.subject);
+    
+    const result = await sgMail.send({
       to: options.to,
       from: {
         email: FROM_EMAIL,
@@ -75,10 +77,18 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       replyTo: options.replyTo,
     });
 
-    console.log('[EMAIL] Sent successfully to:', options.to);
+    console.log('[EMAIL] Sent successfully to:', options.to, 'status:', result[0]?.statusCode);
     return true;
-  } catch (error) {
-    console.error('[EMAIL] Failed to send:', error);
+  } catch (error: unknown) {
+    console.error('[EMAIL] Failed to send to:', options.to);
+    console.error('[EMAIL] Error:', error);
+    
+    // Log more details if it's a SendGrid error
+    if (error && typeof error === 'object' && 'response' in error) {
+      const sgError = error as { response?: { body?: unknown } };
+      console.error('[EMAIL] SendGrid response body:', JSON.stringify(sgError.response?.body, null, 2));
+    }
+    
     return false;
   }
 }

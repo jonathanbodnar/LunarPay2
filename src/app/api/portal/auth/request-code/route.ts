@@ -85,14 +85,19 @@ export async function POST(request: Request) {
     });
 
     // Send email with the code
-    await sendPortalLoginCode(
+    console.log(`[PORTAL AUTH] Attempting to send OTP to ${email}`);
+    const emailSent = await sendPortalLoginCode(
       email.toLowerCase(),
       code,
       organization.name,
       organization.primaryColor || undefined
     );
 
-    console.log(`[PORTAL AUTH] OTP Code sent to ${email}`);
+    if (emailSent) {
+      console.log(`[PORTAL AUTH] OTP Code sent successfully to ${email}`);
+    } else {
+      console.error(`[PORTAL AUTH] Failed to send OTP email to ${email}`);
+    }
 
     return NextResponse.json({
       success: true,
