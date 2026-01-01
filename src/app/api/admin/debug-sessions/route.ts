@@ -4,49 +4,41 @@ import { prisma } from '@/lib/prisma';
 // TEMPORARY DEBUG ENDPOINT - DELETE AFTER USE
 export async function GET() {
   try {
-    // Check if customer_sessions table exists and its structure
-    const tableCheck = await prisma.$queryRaw<Array<{
-      table_name: string;
-      column_name: string;
-      data_type: string;
+    // Get recent sessions with details
+    const recentSessions = await prisma.$queryRaw<Array<{
+      id: string;
+      donor_id: number;
+      organization_id: number;
+      expires_at: Date;
+      created_at: Date;
     }>>`
-      SELECT table_name, column_name, data_type 
-      FROM information_schema.columns 
-      WHERE table_name = 'customer_sessions'
-      ORDER BY ordinal_position
+      SELECT id, donor_id, organization_id, expires_at, created_at
+      FROM customer_sessions
+      ORDER BY created_at DESC
+      LIMIT 5
     `;
 
-    // Try to count sessions
-    let sessionCount = 0;
-    let sessionError = null;
-    try {
-      const countResult = await prisma.$queryRaw<Array<{ count: bigint }>>`
-        SELECT COUNT(*) as count FROM customer_sessions
-      `;
-      sessionCount = Number(countResult[0]?.count || 0);
-    } catch (e) {
-      sessionError = String(e);
-    }
-
-    // Check if gen_random_uuid() works
-    let uuidTest = null;
-    let uuidError = null;
-    try {
-      const uuidResult = await prisma.$queryRaw<Array<{ uuid: string }>>`
-        SELECT gen_random_uuid() as uuid
-      `;
-      uuidTest = uuidResult[0]?.uuid;
-    } catch (e) {
-      uuidError = String(e);
-    }
+    // Get products for org 1 with show_on_portal
+    const products = await prisma.$queryRaw<Array<{
+      id: number;
+      name: string;
+      church_id: number;
+      show_on_portal: boolean;
+      price: number;
+    }>>`
+      SELECT id, name, church_id, show_on_portal, price
+      FROM products
+      WHERE church_id = 1 AND show_on_portal = true AND (trash = false OR trash IS NULL)
+      LIMIT 10
+    `;
 
     return NextResponse.json({
-      tableExists: tableCheck.length > 0,
-      columns: tableCheck,
-      sessionCount,
-      sessionError,
-      uuidTest,
-      uuidError,
+      recentSessions: recentSessions.map(s => ({
+        ...s,
+        id: s.id.substring(0, 8) + '...',
+      })),
+      productsForOrg1: products,
+      productCount: products.length,
     });
   } catch (error) {
     console.error('Debug sessions error:', error);
