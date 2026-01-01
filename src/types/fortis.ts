@@ -16,12 +16,12 @@ export interface MerchantOnboardingData {
     first_name: string;
     last_name: string;
     phone_number: string;
-    // Optional owner details to pre-fill MPA
+    // Optional owner details to pre-fill MPA (non-PCI fields only)
     email?: string;
     title?: string; // Job title (e.g., "Owner", "CEO")
     ownership_percent?: number; // 1-100
     date_of_birth?: string; // YYYY-MM-DD format
-    ssn?: string; // Social Security Number (last 4 or full)
+    // NOTE: SSN is collected by Fortis in their secure MPA iframe, not by us
     // Owner's home address
     address_line_1?: string;
     address_line_2?: string;
