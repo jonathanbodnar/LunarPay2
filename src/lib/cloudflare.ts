@@ -259,8 +259,9 @@ export function getDcvDelegationTarget(): string {
 
 /**
  * Get the CNAME target that merchants should point their domain to
+ * Uses the Worker proxy to handle Host header rewriting
  */
 export function getPortalCnameTarget(): string {
-  return process.env.PORTAL_CNAME_TARGET || 'new.lunarpay.com';
+  return process.env.PORTAL_CNAME_TARGET || 'portal.lunarpay.com';
 }
 
