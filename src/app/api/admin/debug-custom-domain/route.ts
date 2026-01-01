@@ -20,13 +20,13 @@ export async function GET(request: Request) {
     if (domain) {
       // Look up in database
       const org = await prisma.$queryRaw<Array<{
-        id: number;
+        ch_id: number;
         church_name: string;
         portal_slug: string | null;
         portal_enabled: boolean;
         portal_custom_domain: string | null;
       }>>`
-        SELECT id, church_name, portal_slug, portal_enabled, portal_custom_domain
+        SELECT ch_id, church_name, portal_slug, portal_enabled, portal_custom_domain
         FROM church_detail
         WHERE LOWER(portal_custom_domain) = ${domain.toLowerCase()}
         LIMIT 1
@@ -50,13 +50,13 @@ export async function GET(request: Request) {
 
     // List all organizations with custom domains
     const allWithDomains = await prisma.$queryRaw<Array<{
-      id: number;
+      ch_id: number;
       church_name: string;
       portal_slug: string | null;
       portal_enabled: boolean;
       portal_custom_domain: string | null;
     }>>`
-      SELECT id, church_name, portal_slug, portal_enabled, portal_custom_domain
+      SELECT ch_id, church_name, portal_slug, portal_enabled, portal_custom_domain
       FROM church_detail
       WHERE portal_custom_domain IS NOT NULL
       AND portal_custom_domain != ''
