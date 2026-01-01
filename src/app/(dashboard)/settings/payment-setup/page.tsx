@@ -61,9 +61,6 @@ export default function PaymentSetupPage() {
     achAccountNumber: '',
     achRoutingNumber: '',
     accountHolderName: '',
-    achAccountNumber2: '',
-    achRoutingNumber2: '',
-    accountHolderName2: '',
   });
 
   useEffect(() => {
@@ -143,9 +140,10 @@ export default function PaymentSetupPage() {
           routingNumber: bankInfo.achRoutingNumber,
           accountNumber: bankInfo.achAccountNumber,
           accountHolderName: bankInfo.accountHolderName,
-          altRoutingNumber: bankInfo.achRoutingNumber2 || bankInfo.achRoutingNumber,
-          altAccountNumber: bankInfo.achAccountNumber2 || bankInfo.achAccountNumber,
-          altAccountHolderName: bankInfo.accountHolderName2 || bankInfo.accountHolderName,
+          // Use primary bank account for alternative as well (Fortis requires both)
+          altRoutingNumber: bankInfo.achRoutingNumber,
+          altAccountNumber: bankInfo.achAccountNumber,
+          altAccountHolderName: bankInfo.accountHolderName,
         }),
       });
 
@@ -481,42 +479,6 @@ export default function PaymentSetupPage() {
                     placeholder="123456789"
                     maxLength={9}
                   />
-                </div>
-              </div>
-
-              <div className="border-t pt-4 mt-4">
-                <p className="text-sm text-muted-foreground mb-4">
-                  Optional: Add a secondary bank account
-                </p>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Account Holder Name</Label>
-                    <Input
-                      value={bankInfo.accountHolderName2}
-                      onChange={(e) => setBankInfo({ ...bankInfo, accountHolderName2: e.target.value })}
-                      placeholder="Secondary account holder"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Account Number</Label>
-                      <Input
-                        type="password"
-                        value={bankInfo.achAccountNumber2}
-                        onChange={(e) => setBankInfo({ ...bankInfo, achAccountNumber2: e.target.value })}
-                        placeholder="••••••••••"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Routing Number</Label>
-                      <Input
-                        value={bankInfo.achRoutingNumber2}
-                        onChange={(e) => setBankInfo({ ...bankInfo, achRoutingNumber2: e.target.value })}
-                        placeholder="123456789"
-                        maxLength={9}
-                      />
-                    </div>
-                  </div>
                 </div>
               </div>
 
