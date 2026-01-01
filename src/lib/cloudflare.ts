@@ -200,11 +200,12 @@ export async function getCustomHostnameStatus(hostname: string): Promise<{
 /**
  * Get the DCV delegation target for customers to add as a CNAME
  * This is the _acme-challenge CNAME target
+ * Find this in Cloudflare Dashboard -> SSL/TLS -> Custom Hostnames -> "DCV Delegation"
  */
 export function getDcvDelegationTarget(): string {
-  // This is shown in your Cloudflare dashboard under Custom Hostnames
-  // It's static for your zone
-  return '066217d657c42286.dcv.cloudflare.com';
+  // This is shown in your Cloudflare dashboard under Custom Hostnames -> DCV Delegation
+  // It's specific to your zone - set via environment variable or use default
+  return process.env.CLOUDFLARE_DCV_TARGET || '066217d657c42286.dcv.cloudflare.com';
 }
 
 /**

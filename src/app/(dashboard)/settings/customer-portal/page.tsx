@@ -53,23 +53,53 @@ function CopyableValue({ value, label }: { value: string; label: string }) {
 
 function DnsInstructions({ domain }: { domain: string }) {
   const subdomain = domain.split('.')[0];
+  const baseDomain = domain.split('.').slice(1).join('.');
   
   return (
     <div className="text-xs text-muted-foreground space-y-3 mt-3">
-      <p className="font-medium text-foreground">Add this DNS record to your domain:</p>
+      <p className="font-medium text-foreground">Add these DNS records to your domain:</p>
       
+      {/* Record 1: Main CNAME */}
       <div className="bg-muted p-3 rounded space-y-2">
-        <p className="font-medium text-foreground text-xs">CNAME Record</p>
+        <p className="font-medium text-foreground text-xs flex items-center gap-2">
+          <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px]">1</span>
+          Main CNAME Record
+        </p>
         <div className="font-mono text-xs space-y-1">
           <CopyableValue label="Type" value="CNAME" />
           <CopyableValue label="Name" value={subdomain} />
           <CopyableValue label="Value" value="new.lunarpay.com" />
         </div>
+        <p className="text-[10px] text-muted-foreground mt-2">
+          Points your subdomain to LunarPay's servers
+        </p>
       </div>
 
-      <p className="text-muted-foreground">
-        DNS changes may take up to 24 hours to propagate. SSL is handled automatically.
-      </p>
+      {/* Record 2: SSL Validation CNAME */}
+      <div className="bg-muted p-3 rounded space-y-2">
+        <p className="font-medium text-foreground text-xs flex items-center gap-2">
+          <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">2</span>
+          SSL Certificate Validation
+        </p>
+        <div className="font-mono text-xs space-y-1">
+          <CopyableValue label="Type" value="CNAME" />
+          <CopyableValue label="Name" value={`_acme-challenge.${subdomain}`} />
+          <CopyableValue label="Value" value="066217d657c42286.dcv.cloudflare.com" />
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-2">
+          Required for automatic SSL certificate provisioning
+        </p>
+      </div>
+
+      <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
+        <p className="font-medium text-amber-800 text-xs">Important Notes:</p>
+        <ul className="text-[10px] text-amber-700 list-disc pl-4 space-y-1">
+          <li>Add both records to your DNS provider (Cloudflare, GoDaddy, Namecheap, etc.)</li>
+          <li>If using Cloudflare, set proxy status to <strong>DNS only</strong> (gray cloud)</li>
+          <li>DNS changes may take up to 24 hours to propagate</li>
+          <li>SSL certificate will be provisioned automatically once DNS is configured</li>
+        </ul>
+      </div>
     </div>
   );
 }
