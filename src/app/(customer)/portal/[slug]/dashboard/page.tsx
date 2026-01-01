@@ -96,10 +96,10 @@ export default function PortalDashboard() {
   const fetchData = async () => {
     try {
       const [meRes, pmRes, subRes, prodRes] = await Promise.all([
-        fetch('/api/portal/me'),
-        fetch('/api/portal/payment-methods'),
-        fetch('/api/portal/subscriptions'),
-        fetch('/api/portal/products'),
+        fetch('/api/portal/me', { credentials: 'include' }),
+        fetch('/api/portal/payment-methods', { credentials: 'include' }),
+        fetch('/api/portal/subscriptions', { credentials: 'include' }),
+        fetch('/api/portal/products', { credentials: 'include' }),
       ]);
 
       if (!meRes.ok) {
@@ -134,7 +134,7 @@ export default function PortalDashboard() {
   };
 
   const handleLogout = async () => {
-    await fetch('/api/portal/auth/logout', { method: 'POST' });
+    await fetch('/api/portal/auth/logout', { method: 'POST', credentials: 'include' });
     router.push(`/portal/${slug}`);
   };
 
@@ -145,9 +145,10 @@ export default function PortalDashboard() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
+        credentials: 'include',
       });
       // Refresh payment methods
-      const res = await fetch('/api/portal/payment-methods');
+      const res = await fetch('/api/portal/payment-methods', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setPaymentMethods(data.paymentMethods || []);
@@ -164,7 +165,7 @@ export default function PortalDashboard() {
     
     setActionLoading(`pm-delete-${id}`);
     try {
-      await fetch(`/api/portal/payment-methods?id=${id}`, { method: 'DELETE' });
+      await fetch(`/api/portal/payment-methods?id=${id}`, { method: 'DELETE', credentials: 'include' });
       setPaymentMethods(prev => prev.filter(pm => pm.id !== id));
     } catch (error) {
       console.error('Delete error:', error);
@@ -182,9 +183,10 @@ export default function PortalDashboard() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, action: 'cancel' }),
+        credentials: 'include',
       });
       // Refresh subscriptions
-      const res = await fetch('/api/portal/subscriptions');
+      const res = await fetch('/api/portal/subscriptions', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setSubscriptions(data.subscriptions || []);
