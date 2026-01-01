@@ -1,24 +1,46 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
-export default function RegisterPage() {
+function RegisterForm() {
+  // URL format: /register?email=user@example.com&firstName=John&lastName=Doe&phone=+15551234567
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Get pre-filled values from URL params
+  const emailParam = searchParams.get('email') || '';
+  const firstNameParam = searchParams.get('firstName') || searchParams.get('first_name') || '';
+  const lastNameParam = searchParams.get('lastName') || searchParams.get('last_name') || '';
+  const phoneParam = searchParams.get('phone') || '';
+  
   const [formData, setFormData] = useState({
-    email: '',
+    email: emailParam,
     password: '',
     confirmPassword: '',
-    firstName: '',
-    lastName: '',
-    phone: '',
+    firstName: firstNameParam,
+    lastName: lastNameParam,
+    phone: phoneParam,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Update form if URL params change
+  useEffect(() => {
+    if (emailParam || firstNameParam || lastNameParam || phoneParam) {
+      setFormData(prev => ({
+        ...prev,
+        email: emailParam || prev.email,
+        firstName: firstNameParam || prev.firstName,
+        lastName: lastNameParam || prev.lastName,
+        phone: phoneParam || prev.phone,
+      }));
+    }
+  }, [emailParam, firstNameParam, lastNameParam, phoneParam]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -220,6 +242,18 @@ export default function RegisterPage() {
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="animate-pulse">Loading...</div>
+      </div>
+    }>
+      <RegisterForm />
+    </Suspense>
   );
 }
 
