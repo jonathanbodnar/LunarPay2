@@ -22,6 +22,8 @@ import {
 interface Organization {
   id: number;
   name: string;
+  legalName?: string;
+  website?: string;
   fortisOnboarding?: {
     stepCompleted: number;
     appStatus: string | null;
@@ -45,6 +47,9 @@ export default function PaymentSetupPage() {
     signLastName: '',
     signPhoneNumber: '',
     email: '',
+    dbaName: '',
+    legalName: '',
+    website: '',
     merchantAddressLine1: '',
     merchantCity: '',
     merchantState: '',
@@ -74,6 +79,13 @@ export default function PaymentSetupPage() {
         if (data.organizations?.length > 0) {
           const org = data.organizations[0];
           setSelectedOrg(org);
+          // Pre-populate company info from organization
+          setMerchantInfo(prev => ({
+            ...prev,
+            dbaName: org.name || '',
+            legalName: org.legalName || org.name || '',
+            website: org.website || '',
+          }));
           // Set current step based on progress
           if (org.fortisOnboarding?.stepCompleted >= 1) {
             setCurrentStep(2);
@@ -120,9 +132,9 @@ export default function PaymentSetupPage() {
           signLastName: merchantInfo.signLastName,
           signPhoneNumber: merchantInfo.signPhoneNumber,
           email: merchantInfo.email,
-          dbaName: selectedOrg.name,
-          legalName: selectedOrg.name,
-          website: '',
+          dbaName: merchantInfo.dbaName,
+          legalName: merchantInfo.legalName,
+          website: merchantInfo.website,
           addressLine1: merchantInfo.merchantAddressLine1,
           state: merchantInfo.merchantState,
           city: merchantInfo.merchantCity,
@@ -195,6 +207,12 @@ export default function PaymentSetupPage() {
               const org = organizations.find(o => o.id === parseInt(e.target.value));
               if (org) {
                 setSelectedOrg(org);
+                setMerchantInfo(prev => ({
+                  ...prev,
+                  dbaName: org.name || '',
+                  legalName: org.legalName || org.name || '',
+                  website: org.website || '',
+                }));
                 setCurrentStep(org.fortisOnboarding?.stepCompleted ? 
                   Math.min(org.fortisOnboarding.stepCompleted + 1, 3) : 1);
               }
@@ -312,14 +330,55 @@ export default function PaymentSetupPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Business Address *</Label>
-                <Input
-                  required
-                  value={merchantInfo.merchantAddressLine1}
-                  onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantAddressLine1: e.target.value })}
-                  placeholder="123 Main Street"
-                />
+              <div className="border-t pt-4 mt-4">
+                <h4 className="text-sm font-medium mb-4">Business Information</h4>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>DBA Name (Doing Business As) *</Label>
+                      <Input
+                        required
+                        value={merchantInfo.dbaName}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, dbaName: e.target.value })}
+                        placeholder="My Company Inc"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Legal Name *</Label>
+                      <Input
+                        required
+                        value={merchantInfo.legalName}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, legalName: e.target.value })}
+                        placeholder="My Company Inc, LLC"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Website *</Label>
+                    <Input
+                      required
+                      type="url"
+                      value={merchantInfo.website}
+                      onChange={(e) => setMerchantInfo({ ...merchantInfo, website: e.target.value })}
+                      placeholder="https://www.mycompany.com"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4 mt-4">
+                <h4 className="text-sm font-medium mb-4">Business Address</h4>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Street Address *</Label>
+                    <Input
+                      required
+                      value={merchantInfo.merchantAddressLine1}
+                      onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantAddressLine1: e.target.value })}
+                      placeholder="123 Main Street"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
