@@ -105,19 +105,21 @@ function DnsInstructions({ domain, validationRecords }: { domain: string; valida
         </p>
       </div>
 
-      {/* Record 3: SSL Validation CNAME */}
+      {/* Record 3: SSL Certificate TXT */}
       <div className="bg-muted p-3 rounded space-y-2">
         <p className="font-medium text-foreground text-xs flex items-center gap-2">
           <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">3</span>
-          SSL Certificate CNAME (DCV Delegation)
+          SSL Certificate TXT Record
         </p>
         <div className="font-mono text-xs space-y-1">
-          <CopyableValue label="Type" value="CNAME" />
+          <CopyableValue label="Type" value="TXT" />
           <CopyableValue label="Name" value={`_acme-challenge.${subdomain}`} />
-          <CopyableValue label="Value" value="066217d657c42286.dcv.cloudflare.com" />
+          <p className="text-amber-600">
+            <span className="text-muted-foreground">Value:</span> Get from Cloudflare Dashboard → SSL/TLS → Custom Hostnames
+          </p>
         </div>
         <p className="text-[10px] text-muted-foreground mt-2">
-          Enables automatic SSL certificate provisioning and renewal
+          Required for SSL certificate - check Cloudflare dashboard for the exact value
         </p>
       </div>
 
