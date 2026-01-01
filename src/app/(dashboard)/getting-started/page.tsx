@@ -79,9 +79,9 @@ export default function GettingStartedPage() {
         {
           id: 'payment',
           title: 'Configure Payment Processing',
-          description: 'Set up Fortis or other payment processor',
-          completed: false, // TODO: Check if payment processor is connected
-          path: '/settings',
+          description: 'Set up Fortis to accept credit cards and ACH payments',
+          completed: orgs.organizations?.[0]?.fortisOnboarding?.appStatus === 'ACTIVE',
+          path: '/settings/payment-setup',
         },
       ]);
     } catch (error) {
