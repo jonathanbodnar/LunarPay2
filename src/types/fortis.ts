@@ -9,38 +9,86 @@ export interface FortisConfig {
 }
 
 // Merchant Onboarding Types
+// Full list of fields supported by Fortis API for pre-filling MPA form
 export interface MerchantOnboardingData {
+  // Primary Principal (Owner) - Required
   primary_principal: {
     first_name: string;
     last_name: string;
     phone_number: string;
+    // Optional owner details to pre-fill MPA
+    email?: string;
+    title?: string; // Job title (e.g., "Owner", "CEO")
+    ownership_percent?: number; // 1-100
+    date_of_birth?: string; // YYYY-MM-DD format
+    ssn?: string; // Social Security Number (last 4 or full)
+    // Owner's home address
+    address_line_1?: string;
+    address_line_2?: string;
+    city?: string;
+    state_province?: string;
+    postal_code?: string;
+    country?: string; // Default: "US"
   };
+  
+  // Business contact email
   email: string;
+  
+  // Business names
   dba_name: string;
+  legal_name: string;
+  
+  // Business details
   template_code: string;
   website: string;
+  fed_tax_id?: string; // Federal Tax ID / EIN
+  ownership_type?: 'llc' | 'llp' | 'corporation' | 'sole_proprietorship' | 'partnership' | 'non_profit';
+  business_category?: string; // MCC code or category
+  
+  // Estimated volumes (helps with underwriting)
+  annual_revenue?: number; // Estimated annual revenue in cents
+  cc_monthly_volume?: number; // Monthly CC volume in cents
+  ach_monthly_volume?: number; // Monthly ACH volume in cents
+  average_ticket?: number; // Average transaction amount in cents
+  highest_ticket?: number; // Highest expected transaction in cents
+  
+  // Business location
   location: {
     address_line_1: string;
-    state_province: string;
+    address_line_2?: string;
     city: string;
+    state_province: string;
     postal_code: string;
+    country?: string; // Default: "US"
     phone_number: string;
   };
+  
+  // Application delivery method
   app_delivery: 'link_iframe' | 'link_full_page';
+  
+  // Bank accounts for deposits
   bank_account: {
     routing_number: string;
     account_number: string;
     account_holder_name: string;
+    account_type?: 'checking' | 'savings';
   };
   alt_bank_account: {
     routing_number: string;
     account_number: string;
     account_holder_name: string;
+    account_type?: 'checking' | 'savings';
   };
-  legal_name: string;
+  
+  // Contact information
   contact: {
+    first_name?: string;
+    last_name?: string;
     phone_number: string;
+    email?: string;
   };
+  
+  // Client reference ID (our organization ID)
   client_app_id: string;
 }
 

@@ -58,10 +58,19 @@ export default function PaymentSetupPage() {
     dbaName: '',
     legalName: '',
     website: '',
+    fedTaxId: '', // EIN
+    ownershipType: '',
+    ownerTitle: '',
+    ownershipPercent: '100',
+    dateOfBirth: '',
     merchantAddressLine1: '',
+    merchantAddressLine2: '',
     merchantCity: '',
     merchantState: '',
     merchantPostalCode: '',
+    // Estimated volumes
+    annualRevenue: '',
+    averageTicket: '',
   });
 
   // Step 2: Bank Account
@@ -69,6 +78,7 @@ export default function PaymentSetupPage() {
     achAccountNumber: '',
     achRoutingNumber: '',
     accountHolderName: '',
+    accountType: 'checking',
   });
 
   useEffect(() => {
@@ -104,10 +114,18 @@ export default function PaymentSetupPage() {
       dbaName: org.name || '',
       legalName: org.legalName || org.name || '',
       website: org.website || '',
+      fedTaxId: '',
+      ownershipType: '',
+      ownerTitle: '',
+      ownershipPercent: '100',
+      dateOfBirth: '',
       merchantAddressLine1: org.fortisOnboarding?.merchantAddressLine1 || '',
+      merchantAddressLine2: '',
       merchantCity: org.fortisOnboarding?.merchantCity || '',
       merchantState: org.fortisOnboarding?.merchantState || '',
       merchantPostalCode: org.fortisOnboarding?.merchantPostalCode || '',
+      annualRevenue: '',
+      averageTicket: '',
     });
 
     // Set current step based on progress
@@ -146,6 +164,7 @@ export default function PaymentSetupPage() {
           legalName: merchantInfo.legalName,
           website: merchantInfo.website,
           addressLine1: merchantInfo.merchantAddressLine1,
+          addressLine2: merchantInfo.merchantAddressLine2,
           state: merchantInfo.merchantState,
           city: merchantInfo.merchantCity,
           postalCode: merchantInfo.merchantPostalCode,
@@ -181,22 +200,35 @@ export default function PaymentSetupPage() {
         credentials: 'include',
         body: JSON.stringify({
           organizationId: selectedOrg.id,
-          // Merchant info
+          // Primary contact
           signFirstName: merchantInfo.signFirstName,
           signLastName: merchantInfo.signLastName,
           signPhoneNumber: merchantInfo.signPhoneNumber,
           email: merchantInfo.email,
+          // Business info
           dbaName: merchantInfo.dbaName,
           legalName: merchantInfo.legalName,
           website: merchantInfo.website,
+          fedTaxId: merchantInfo.fedTaxId || undefined,
+          ownershipType: merchantInfo.ownershipType || undefined,
+          // Owner details
+          ownerTitle: merchantInfo.ownerTitle || 'Owner',
+          ownershipPercent: merchantInfo.ownershipPercent || '100',
+          dateOfBirth: merchantInfo.dateOfBirth || undefined,
+          // Business address
           addressLine1: merchantInfo.merchantAddressLine1,
+          addressLine2: merchantInfo.merchantAddressLine2 || undefined,
           state: merchantInfo.merchantState,
           city: merchantInfo.merchantCity,
           postalCode: merchantInfo.merchantPostalCode,
+          // Volume estimates
+          annualRevenue: merchantInfo.annualRevenue || undefined,
+          averageTicket: merchantInfo.averageTicket || undefined,
           // Bank info
           routingNumber: bankInfo.achRoutingNumber,
           accountNumber: bankInfo.achAccountNumber,
           accountHolderName: bankInfo.accountHolderName,
+          accountType: bankInfo.accountType,
           // Use primary bank account for alternative as well (Fortis requires both)
           altRoutingNumber: bankInfo.achRoutingNumber,
           altAccountNumber: bankInfo.achAccountNumber,
@@ -401,14 +433,95 @@ export default function PaymentSetupPage() {
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Website *</Label>
+                      <Input
+                        required
+                        type="url"
+                        value={merchantInfo.website}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, website: e.target.value })}
+                        placeholder="https://www.mycompany.com"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Federal Tax ID (EIN)</Label>
+                      <Input
+                        value={merchantInfo.fedTaxId}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, fedTaxId: e.target.value })}
+                        placeholder="XX-XXXXXXX"
+                        maxLength={10}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Business Type</Label>
+                      <select
+                        className="w-full h-10 px-3 rounded-lg border border-border bg-background"
+                        value={merchantInfo.ownershipType}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, ownershipType: e.target.value })}
+                      >
+                        <option value="">Select type...</option>
+                        <option value="sole_proprietorship">Sole Proprietorship</option>
+                        <option value="llc">LLC</option>
+                        <option value="corporation">Corporation</option>
+                        <option value="partnership">Partnership</option>
+                        <option value="non_profit">Non-Profit</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Owner Title</Label>
+                      <Input
+                        value={merchantInfo.ownerTitle}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, ownerTitle: e.target.value })}
+                        placeholder="Owner, CEO, President"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Ownership Percentage</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={merchantInfo.ownershipPercent}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, ownershipPercent: e.target.value })}
+                        placeholder="100"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Date of Birth</Label>
+                      <Input
+                        type="date"
+                        value={merchantInfo.dateOfBirth}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, dateOfBirth: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-4 mt-4">
+                <h4 className="text-sm font-medium mb-4">Estimated Processing Volume</h4>
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Website *</Label>
+                    <Label>Annual Revenue ($)</Label>
                     <Input
-                      required
-                      type="url"
-                      value={merchantInfo.website}
-                      onChange={(e) => setMerchantInfo({ ...merchantInfo, website: e.target.value })}
-                      placeholder="https://www.mycompany.com"
+                      type="number"
+                      value={merchantInfo.annualRevenue}
+                      onChange={(e) => setMerchantInfo({ ...merchantInfo, annualRevenue: e.target.value })}
+                      placeholder="100000"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Average Transaction ($)</Label>
+                    <Input
+                      type="number"
+                      value={merchantInfo.averageTicket}
+                      onChange={(e) => setMerchantInfo({ ...merchantInfo, averageTicket: e.target.value })}
+                      placeholder="50"
                     />
                   </div>
                 </div>
@@ -424,6 +537,14 @@ export default function PaymentSetupPage() {
                       value={merchantInfo.merchantAddressLine1}
                       onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantAddressLine1: e.target.value })}
                       placeholder="123 Main Street"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Suite / Unit</Label>
+                    <Input
+                      value={merchantInfo.merchantAddressLine2}
+                      onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantAddressLine2: e.target.value })}
+                      placeholder="Suite 100"
                     />
                   </div>
                 </div>
@@ -509,7 +630,7 @@ export default function PaymentSetupPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Account Number *</Label>
                   <Input
@@ -529,6 +650,17 @@ export default function PaymentSetupPage() {
                     placeholder="123456789"
                     maxLength={9}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Account Type *</Label>
+                  <select
+                    className="w-full h-10 px-3 rounded-lg border border-border bg-background"
+                    value={bankInfo.accountType}
+                    onChange={(e) => setBankInfo({ ...bankInfo, accountType: e.target.value })}
+                  >
+                    <option value="checking">Checking</option>
+                    <option value="savings">Savings</option>
+                  </select>
                 </div>
               </div>
 

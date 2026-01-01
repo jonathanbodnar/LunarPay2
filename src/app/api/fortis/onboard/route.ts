@@ -11,20 +11,40 @@ export async function POST(request: Request) {
 
     const {
       organizationId,
+      // Primary contact
       signFirstName,
       signLastName,
       signPhoneNumber,
       email,
+      // Business info
       dbaName,
       legalName,
       website,
+      fedTaxId,
+      ownershipType,
+      // Owner details (optional)
+      ownerTitle,
+      ownershipPercent,
+      dateOfBirth,
+      ownerAddressLine1,
+      ownerCity,
+      ownerState,
+      ownerPostalCode,
+      // Business address
       addressLine1,
+      addressLine2,
       state,
       city,
       postalCode,
+      // Volume estimates (optional)
+      annualRevenue,
+      averageTicket,
+      highestTicket,
+      // Bank info
       routingNumber,
       accountNumber,
       accountHolderName,
+      accountType,
       altRoutingNumber,
       altAccountNumber,
       altAccountHolderName,
@@ -60,39 +80,80 @@ export async function POST(request: Request) {
     const isTest = process.env.fortis_environment !== 'prd';
     const templateCode = isTest ? 'Testing1234' : (organization.fortisTemplate || process.env.FORTIS_TPL_DEFAULT || 'ActiveBase4');
 
-    // Prepare Fortis onboarding data
+    // Prepare Fortis onboarding data with all available fields
     const merchantData: MerchantOnboardingData = {
+      // Primary principal (owner) with all available details
       primary_principal: {
         first_name: signFirstName,
         last_name: signLastName,
         phone_number: signPhoneNumber,
+        email: email,
+        title: ownerTitle || 'Owner',
+        ownership_percent: ownershipPercent ? parseInt(ownershipPercent) : 100,
+        date_of_birth: dateOfBirth || undefined,
+        // Owner's home address (if different from business)
+        address_line_1: ownerAddressLine1 || addressLine1,
+        city: ownerCity || city,
+        state_province: ownerState || state,
+        postal_code: ownerPostalCode || postalCode,
+        country: 'US',
       },
+      
+      // Business contact
       email,
+      
+      // Business names
       dba_name: dbaName,
+      legal_name: legalName,
+      
+      // Business details
       template_code: templateCode,
       website,
+      fed_tax_id: fedTaxId || undefined,
+      ownership_type: ownershipType || undefined,
+      
+      // Volume estimates (convert to cents if provided as dollars)
+      annual_revenue: annualRevenue ? parseInt(annualRevenue) * 100 : undefined,
+      average_ticket: averageTicket ? parseInt(averageTicket) * 100 : undefined,
+      highest_ticket: highestTicket ? parseInt(highestTicket) * 100 : undefined,
+      
+      // Business location
       location: {
         address_line_1: addressLine1,
-        state_province: state,
+        address_line_2: addressLine2 || undefined,
         city,
+        state_province: state,
         postal_code: postalCode,
+        country: 'US',
         phone_number: signPhoneNumber,
       },
+      
+      // Application delivery as embedded iframe
       app_delivery: 'link_iframe',
+      
+      // Bank accounts
       bank_account: {
         routing_number: routingNumber,
         account_number: accountNumber,
         account_holder_name: accountHolderName,
+        account_type: accountType || 'checking',
       },
       alt_bank_account: {
         routing_number: altRoutingNumber,
         account_number: altAccountNumber,
         account_holder_name: altAccountHolderName,
+        account_type: accountType || 'checking',
       },
-      legal_name: legalName,
+      
+      // Contact information
       contact: {
+        first_name: signFirstName,
+        last_name: signLastName,
         phone_number: signPhoneNumber,
+        email: email,
       },
+      
+      // Our internal organization ID for webhook matching
       client_app_id: organizationId.toString(),
     };
 
