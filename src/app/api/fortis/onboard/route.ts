@@ -83,6 +83,19 @@ export async function POST(request: Request) {
     
     console.log('[Fortis Onboard] Environment:', fortisEnv, 'isTest:', isTest, 'templateCode:', templateCode);
     console.log('[Fortis Onboard] Bank info received - routing:', routingNumber?.slice(-4), 'account:', accountNumber?.slice(-4));
+    console.log('[Fortis Onboard] Merchant data:', {
+      firstName: signFirstName,
+      lastName: signLastName,
+      phone: signPhoneNumber,
+      email,
+      dbaName,
+      legalName,
+      website,
+      address: addressLine1,
+      city,
+      state,
+      postalCode,
+    });
 
     // Prepare Fortis onboarding data (only allowed fields)
     const merchantData: MerchantOnboardingData = {
@@ -155,17 +168,26 @@ export async function POST(request: Request) {
     const result = await fortisClient.onboardMerchant(merchantData);
 
     if (!result.status) {
+      console.error('[Fortis Onboard] API Error:', JSON.stringify(result, null, 2));
+      
       // Update onboarding record with error
-      await prisma.fortisOnboarding.update({
-        where: { organizationId },
-        data: {
-          appStatus: 'FORM_ERROR',
-          processorResponse: JSON.stringify(result),
-        },
-      });
+      try {
+        await prisma.fortisOnboarding.update({
+          where: { organizationId },
+          data: {
+            appStatus: 'FORM_ERROR',
+            processorResponse: JSON.stringify(result),
+          },
+        });
+      } catch (dbError) {
+        console.error('[Fortis Onboard] DB update error:', dbError);
+      }
 
       return NextResponse.json(
-        { error: result.message || 'Onboarding failed' },
+        { 
+          error: result.message || 'Onboarding failed',
+          details: result,
+        },
         { status: 400 }
       );
     }

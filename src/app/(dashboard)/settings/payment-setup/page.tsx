@@ -261,9 +261,16 @@ export default function PaymentSetupPage() {
         setCurrentStep(3);
         await fetchOrganizations();
       } else {
-        setError(data.error || 'Failed to submit to Fortis');
+        // Show more detailed error message
+        let errorMsg = data.error || 'Failed to submit to Fortis';
+        if (data.details?.result?.detail) {
+          errorMsg += `: ${data.details.result.detail}`;
+        }
+        console.error('Fortis submission error:', data);
+        setError(errorMsg);
       }
     } catch (err) {
+      console.error('Fortis submission exception:', err);
       setError('An error occurred. Please try again.');
     } finally {
       setSaving(false);
