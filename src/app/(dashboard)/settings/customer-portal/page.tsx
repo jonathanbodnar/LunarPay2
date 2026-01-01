@@ -22,8 +22,6 @@ interface Organization {
   portalSlug: string | null;
   portalEnabled: boolean;
   portalCustomDomain: string | null;
-  portalTitle: string | null;
-  portalDescription: string | null;
 }
 
 function CopyableValue({ value, label }: { value: string; label: string }) {
@@ -89,8 +87,6 @@ export default function CustomerPortalSettingsPage() {
     portalSlug: '',
     portalEnabled: false,
     portalCustomDomain: '',
-    portalTitle: '',
-    portalDescription: '',
   });
 
   useEffect(() => {
@@ -122,8 +118,6 @@ export default function CustomerPortalSettingsPage() {
       portalSlug: org.portalSlug || org.slug || '',
       portalEnabled: org.portalEnabled || false,
       portalCustomDomain: org.portalCustomDomain || '',
-      portalTitle: org.portalTitle || '',
-      portalDescription: org.portalDescription || '',
     });
   };
 
@@ -325,33 +319,6 @@ export default function CustomerPortalSettingsPage() {
                   Use your own domain for the customer portal (e.g., pay.yourcompany.com)
                 </p>
               )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-medium">Portal Customization</CardTitle>
-            <CardDescription>Customize the portal appearance</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Portal Title</Label>
-              <Input
-                value={formData.portalTitle}
-                onChange={(e) => setFormData({ ...formData, portalTitle: e.target.value })}
-                placeholder="Customer Portal"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Welcome Message</Label>
-              <textarea
-                className="w-full min-h-[80px] px-3 py-2 rounded-lg border border-border bg-background text-sm"
-                value={formData.portalDescription}
-                onChange={(e) => setFormData({ ...formData, portalDescription: e.target.value })}
-                placeholder="Welcome to our customer portal. Sign in to manage your account."
-              />
             </div>
           </CardContent>
         </Card>
