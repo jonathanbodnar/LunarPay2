@@ -140,7 +140,7 @@ export async function POST(request: Request) {
       // Application delivery as embedded iframe
       app_delivery: 'link_iframe',
       
-      // Bank accounts - deposit_type only allowed on alt_bank_account
+      // Bank accounts
       bank_account: {
         routing_number: routingNumber,
         account_number: accountNumber,
@@ -150,7 +150,6 @@ export async function POST(request: Request) {
         routing_number: altRoutingNumber || routingNumber,
         account_number: altAccountNumber || accountNumber,
         account_holder_name: altAccountHolderName || accountHolderName,
-        deposit_type: (accountType as 'checking' | 'savings') || 'checking',
       },
       
       // Contact information
