@@ -69,68 +69,54 @@ function DnsInstructions({ domain, validationRecords }: { domain: string; valida
       
       {/* Record 1: Main CNAME */}
       <div className="bg-muted p-3 rounded space-y-2">
-        <p className="font-medium text-foreground text-xs flex items-center gap-2">
-          <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px]">1</span>
-          Main CNAME Record
-        </p>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-medium">1</span>
+          <span className="font-medium text-foreground text-xs">CNAME</span>
+        </div>
         <div className="font-mono text-xs space-y-1">
-          <CopyableValue label="Type" value="CNAME" />
           <CopyableValue label="Name" value={subdomain} />
           <CopyableValue label="Value" value="new.lunarpay.com" />
         </div>
-        <p className="text-[10px] text-muted-foreground mt-2">
-          Points your subdomain to LunarPay's servers
-        </p>
       </div>
 
       {/* Record 2: Hostname Validation TXT */}
       <div className="bg-muted p-3 rounded space-y-2">
-        <p className="font-medium text-foreground text-xs flex items-center gap-2">
-          <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px]">2</span>
-          Hostname Validation TXT Record
-        </p>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-medium">2</span>
+          <span className="font-medium text-foreground text-xs">TXT</span>
+        </div>
         <div className="font-mono text-xs space-y-1">
-          <CopyableValue label="Type" value="TXT" />
           <CopyableValue label="Name" value={txtRecord?.name || `_cf-custom-hostname.${subdomain}`} />
           {txtRecord?.value ? (
             <CopyableValue label="Value" value={txtRecord.value} />
           ) : (
             <p className="text-amber-600">
-              <span className="text-muted-foreground">Value:</span> Save settings to get this value
+              <span className="text-muted-foreground">Value:</span> Save settings first
             </p>
           )}
         </div>
-        <p className="text-[10px] text-muted-foreground mt-2">
-          Verifies domain ownership with Cloudflare
-        </p>
       </div>
 
       {/* Record 3: SSL DCV Delegation CNAME */}
       <div className="bg-muted p-3 rounded space-y-2">
-        <p className="font-medium text-foreground text-xs flex items-center gap-2">
-          <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px]">3</span>
-          SSL Certificate (DCV Delegation)
-        </p>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-medium">3</span>
+          <span className="font-medium text-foreground text-xs">CNAME</span>
+        </div>
         <div className="font-mono text-xs space-y-1">
-          <CopyableValue label="Type" value="CNAME" />
           <CopyableValue label="Name" value={`_acme-challenge.${subdomain}`} />
           <CopyableValue label="Value" value="066217d657c42286.dcv.cloudflare.com" />
         </div>
-        <p className="text-[10px] text-muted-foreground mt-2">
-          Enables automatic SSL certificate provisioning and renewal
-        </p>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
-        <p className="font-medium text-amber-800 text-xs">Important Notes:</p>
+        <p className="font-medium text-amber-800 text-xs">Important:</p>
         <ul className="text-[10px] text-amber-700 list-disc pl-4 space-y-1">
-          <li>Add all 3 records to your DNS provider (Cloudflare, GoDaddy, Namecheap, etc.)</li>
-          <li>If using Cloudflare, set proxy status to <strong>DNS only</strong> (gray cloud) for all records</li>
           {!txtRecord?.value && (
-            <li className="text-purple-700 font-medium">Save your settings first to get the TXT validation value</li>
+            <li className="text-purple-700 font-medium">Save settings first to get Record 2 value</li>
           )}
+          <li>If using Cloudflare DNS, set all records to <strong>DNS only</strong> (gray cloud)</li>
           <li>DNS changes may take up to 24 hours to propagate</li>
-          <li>SSL certificate will be provisioned automatically once DNS is configured</li>
         </ul>
       </div>
     </div>
