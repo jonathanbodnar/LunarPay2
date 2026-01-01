@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { addCustomHostname, deleteCustomHostname, getCustomHostnameStatus, getDcvDelegationTarget, getPortalCnameTarget } from '@/lib/cloudflare';
+import { addRailwayCustomDomain } from '@/lib/railway';
 
 const portalSettingsSchema = z.object({
   portalSlug: z.string()
@@ -136,7 +137,7 @@ export async function PUT(
         await deleteCustomHostname(oldCustomDomain);
       }
 
-      // Add new custom hostname to Cloudflare if provided
+      // Add new custom hostname to Cloudflare and Railway if provided
       if (newCustomDomain) {
         console.log('[PORTAL] Adding new custom domain to Cloudflare:', newCustomDomain);
         cloudflareResult = await addCustomHostname(newCustomDomain);
@@ -144,6 +145,17 @@ export async function PUT(
         if (!cloudflareResult.success) {
           console.error('[PORTAL] Failed to add custom domain to Cloudflare:', cloudflareResult.error);
           // Don't fail the request, just warn
+        }
+
+        // Also add to Railway so it accepts the hostname
+        console.log('[PORTAL] Adding new custom domain to Railway:', newCustomDomain);
+        const railwayResult = await addRailwayCustomDomain(newCustomDomain);
+        
+        if (!railwayResult.success) {
+          console.error('[PORTAL] Failed to add custom domain to Railway:', railwayResult.error);
+          // Don't fail the request, Railway domain can be added later
+        } else {
+          console.log('[PORTAL] Successfully added custom domain to Railway');
         }
       }
     }

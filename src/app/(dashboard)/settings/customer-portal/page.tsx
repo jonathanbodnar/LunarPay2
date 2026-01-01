@@ -51,26 +51,8 @@ function CopyableValue({ value, label }: { value: string; label: string }) {
   );
 }
 
-interface ValidationRecord {
-  name: string;
-  value: string;
-}
-
-function DnsInstructions({ domain, validationRecords }: { domain: string; validationRecords?: ValidationRecord[] }) {
+function DnsInstructions({ domain }: { domain: string }) {
   const subdomain = domain.split('.')[0];
-  const baseDomain = domain.split('.').slice(1).join('.');
-  
-  // Debug logging
-  console.log('[DNS] Validation records:', validationRecords);
-  
-  // Find ownership TXT record (_cf-custom-hostname)
-  const ownershipRecord = validationRecords?.find(r => r.name.includes('_cf-custom-hostname'));
-  
-  // Find SSL certificate TXT record (_acme-challenge)
-  const sslRecord = validationRecords?.find(r => r.name.includes('_acme-challenge'));
-  
-  console.log('[DNS] Ownership record:', ownershipRecord);
-  console.log('[DNS] SSL record:', sslRecord);
   
   return (
     <div className="text-xs text-muted-foreground space-y-3 mt-3">
@@ -79,8 +61,8 @@ function DnsInstructions({ domain, validationRecords }: { domain: string; valida
       {/* Record 1: Main CNAME */}
       <div className="bg-muted p-3 rounded space-y-2">
         <div className="flex items-center gap-2 mb-2">
-          <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-medium">1</span>
-          <span className="font-medium text-foreground text-xs">CNAME</span>
+          <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-medium">CNAME</span>
+          <span className="font-medium text-foreground text-xs">Point your domain to LunarPay</span>
         </div>
         <div className="font-mono text-xs space-y-1">
           <CopyableValue label="Name" value={subdomain} />
@@ -88,49 +70,12 @@ function DnsInstructions({ domain, validationRecords }: { domain: string; valida
         </div>
       </div>
 
-      {/* Record 2: Hostname Validation TXT */}
-      <div className="bg-muted p-3 rounded space-y-2">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-medium">2</span>
-          <span className="font-medium text-foreground text-xs">TXT (Ownership)</span>
-        </div>
-        <div className="font-mono text-xs space-y-1">
-          <CopyableValue label="Name" value={ownershipRecord?.name || `_cf-custom-hostname.${subdomain}`} />
-          {ownershipRecord?.value ? (
-            <CopyableValue label="Value" value={ownershipRecord.value} />
-          ) : (
-            <p className="text-amber-600">
-              <span className="text-muted-foreground">Value:</span> Save settings first
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Record 3: SSL Certificate TXT */}
-      <div className="bg-muted p-3 rounded space-y-2">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-medium">3</span>
-          <span className="font-medium text-foreground text-xs">TXT (SSL Certificate)</span>
-        </div>
-        <div className="font-mono text-xs space-y-1">
-          <CopyableValue label="Name" value={sslRecord?.name || `_acme-challenge.${subdomain}`} />
-          {sslRecord?.value ? (
-            <CopyableValue label="Value" value={sslRecord.value} />
-          ) : (
-            <p className="text-amber-600">
-              <span className="text-muted-foreground">Value:</span> Save settings first
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
-        <p className="font-medium text-amber-800 text-xs">Important:</p>
-        <ul className="text-[10px] text-amber-700 list-disc pl-4 space-y-1">
-          {(!ownershipRecord?.value || !sslRecord?.value) && (
-            <li className="text-purple-700 font-medium">Save settings first to get TXT values</li>
-          )}
-          <li>If using Cloudflare DNS, set all records to <strong>DNS only</strong> (gray cloud)</li>
+      <div className="bg-green-50 border border-green-200 rounded p-3 space-y-1">
+        <p className="font-medium text-green-800 text-xs">That&apos;s it!</p>
+        <ul className="text-[10px] text-green-700 list-disc pl-4 space-y-1">
+          <li>Save your settings, then add the CNAME record above</li>
+          <li>SSL certificate will be automatically provisioned</li>
+          <li>If using Cloudflare DNS, set to <strong>DNS only</strong> (gray cloud)</li>
           <li>DNS changes may take up to 24 hours to propagate</li>
         </ul>
       </div>
@@ -152,7 +97,6 @@ export default function CustomerPortalSettingsPage() {
     portalEnabled: false,
     portalCustomDomain: '',
   });
-  const [validationRecords, setValidationRecords] = useState<ValidationRecord[]>([]);
 
   useEffect(() => {
     fetchOrganizations();
@@ -177,32 +121,13 @@ export default function CustomerPortalSettingsPage() {
     }
   };
 
-  const selectOrganization = async (org: Organization) => {
+  const selectOrganization = (org: Organization) => {
     setSelectedOrg(org);
     setFormData({
       portalSlug: org.portalSlug || org.slug || '',
       portalEnabled: org.portalEnabled || false,
       portalCustomDomain: org.portalCustomDomain || '',
     });
-    
-    // Fetch validation records if custom domain exists
-    if (org.portalCustomDomain) {
-      try {
-        const response = await fetch(`/api/organizations/${org.id}/portal`, {
-          credentials: 'include',
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.customDomain?.validationRecords) {
-            setValidationRecords(data.customDomain.validationRecords);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch validation records:', err);
-      }
-    } else {
-      setValidationRecords([]);
-    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -230,11 +155,6 @@ export default function CustomerPortalSettingsPage() {
           org.id === selectedOrg.id ? { ...org, ...data.organization } : org
         ));
         setSelectedOrg(prev => prev ? { ...prev, ...data.organization } : prev);
-        
-        // Store validation records if provided
-        if (data.customDomain?.validationRecords) {
-          setValidationRecords(data.customDomain.validationRecords);
-        }
         
         setTimeout(() => setSuccess(''), 3000);
       } else {
@@ -402,7 +322,7 @@ export default function CustomerPortalSettingsPage() {
                 placeholder="pay.yourcompany.com"
               />
               {formData.portalCustomDomain ? (
-                <DnsInstructions domain={formData.portalCustomDomain} validationRecords={validationRecords} />
+                <DnsInstructions domain={formData.portalCustomDomain} />
               ) : (
                 <p className="text-xs text-muted-foreground">
                   Use your own domain for the customer portal (e.g., pay.yourcompany.com)
