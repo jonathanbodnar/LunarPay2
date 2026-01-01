@@ -5,21 +5,27 @@ import { prisma } from '@/lib/prisma';
 export async function GET() {
   try {
     const portals = await prisma.$queryRaw<Array<{
-      id: number;
+      church_detail_id: number;
       name: string;
       portal_slug: string | null;
       portal_enabled: boolean;
       portal_custom_domain: string | null;
     }>>`
-      SELECT id, name, portal_slug, portal_enabled, portal_custom_domain
+      SELECT church_detail_id, name, portal_slug, portal_enabled, portal_custom_domain
       FROM church_detail
       WHERE portal_enabled = true OR portal_custom_domain IS NOT NULL
-      ORDER BY id
+      ORDER BY church_detail_id
+      LIMIT 20
     `;
+
+    // Also check if SENDGRID_API_KEY is configured
+    const sendgridConfigured = !!process.env.SENDGRID_API_KEY;
 
     return NextResponse.json({
       count: portals.length,
       portals,
+      sendgridConfigured,
+      sendgridFromEmail: process.env.SENDGRID_FROM_EMAIL || 'not set',
     });
   } catch (error) {
     console.error('Debug portals error:', error);
