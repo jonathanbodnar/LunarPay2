@@ -60,8 +60,11 @@ function DnsInstructions({ domain, validationRecords }: { domain: string; valida
   const subdomain = domain.split('.')[0];
   const baseDomain = domain.split('.').slice(1).join('.');
   
-  // Find TXT validation record if available
-  const txtRecord = validationRecords?.find(r => r.name.includes('_cf-custom-hostname') || r.name.includes(subdomain));
+  // Find ownership TXT record (_cf-custom-hostname)
+  const ownershipRecord = validationRecords?.find(r => r.name.includes('_cf-custom-hostname'));
+  
+  // Find SSL certificate TXT record (_acme-challenge)
+  const sslRecord = validationRecords?.find(r => r.name.includes('_acme-challenge'));
   
   return (
     <div className="text-xs text-muted-foreground space-y-3 mt-3">
@@ -83,12 +86,12 @@ function DnsInstructions({ domain, validationRecords }: { domain: string; valida
       <div className="bg-muted p-3 rounded space-y-2">
         <div className="flex items-center gap-2 mb-2">
           <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-medium">2</span>
-          <span className="font-medium text-foreground text-xs">TXT</span>
+          <span className="font-medium text-foreground text-xs">TXT (Ownership)</span>
         </div>
         <div className="font-mono text-xs space-y-1">
-          <CopyableValue label="Name" value={txtRecord?.name || `_cf-custom-hostname.${subdomain}`} />
-          {txtRecord?.value ? (
-            <CopyableValue label="Value" value={txtRecord.value} />
+          <CopyableValue label="Name" value={ownershipRecord?.name || `_cf-custom-hostname.${subdomain}`} />
+          {ownershipRecord?.value ? (
+            <CopyableValue label="Value" value={ownershipRecord.value} />
           ) : (
             <p className="text-amber-600">
               <span className="text-muted-foreground">Value:</span> Save settings first
@@ -101,24 +104,25 @@ function DnsInstructions({ domain, validationRecords }: { domain: string; valida
       <div className="bg-muted p-3 rounded space-y-2">
         <div className="flex items-center gap-2 mb-2">
           <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-medium">3</span>
-          <span className="font-medium text-foreground text-xs">TXT</span>
+          <span className="font-medium text-foreground text-xs">TXT (SSL Certificate)</span>
         </div>
         <div className="font-mono text-xs space-y-1">
-          <CopyableValue label="Name" value={`_acme-challenge.${subdomain}`} />
-          <p className="text-amber-600 text-xs">
-            <span className="text-muted-foreground">Value:</span> Copy from Cloudflare Dashboard
-          </p>
+          <CopyableValue label="Name" value={sslRecord?.name || `_acme-challenge.${subdomain}`} />
+          {sslRecord?.value ? (
+            <CopyableValue label="Value" value={sslRecord.value} />
+          ) : (
+            <p className="text-amber-600">
+              <span className="text-muted-foreground">Value:</span> Save settings first
+            </p>
+          )}
         </div>
-        <p className="text-[10px] text-muted-foreground">
-          Find this in: SSL/TLS → Custom Hostnames → Click your hostname
-        </p>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
         <p className="font-medium text-amber-800 text-xs">Important:</p>
         <ul className="text-[10px] text-amber-700 list-disc pl-4 space-y-1">
-          {!txtRecord?.value && (
-            <li className="text-purple-700 font-medium">Save settings first to get Record 2 value</li>
+          {(!ownershipRecord?.value || !sslRecord?.value) && (
+            <li className="text-purple-700 font-medium">Save settings first to get TXT values</li>
           )}
           <li>If using Cloudflare DNS, set all records to <strong>DNS only</strong> (gray cloud)</li>
           <li>DNS changes may take up to 24 hours to propagate</li>
