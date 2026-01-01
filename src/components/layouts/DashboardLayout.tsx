@@ -86,18 +86,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const checkSetupProgress = async () => {
     try {
+      // Add small delay to ensure auth cookie is properly set after login redirect
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const [orgsRes, customersRes, productsRes, invoicesRes] = await Promise.all([
-        fetch('/api/organizations', { credentials: 'include' }),
-        fetch('/api/customers', { credentials: 'include' }),
-        fetch('/api/products', { credentials: 'include' }),
-        fetch('/api/invoices', { credentials: 'include' }),
+        fetch('/api/organizations', { credentials: 'include' }).catch(() => null),
+        fetch('/api/customers', { credentials: 'include' }).catch(() => null),
+        fetch('/api/products', { credentials: 'include' }).catch(() => null),
+        fetch('/api/invoices', { credentials: 'include' }).catch(() => null),
       ]);
 
+      // If any request failed completely or returned 401, don't show the banner
+      if (!orgsRes || !orgsRes.ok) {
+        console.log('[SetupProgress] API calls failed or unauthorized, skipping banner');
+        return;
+      }
+
       const [orgs, customers, products, invoices] = await Promise.all([
-        orgsRes.ok ? orgsRes.json() : { organizations: [] },
-        customersRes.ok ? customersRes.json() : { customers: [] },
-        productsRes.ok ? productsRes.json() : { products: [] },
-        invoicesRes.ok ? invoicesRes.json() : { invoices: [] },
+        orgsRes?.ok ? orgsRes.json().catch(() => ({ organizations: [] })) : { organizations: [] },
+        customersRes?.ok ? customersRes.json().catch(() => ({ customers: [] })) : { customers: [] },
+        productsRes?.ok ? productsRes.json().catch(() => ({ products: [] })) : { products: [] },
+        invoicesRes?.ok ? invoicesRes.json().catch(() => ({ invoices: [] })) : { invoices: [] },
       ]);
 
       const steps = [
@@ -117,6 +126,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       });
     } catch (error) {
       console.error('Failed to check setup progress:', error);
+      // Don't break the layout if setup check fails
     }
   };
 

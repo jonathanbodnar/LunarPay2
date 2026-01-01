@@ -108,7 +108,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Define protected routes
-  const protectedRoutes = ['/dashboard', '/organizations', '/invoices', '/customers', '/transactions', '/subscriptions', '/funds', '/payouts', '/settings', '/payment-links'];
+  const protectedRoutes = ['/dashboard', '/organizations', '/invoices', '/customers', '/transactions', '/subscriptions', '/funds', '/payouts', '/settings', '/payment-links', '/getting-started', '/products', '/statements', '/team'];
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
   const isProtectedApi = pathname.startsWith('/api') && !publicApiRoutes.some(route => pathname.startsWith(route));
 
