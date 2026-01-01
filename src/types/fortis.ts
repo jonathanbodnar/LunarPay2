@@ -9,26 +9,24 @@ export interface FortisConfig {
 }
 
 // Merchant Onboarding Types
-// Full list of fields supported by Fortis API for pre-filling MPA form
+// Fields allowed by Fortis API for pre-filling MPA form
 export interface MerchantOnboardingData {
   // Primary Principal (Owner) - Required
   primary_principal: {
     first_name: string;
     last_name: string;
     phone_number: string;
-    // Optional owner details to pre-fill MPA (non-PCI fields only)
-    email?: string;
+    // Optional owner details to pre-fill MPA
     title?: string; // Job title (e.g., "Owner", "CEO")
     ownership_percent?: number; // 1-100
     date_of_birth?: string; // YYYY-MM-DD format
-    // NOTE: SSN is collected by Fortis in their secure MPA iframe, not by us
     // Owner's home address
     address_line_1?: string;
     address_line_2?: string;
     city?: string;
     state_province?: string;
     postal_code?: string;
-    country?: string; // Default: "US"
+    // NOTE: email, country, SSN are collected by Fortis in their secure MPA iframe
   };
   
   // Business contact email
@@ -45,47 +43,36 @@ export interface MerchantOnboardingData {
   ownership_type?: 'llc' | 'llp' | 'corporation' | 'sole_proprietorship' | 'partnership' | 'non_profit';
   business_category?: string; // MCC code or category
   
-  // Estimated volumes (helps with underwriting)
-  annual_revenue?: number; // Estimated annual revenue in cents
-  cc_monthly_volume?: number; // Monthly CC volume in cents
-  ach_monthly_volume?: number; // Monthly ACH volume in cents
-  average_ticket?: number; // Average transaction amount in cents
-  highest_ticket?: number; // Highest expected transaction in cents
-  
-  // Business location
+  // Business location (country not allowed via API)
   location: {
     address_line_1: string;
     address_line_2?: string;
     city: string;
     state_province: string;
     postal_code: string;
-    country?: string; // Default: "US"
     phone_number: string;
   };
   
   // Application delivery method
   app_delivery: 'link_iframe' | 'link_full_page';
   
-  // Bank accounts for deposits
+  // Bank accounts for deposits (account_type not allowed via API)
   bank_account: {
     routing_number: string;
     account_number: string;
     account_holder_name: string;
-    account_type?: 'checking' | 'savings';
   };
   alt_bank_account: {
     routing_number: string;
     account_number: string;
     account_holder_name: string;
-    account_type?: 'checking' | 'savings';
   };
   
-  // Contact information
+  // Contact information (email not allowed via API)
   contact: {
     first_name?: string;
     last_name?: string;
     phone_number: string;
-    email?: string;
   };
   
   // Client reference ID (our organization ID)

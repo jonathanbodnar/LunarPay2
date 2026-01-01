@@ -68,9 +68,6 @@ export default function PaymentSetupPage() {
     merchantCity: '',
     merchantState: '',
     merchantPostalCode: '',
-    // Estimated volumes
-    annualRevenue: '',
-    averageTicket: '',
   });
 
   // Step 2: Bank Account
@@ -78,7 +75,6 @@ export default function PaymentSetupPage() {
     achAccountNumber: '',
     achRoutingNumber: '',
     accountHolderName: '',
-    accountType: 'checking',
   });
 
   useEffect(() => {
@@ -124,8 +120,6 @@ export default function PaymentSetupPage() {
       merchantCity: org.fortisOnboarding?.merchantCity || '',
       merchantState: org.fortisOnboarding?.merchantState || '',
       merchantPostalCode: org.fortisOnboarding?.merchantPostalCode || '',
-      annualRevenue: '',
-      averageTicket: '',
     });
 
     // Set current step based on progress
@@ -221,14 +215,10 @@ export default function PaymentSetupPage() {
           state: merchantInfo.merchantState,
           city: merchantInfo.merchantCity,
           postalCode: merchantInfo.merchantPostalCode,
-          // Volume estimates
-          annualRevenue: merchantInfo.annualRevenue || undefined,
-          averageTicket: merchantInfo.averageTicket || undefined,
           // Bank info
           routingNumber: bankInfo.achRoutingNumber,
           accountNumber: bankInfo.achAccountNumber,
           accountHolderName: bankInfo.accountHolderName,
-          accountType: bankInfo.accountType,
           // Use primary bank account for alternative as well (Fortis requires both)
           altRoutingNumber: bankInfo.achRoutingNumber,
           altAccountNumber: bankInfo.achAccountNumber,
@@ -504,30 +494,6 @@ export default function PaymentSetupPage() {
               </div>
 
               <div className="border-t pt-4 mt-4">
-                <h4 className="text-sm font-medium mb-4">Estimated Processing Volume</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Annual Revenue ($)</Label>
-                    <Input
-                      type="number"
-                      value={merchantInfo.annualRevenue}
-                      onChange={(e) => setMerchantInfo({ ...merchantInfo, annualRevenue: e.target.value })}
-                      placeholder="100000"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Average Transaction ($)</Label>
-                    <Input
-                      type="number"
-                      value={merchantInfo.averageTicket}
-                      onChange={(e) => setMerchantInfo({ ...merchantInfo, averageTicket: e.target.value })}
-                      placeholder="50"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t pt-4 mt-4">
                 <h4 className="text-sm font-medium mb-4">Business Address</h4>
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -630,7 +596,7 @@ export default function PaymentSetupPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Account Number *</Label>
                   <Input
@@ -650,17 +616,6 @@ export default function PaymentSetupPage() {
                     placeholder="123456789"
                     maxLength={9}
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label>Account Type *</Label>
-                  <select
-                    className="w-full h-10 px-3 rounded-lg border border-border bg-background"
-                    value={bankInfo.accountType}
-                    onChange={(e) => setBankInfo({ ...bankInfo, accountType: e.target.value })}
-                  >
-                    <option value="checking">Checking</option>
-                    <option value="savings">Savings</option>
-                  </select>
                 </div>
               </div>
 
