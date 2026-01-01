@@ -66,7 +66,7 @@ function DnsInstructions({ domain }: { domain: string }) {
         </div>
         <div className="font-mono text-xs space-y-1">
           <CopyableValue label="Name" value={subdomain} />
-          <CopyableValue label="Value" value="new.lunarpay.com" />
+          <CopyableValue label="Value" value="app.lunarpay.com" />
         </div>
       </div>
 

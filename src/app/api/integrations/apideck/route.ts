@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
     // Create Vault session
     const consumerId = `org_${organization.id}`;
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://new.lunarpay.com';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com';
     const redirectUri = `${baseUrl}/settings/integrations?connected=true`;
 
     const session = await createVaultSession(consumerId, redirectUri, connectorId);
