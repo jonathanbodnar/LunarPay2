@@ -17,9 +17,11 @@ import {
   Menu,
   X,
   HelpCircle,
-  ChevronDown
+  ChevronDown,
+  Rocket,
+  ArrowRight
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 
 interface NavItem {
@@ -65,11 +67,58 @@ const navigation: NavItem[] = [
   },
 ];
 
+interface SetupProgress {
+  completed: number;
+  total: number;
+  isComplete: boolean;
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>(['Payments']);
+  const [setupProgress, setSetupProgress] = useState<SetupProgress | null>(null);
+
+  useEffect(() => {
+    checkSetupProgress();
+  }, []);
+
+  const checkSetupProgress = async () => {
+    try {
+      const [orgsRes, customersRes, productsRes, invoicesRes] = await Promise.all([
+        fetch('/api/organizations', { credentials: 'include' }),
+        fetch('/api/customers', { credentials: 'include' }),
+        fetch('/api/products', { credentials: 'include' }),
+        fetch('/api/invoices', { credentials: 'include' }),
+      ]);
+
+      const [orgs, customers, products, invoices] = await Promise.all([
+        orgsRes.ok ? orgsRes.json() : { organizations: [] },
+        customersRes.ok ? customersRes.json() : { customers: [] },
+        productsRes.ok ? productsRes.json() : { products: [] },
+        invoicesRes.ok ? invoicesRes.json() : { invoices: [] },
+      ]);
+
+      const steps = [
+        orgs.organizations?.length > 0,
+        customers.customers?.length > 0,
+        products.products?.length > 0,
+        invoices.invoices?.length > 0,
+        false, // Branding - TODO: check if set
+        orgs.organizations?.[0]?.fortisOnboarding?.appStatus === 'ACTIVE',
+      ];
+
+      const completed = steps.filter(Boolean).length;
+      setSetupProgress({
+        completed,
+        total: steps.length,
+        isComplete: completed === steps.length,
+      });
+    } catch (error) {
+      console.error('Failed to check setup progress:', error);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -255,6 +304,41 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Button>
           </div>
         </header>
+
+        {/* Setup Progress Banner */}
+        {setupProgress && !setupProgress.isComplete && pathname !== '/getting-started' && (
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0 p-1.5 bg-white/20 rounded-full">
+                    <Rocket className="h-4 w-4" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Complete your setup</span>
+                    <span className="hidden sm:inline text-white/80">
+                      – {setupProgress.completed}/{setupProgress.total} steps done
+                    </span>
+                  </div>
+                </div>
+                <Link
+                  href="/getting-started"
+                  className="flex items-center gap-1 text-sm font-medium bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Continue
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+              {/* Progress bar */}
+              <div className="mt-2 h-1 bg-white/20 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-white rounded-full transition-all duration-500"
+                  style={{ width: `${(setupProgress.completed / setupProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         <main className="py-8">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
