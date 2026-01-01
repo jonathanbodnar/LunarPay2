@@ -13,6 +13,7 @@ const APP_DOMAINS = [
   'new.lunarpay.com',
   'app.lunarpay.com',
   'lunarpay.com',
+  'portal.lunarpay.com',
 ];
 
 // Routes that don't require authentication

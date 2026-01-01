@@ -211,6 +211,8 @@ export function getDcvDelegationTarget(): string {
  * Get the CNAME target that merchants should point their domain to
  */
 export function getPortalCnameTarget(): string {
-  return 'portal.lunarpay.com';
+  // For development, use Railway directly
+  // For production, use the Cloudflare for SaaS fallback origin
+  return process.env.PORTAL_CNAME_TARGET || 'lunarpay2-development.up.railway.app';
 }
 

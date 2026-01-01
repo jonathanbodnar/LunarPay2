@@ -55,31 +55,31 @@ function CopyableValue({ value, label }: { value: string; label: string }) {
 
 function DnsInstructions({ domain }: { domain: string }) {
   const subdomain = domain.split('.')[0];
+  // For development, use Railway directly. For production, this should be portal.lunarpay.com
+  const cnameTarget = 'lunarpay2-development.up.railway.app';
   
   return (
     <div className="text-xs text-muted-foreground space-y-3 mt-3">
-      <p className="font-medium text-foreground">Add these DNS records to your domain:</p>
+      <p className="font-medium text-foreground">Setup Instructions:</p>
       
       <div className="bg-muted p-3 rounded space-y-2">
-        <p className="font-medium text-foreground text-xs">1. Main CNAME (points your domain to LunarPay)</p>
+        <p className="font-medium text-foreground text-xs">Step 1: Add CNAME record to your DNS</p>
         <div className="font-mono text-xs space-y-1">
           <CopyableValue label="Type" value="CNAME" />
           <CopyableValue label="Name" value={subdomain} />
-          <CopyableValue label="Value" value="portal.lunarpay.com" />
+          <CopyableValue label="Value" value={cnameTarget} />
         </div>
       </div>
 
       <div className="bg-muted p-3 rounded space-y-2">
-        <p className="font-medium text-foreground text-xs">2. DCV CNAME (for SSL certificate validation)</p>
-        <div className="font-mono text-xs space-y-1">
-          <CopyableValue label="Type" value="CNAME" />
-          <CopyableValue label="Name" value={`_acme-challenge.${subdomain}`} />
-          <CopyableValue label="Value" value="066217d657c42286.dcv.cloudflare.com" />
-        </div>
+        <p className="font-medium text-foreground text-xs">Step 2: Add custom domain in Railway</p>
+        <p className="text-xs">
+          Go to your Railway dashboard → Settings → Custom Domains → Add <code className="bg-background px-1 rounded">{domain}</code>
+        </p>
       </div>
 
       <p className="text-amber-600">
-        ⚠️ Both records are required for the custom domain to work with SSL.
+        ⚠️ SSL certificate will be automatically provisioned by Railway after both steps are complete.
       </p>
     </div>
   );
