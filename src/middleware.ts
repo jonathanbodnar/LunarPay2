@@ -36,6 +36,7 @@ const publicApiRoutes = [
   '/api/admin/add-email-templates-table', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-team-tables', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/enable-portal', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/add-onboarding-columns', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/debug-products', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-customer-sessions-table', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-zapier-table', // TEMPORARY - DELETE AFTER USE!
