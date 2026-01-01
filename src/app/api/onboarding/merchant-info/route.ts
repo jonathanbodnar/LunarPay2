@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 // Validation schema for Merchant Information (Primary Principal + Merchant Business Info)
@@ -51,8 +52,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if already completed onboarding
-    if (organization.fortisOnboarding?.appStatus === 'ACTIVE') {
+    // Check if already completed onboarding (future-proof for additional statuses)
+    const completedStatuses = ['ACTIVE'];
+    if (organization.fortisOnboarding?.appStatus && 
+        completedStatuses.includes(organization.fortisOnboarding.appStatus)) {
       return NextResponse.json(
         { status: false, message: 'Organization already onboarded' },
         { status: 400 }
@@ -99,8 +102,8 @@ export async function POST(request: Request) {
       },
     });
 
-    // Update or create Fortis onboarding record
-    const onboardingData: any = {
+    // Update or create Fortis onboarding record with type safety
+    const onboardingData: Prisma.FortisOnboardingUpdateInput = {
       signFirstName: validatedData.signFirstName,
       signLastName: validatedData.signLastName,
       signPhoneNumber: validatedData.signPhoneNumber,
@@ -109,11 +112,8 @@ export async function POST(request: Request) {
       merchantState: validatedData.merchantState,
       merchantCity: validatedData.merchantCity,
       merchantPostalCode: validatedData.merchantPostalCode,
+      stepCompleted: 1, // Merchant information step completed
     };
-    
-    // Add stepCompleted - will work after Prisma Client is regenerated and server restarted
-    // If you get an error, restart the Next.js dev server after running: npx prisma generate
-    onboardingData.stepCompleted = 1;
 
     if (organization.fortisOnboarding) {
       await prisma.fortisOnboarding.update({
@@ -121,13 +121,23 @@ export async function POST(request: Request) {
         data: onboardingData,
       });
     } else {
+      // Create data with proper type safety - using direct fields as per schema
+      const createData = {
+        signFirstName: validatedData.signFirstName,
+        signLastName: validatedData.signLastName,
+        signPhoneNumber: validatedData.signPhoneNumber,
+        email: validatedData.email,
+        merchantAddressLine1: validatedData.merchantAddressLine1,
+        merchantState: validatedData.merchantState,
+        merchantCity: validatedData.merchantCity,
+        merchantPostalCode: validatedData.merchantPostalCode,
+        stepCompleted: 1,
+        userId: currentUser.userId,
+        organizationId: validatedData.organizationId,
+        appStatus: 'PENDING',
+      } satisfies Prisma.FortisOnboardingCreateInput;
       await prisma.fortisOnboarding.create({
-        data: {
-          ...onboardingData,
-          userId: currentUser.userId,
-          organizationId: validatedData.organizationId,
-          appStatus: 'PENDING',
-        },
+        data: createData,
       });
     }
 
