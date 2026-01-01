@@ -341,27 +341,46 @@ export class FortisClient {
 
 /**
  * Factory function to create Fortis client
+ * Uses environment variables matching original LunarPay config:
+ * - fortis_environment: 'dev' or 'prd'
+ * - fortis_developer_id_sandbox / fortis_developer_id_production
+ * - fortis_onboarding_user_id_sandbox / fortis_onboarding_user_id_production
+ * - fortis_onboarding_user_api_key_sandbox / fortis_onboarding_user_api_key_production
  */
 export function createFortisClient(
   environment?: 'sandbox' | 'production',
   userId?: string,
   userApiKey?: string
 ): FortisClient {
-  const env = environment || (process.env.FORTIS_ENVIRONMENT as 'sandbox' | 'production') || 'sandbox';
+  // Map 'dev' to 'sandbox', 'prd' to 'production'
+  const fortisEnv = process.env.fortis_environment || 'dev';
+  const env = environment || (fortisEnv === 'prd' ? 'production' : 'sandbox');
   
   const config: FortisConfig = {
     environment: env,
     developerId: env === 'sandbox'
-      ? process.env.FORTIS_DEVELOPER_ID_SANDBOX!
-      : process.env.FORTIS_DEVELOPER_ID_PRODUCTION!,
+      ? (process.env.fortis_developer_id_sandbox || process.env.FORTIS_DEVELOPER_ID_SANDBOX!)
+      : (process.env.fortis_developer_id_production || process.env.FORTIS_DEVELOPER_ID_PRODUCTION!),
     userId: userId || (env === 'sandbox'
-      ? process.env.FORTIS_USER_ID_SANDBOX!
-      : process.env.FORTIS_USER_ID_PRODUCTION!),
+      ? (process.env.fortis_onboarding_user_id_sandbox || process.env.FORTIS_USER_ID_SANDBOX!)
+      : (process.env.fortis_onboarding_user_id_production || process.env.FORTIS_USER_ID_PRODUCTION!)),
     userApiKey: userApiKey || (env === 'sandbox'
-      ? process.env.FORTIS_USER_API_KEY_SANDBOX!
-      : process.env.FORTIS_USER_API_KEY_PRODUCTION!),
+      ? (process.env.fortis_onboarding_user_api_key_sandbox || process.env.FORTIS_USER_API_KEY_SANDBOX!)
+      : (process.env.fortis_onboarding_user_api_key_production || process.env.FORTIS_USER_API_KEY_PRODUCTION!)),
   };
 
   return new FortisClient(config);
+}
+
+/**
+ * Get Fortis location ID for transaction operations
+ */
+export function getFortisLocationId(): string {
+  const fortisEnv = process.env.fortis_environment || 'dev';
+  const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
+  
+  return env === 'sandbox'
+    ? (process.env.fortis_location_id_sandbox || process.env.FORTIS_LOCATION_ID_SANDBOX || '')
+    : (process.env.fortis_location_id_production || process.env.FORTIS_LOCATION_ID_PRODUCTION || '');
 }
 

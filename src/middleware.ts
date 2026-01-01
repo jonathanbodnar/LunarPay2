@@ -47,6 +47,7 @@ const publicApiRoutes = [
   '/api/admin/debug-sessions', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/debug-custom-domain', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/link-org', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/add-fortis-tables', // TEMPORARY - DELETE AFTER USE!
   '/api/zapier', // Zapier integration endpoints (use API key auth)
   '/api/team/invite', // Public invite endpoints
   '/api/invoices/public',

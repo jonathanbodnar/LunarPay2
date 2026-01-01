@@ -56,9 +56,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Determine test mode
-    const isTest = process.env.FORTIS_ENVIRONMENT !== 'prd';
-    const templateCode = isTest ? 'Testing1234' : (organization.fortisTemplate || 'ActiveBase4');
+    // Determine test mode (fortis_environment: 'dev' or 'prd')
+    const isTest = process.env.fortis_environment !== 'prd';
+    const templateCode = isTest ? 'Testing1234' : (organization.fortisTemplate || process.env.FORTIS_TPL_DEFAULT || 'ActiveBase4');
 
     // Prepare Fortis onboarding data
     const merchantData: MerchantOnboardingData = {
