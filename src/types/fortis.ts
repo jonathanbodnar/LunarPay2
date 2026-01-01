@@ -57,12 +57,11 @@ export interface MerchantOnboardingData {
   app_delivery: 'link_iframe' | 'link_full_page';
   
   // Bank accounts for deposits
-  // deposit_type: 'checking' or 'savings'
+  // Note: deposit_type only allowed on alt_bank_account, not bank_account
   bank_account: {
     routing_number: string;
     account_number: string;
     account_holder_name: string;
-    deposit_type: 'checking' | 'savings';
   };
   alt_bank_account: {
     routing_number: string;
