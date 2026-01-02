@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
     const organizationId = searchParams.get('organizationId');
+    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 100;
 
     const where: any = {
       organization: {
@@ -69,7 +70,7 @@ export async function GET(request: Request) {
         },
       },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      take: limit,
     });
 
     return NextResponse.json({ transactions });
