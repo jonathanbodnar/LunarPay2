@@ -108,7 +108,25 @@ export default function PaymentSetupPage() {
 
   const refreshApplicationStatus = async () => {
     setRefreshingStatus(true);
+    setError('');
     try {
+      // First, check status directly from Fortis
+      if (selectedOrg?.id) {
+        const fortisRes = await fetch(`/api/fortis/check-status?organizationId=${selectedOrg.id}`, { 
+          credentials: 'include' 
+        });
+        if (fortisRes.ok) {
+          const fortisData = await fortisRes.json();
+          if (fortisData.appStatus === 'ACTIVE') {
+            setSuccess('Your application has been approved!');
+          } else if (fortisData.fortisStatus) {
+            // Show Fortis status if available
+            setSuccess(`Status: ${fortisData.fortisStatus}${fortisData.statusMessage ? ` - ${fortisData.statusMessage}` : ''}`);
+          }
+        }
+      }
+
+      // Then refresh organization data
       const res = await fetch('/api/organizations', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
@@ -122,6 +140,7 @@ export default function PaymentSetupPage() {
       }
     } catch (err) {
       console.error('Failed to refresh status:', err);
+      setError('Failed to check status. Please try again.');
     } finally {
       setRefreshingStatus(false);
     }

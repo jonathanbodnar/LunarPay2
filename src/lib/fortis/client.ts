@@ -133,6 +133,54 @@ export class FortisClient {
   }
 
   /**
+   * GET MERCHANT APPLICATION STATUS
+   * GET /v1/onboarding/{client_app_id}
+   * 
+   * Retrieves the current status of a merchant onboarding application
+   */
+  async getOnboardingStatus(clientAppId: string): Promise<{
+    status: boolean;
+    data?: {
+      id: string;
+      client_app_id: string;
+      status: string;
+      status_message?: string;
+      users?: Array<{
+        user_id: string;
+        user_api_key: string;
+        location_id?: string;
+        locations?: Array<{ id: string }>;
+      }>;
+      locations?: Array<{
+        id: string;
+        product_transactions?: Array<{ id: string }>;
+      }>;
+    };
+    message?: string;
+  }> {
+    try {
+      const response = await this.client.get(`onboarding/${clientAppId}`);
+      
+      if (response.data?.data) {
+        return {
+          status: true,
+          data: response.data.data,
+        };
+      }
+      
+      return {
+        status: false,
+        message: 'No data returned from Fortis',
+      };
+    } catch (error) {
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
    * 2. TRANSACTION INTENTION (Elements)
    * POST /v1/elements/transaction/intention
    * 
