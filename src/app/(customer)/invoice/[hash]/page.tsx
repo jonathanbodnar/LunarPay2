@@ -434,6 +434,7 @@ export default function PublicInvoicePage() {
                 </div>
               )}
               <p className="text-gray-600 text-sm">Pay <span className="font-medium text-gray-900">{invoice.organization.name}</span> easily.</p>
+              <p className="text-gray-500 text-xs mt-1">Invoice #{invoice.reference || invoice.id}</p>
             </div>
 
             {/* Amount Due */}
