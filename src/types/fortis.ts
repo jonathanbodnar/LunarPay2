@@ -158,10 +158,29 @@ export interface RefundResponse {
 export interface FortisWebhookPayload {
   client_app_id: string;
   stage: 'sandbox' | 'production';
+  // Merchant credentials and location
   users?: Array<{
     user_id: string;
     user_api_key: string;
+    // Location may be included per user
+    location_id?: string;
+    locations?: Array<{
+      id: string;
+      name?: string;
+    }>;
   }>;
+  // Location might also be at the top level
+  location_id?: string;
+  locations?: Array<{
+    id: string;
+    name?: string;
+    product_transactions?: Array<{
+      id: string;
+      payment_method: string;
+    }>;
+  }>;
+  // Additional fields that may be in the webhook
+  product_transaction_id?: string;
 }
 
 // Reason Codes

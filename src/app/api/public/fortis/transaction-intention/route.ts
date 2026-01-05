@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     // Get merchant credentials
     const merchantUserId = organization.fortisOnboarding.authUserId;
     const merchantApiKey = organization.fortisOnboarding.authUserApiKey;
-    const locationId = organization.fortisOnboarding.locationId;
+    let locationId = organization.fortisOnboarding.locationId;
 
     if (!merchantUserId || !merchantApiKey) {
       return NextResponse.json(
@@ -65,23 +65,46 @@ export async function POST(request: Request) {
       );
     }
 
-    // Location ID is critical - if not stored, use sandbox default for testing
+    // Determine environment
     const fortisEnv = process.env.fortis_environment || 'dev';
-    let effectiveLocationId = locationId;
-    
-    if (!effectiveLocationId) {
-      if (fortisEnv === 'dev') {
-        // Use sandbox location for testing
-        effectiveLocationId = process.env.fortis_location_id_sandbox || process.env.FORTIS_LOCATION_ID_SANDBOX;
+    const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
+
+    // Create Fortis client with merchant credentials
+    const fortisClient = createFortisClient(
+      env as 'sandbox' | 'production',
+      merchantUserId,
+      merchantApiKey
+    );
+
+    // If location_id is not stored, try to fetch it from Fortis API
+    if (!locationId) {
+      console.log('[PUBLIC Fortis Intention] Location ID missing, fetching from API...');
+      
+      const locationsResult = await fortisClient.getLocations();
+      
+      if (locationsResult.status && locationsResult.locations && locationsResult.locations.length > 0) {
+        locationId = locationsResult.locations[0].id;
+        
+        console.log('[PUBLIC Fortis Intention] Fetched location_id:', locationId);
+        
+        // Save it for future use
+        await prisma.fortisOnboarding.update({
+          where: { id: organization.fortisOnboarding.id },
+          data: { 
+            locationId,
+            updatedAt: new Date(),
+          },
+        });
       } else {
+        console.error('[PUBLIC Fortis Intention] Failed to fetch locations:', locationsResult.message);
         return NextResponse.json(
-          { error: 'Merchant location not configured' },
+          { error: 'Merchant payment location not configured. Please contact the merchant.' },
           { status: 400 }
         );
       }
     }
 
-    if (!effectiveLocationId) {
+    if (!locationId) {
       return NextResponse.json(
         { error: 'Payment location not configured. Please contact support.' },
         { status: 400 }
@@ -93,17 +116,9 @@ export async function POST(request: Request) {
     // Otherwise use 'sale' for direct payment
     const fortisAction = savePaymentMethod && !amount ? 'store' : (action || 'sale');
 
-    // Create Fortis client with merchant credentials
-    const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
-    const fortisClient = createFortisClient(
-      env as 'sandbox' | 'production',
-      merchantUserId,
-      merchantApiKey
-    );
-
     // Build transaction intention data
     const intentionData: Record<string, any> = {
-      location_id: effectiveLocationId,
+      location_id: locationId,
       action: fortisAction,
     };
 
@@ -121,9 +136,10 @@ export async function POST(request: Request) {
       organizationId,
       action: fortisAction,
       amount: intentionData.amount,
-      locationId: effectiveLocationId,
+      locationId,
       type,
       referenceId,
+      environment: env,
     });
 
     // Create transaction intention
@@ -142,7 +158,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       clientToken: result.clientToken,
-      locationId: effectiveLocationId,
+      locationId,
       environment: env,
     });
   } catch (error) {

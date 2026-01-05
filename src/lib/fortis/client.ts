@@ -305,6 +305,96 @@ export class FortisClient {
   }
 
   /**
+   * 6. GET LOCATIONS
+   * GET /v1/locations
+   * 
+   * Fetches locations for the authenticated user
+   * Used when location_id is not provided in onboarding webhook
+   */
+  async getLocations(): Promise<{
+    status: boolean;
+    locations?: Array<{
+      id: string;
+      name: string;
+      product_transactions?: Array<{
+        id: string;
+        payment_method: string;
+      }>;
+    }>;
+    message?: string;
+  }> {
+    try {
+      const response = await this.client.get('locations');
+      
+      if (response.data?.list && Array.isArray(response.data.list)) {
+        return {
+          status: true,
+          locations: response.data.list.map((loc: any) => ({
+            id: loc.id,
+            name: loc.name || loc.dba_name || 'Unknown',
+            product_transactions: loc.product_transactions,
+          })),
+        };
+      }
+      
+      return {
+        status: false,
+        message: 'No locations found',
+      };
+    } catch (error) {
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
+   * 7. GET LOCATION DETAILS
+   * GET /v1/locations/{locationId}
+   * 
+   * Fetches details for a specific location
+   */
+  async getLocation(locationId: string): Promise<{
+    status: boolean;
+    location?: {
+      id: string;
+      name: string;
+      product_transactions?: Array<{
+        id: string;
+        payment_method: string;
+      }>;
+    };
+    message?: string;
+  }> {
+    try {
+      const response = await this.client.get(`locations/${locationId}`);
+      
+      if (response.data?.data) {
+        const loc = response.data.data;
+        return {
+          status: true,
+          location: {
+            id: loc.id,
+            name: loc.name || loc.dba_name || 'Unknown',
+            product_transactions: loc.product_transactions,
+          },
+        };
+      }
+      
+      return {
+        status: false,
+        message: 'Location not found',
+      };
+    } catch (error) {
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
    * Format error for user-friendly message
    */
   private formatError(error: unknown): string {

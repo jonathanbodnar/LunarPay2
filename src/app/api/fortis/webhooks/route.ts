@@ -50,7 +50,17 @@ export async function POST(request: Request) {
  * Handle merchant onboarding webhook
  */
 async function handleMerchantOnboardingWebhook(body: FortisWebhookPayload) {
-  const { client_app_id, stage, users } = body;
+  const { client_app_id, stage, users, locations, location_id: topLevelLocationId, product_transaction_id: topLevelProductTxId } = body;
+
+  console.log('[Fortis Webhook] Merchant onboarding webhook received:', {
+    client_app_id,
+    stage,
+    hasUsers: !!users?.length,
+    hasLocations: !!locations?.length,
+    topLevelLocationId,
+    topLevelProductTxId,
+    fullPayload: JSON.stringify(body, null, 2),
+  });
 
   await logWebhookReceived('merchant_onboarding', parseInt(client_app_id));
 
@@ -82,16 +92,64 @@ async function handleMerchantOnboardingWebhook(body: FortisWebhookPayload) {
   if (users && users.length > 0) {
     const merchantUser = users[0];
     
+    // Extract location_id from various possible places in the webhook
+    let locationId: string | null = null;
+    let productTransactionId: string | null = null;
+    
+    // Priority 1: User's location_id
+    if (merchantUser.location_id) {
+      locationId = merchantUser.location_id;
+    }
+    
+    // Priority 2: User's locations array
+    if (!locationId && merchantUser.locations && merchantUser.locations.length > 0) {
+      locationId = merchantUser.locations[0].id;
+    }
+    
+    // Priority 3: Top-level location_id
+    if (!locationId && topLevelLocationId) {
+      locationId = topLevelLocationId;
+    }
+    
+    // Priority 4: Top-level locations array
+    if (!locationId && locations && locations.length > 0) {
+      locationId = locations[0].id;
+      // Also try to get product_transaction_id from location
+      if (locations[0].product_transactions && locations[0].product_transactions.length > 0) {
+        productTransactionId = locations[0].product_transactions[0].id;
+      }
+    }
+    
+    // Get product_transaction_id
+    if (!productTransactionId && topLevelProductTxId) {
+      productTransactionId = topLevelProductTxId;
+    }
+    
+    console.log('[Fortis Webhook] Extracted credentials:', {
+      userId: merchantUser.user_id,
+      locationId,
+      productTransactionId,
+    });
+
     // Update onboarding record with merchant credentials
     await prisma.fortisOnboarding.update({
       where: { id: organization.fortisOnboarding.id },
       data: {
         authUserId: merchantUser.user_id,
         authUserApiKey: merchantUser.user_api_key,
+        locationId: locationId,
+        productTransactionId: productTransactionId,
         appStatus: 'ACTIVE',
+        processorResponse: JSON.stringify(body), // Store full webhook for debugging
         updatedAt: new Date(),
       },
     });
+
+    // Log if location_id was not found (will need manual resolution)
+    if (!locationId) {
+      console.warn('[Fortis Webhook] WARNING: location_id not found in webhook for org:', organizationId);
+      console.warn('[Fortis Webhook] Full payload:', JSON.stringify(body, null, 2));
+    }
 
     // TODO: Send email notification to merchant
     // "Your account is ready for receiving payments!"
@@ -99,6 +157,7 @@ async function handleMerchantOnboardingWebhook(body: FortisWebhookPayload) {
     return NextResponse.json({
       status: true,
       message: 'Merchant onboarding webhook processed successfully',
+      locationId: locationId || 'not_found',
     });
   }
 
