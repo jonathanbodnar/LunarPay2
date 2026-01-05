@@ -83,6 +83,7 @@ export default function PaymentLinkPage() {
   const [fortisLoaded, setFortisLoaded] = useState(false);
   const [payForm, setPayForm] = useState<any>(null);
   const [demoMode, setDemoMode] = useState(false);
+  const [fortisEnvironment, setFortisEnvironment] = useState<'sandbox' | 'production'>('production');
   
   // Demo form state (for screenshot/preview when Fortis not configured)
   const [demoCardNumber, setDemoCardNumber] = useState('');
@@ -135,13 +136,18 @@ export default function PaymentLinkPage() {
 
   // Initialize Fortis payment form when token and total are ready
   useEffect(() => {
-    if (!clientToken || !fortisLoaded || !window.PayForm) return;
+    if (!clientToken || !fortisLoaded || !window.PayForm) {
+      console.log('[Fortis] Not ready:', { clientToken: !!clientToken, fortisLoaded, hasPayForm: !!window.PayForm });
+      return;
+    }
+
+    console.log('[Fortis] Initializing payment form with environment:', fortisEnvironment);
 
     try {
       const config = {
         container: '#payment-form-container',
         theme: 'default',
-        environment: 'sandbox',
+        environment: fortisEnvironment,
         floatingLabels: true,
         showReceipt: false,
         showSubmitButton: false,
@@ -168,6 +174,7 @@ export default function PaymentLinkPage() {
         },
       };
 
+      console.log('[Fortis] Creating PayForm with config:', JSON.stringify(config, null, 2));
       const form = new window.PayForm(clientToken, config);
       
       form.on('ready', () => {
@@ -189,7 +196,7 @@ export default function PaymentLinkPage() {
       console.error('[Fortis] Init error:', err);
       setPaymentError('Failed to initialize payment form');
     }
-  }, [clientToken, fortisLoaded, paymentMethod, primaryColor]);
+  }, [clientToken, fortisLoaded, paymentMethod, primaryColor, fortisEnvironment]);
 
   const fetchPaymentLink = async () => {
     try {
@@ -244,7 +251,9 @@ export default function PaymentLinkPage() {
       
       if (data.success && data.clientToken) {
         setClientToken(data.clientToken);
+        setFortisEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
         setDemoMode(false);
+        console.log('[PaymentLink] Got Fortis token, environment:', data.environment);
       } else {
         // Enable demo mode for screenshots/preview when Fortis not configured
         console.log('[PaymentLink] Enabling demo mode - Fortis not configured');

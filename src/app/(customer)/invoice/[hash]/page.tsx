@@ -90,6 +90,7 @@ export default function PublicInvoicePage() {
   const [fortisLoaded, setFortisLoaded] = useState(false);
   const [payForm, setPayForm] = useState<any>(null);
   const [demoMode, setDemoMode] = useState(false);
+  const [fortisEnvironment, setFortisEnvironment] = useState<'sandbox' | 'production'>('production');
   
   // Demo form state (for screenshot/preview when Fortis not configured)
   const [demoCardNumber, setDemoCardNumber] = useState('');
@@ -134,14 +135,19 @@ export default function PublicInvoicePage() {
 
   // Initialize Fortis payment form when token is available
   useEffect(() => {
-    if (!clientToken || !fortisLoaded || !window.PayForm) return;
+    if (!clientToken || !fortisLoaded || !window.PayForm) {
+      console.log('[Fortis] Not ready:', { clientToken: !!clientToken, fortisLoaded, hasPayForm: !!window.PayForm });
+      return;
+    }
+
+    console.log('[Fortis] Initializing payment form with environment:', fortisEnvironment);
 
     try {
       // Configure payment form
       const config = {
         container: '#payment-form-container',
         theme: 'default',
-        environment: 'sandbox', // Will be overridden by token
+        environment: fortisEnvironment,
         floatingLabels: true,
         showReceipt: false,
         showSubmitButton: false, // We'll use our own button
@@ -171,6 +177,7 @@ export default function PublicInvoicePage() {
         },
       };
 
+      console.log('[Fortis] Creating PayForm with config:', JSON.stringify(config, null, 2));
       const form = new window.PayForm(clientToken, config);
       
       form.on('ready', () => {
@@ -192,7 +199,7 @@ export default function PublicInvoicePage() {
       console.error('[Fortis] Init error:', err);
       setPaymentError('Failed to initialize payment form');
     }
-  }, [clientToken, fortisLoaded, paymentMethod, primaryColor]);
+  }, [clientToken, fortisLoaded, paymentMethod, primaryColor, fortisEnvironment]);
 
   const fetchInvoice = async () => {
     try {
@@ -237,7 +244,9 @@ export default function PublicInvoicePage() {
       
       if (data.success && data.clientToken) {
         setClientToken(data.clientToken);
+        setFortisEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
         setDemoMode(false);
+        console.log('[Invoice] Got Fortis token, environment:', data.environment);
       } else {
         // Enable demo mode for screenshots/preview when Fortis not configured
         console.log('[Invoice] Enabling demo mode - Fortis not configured');
