@@ -218,10 +218,11 @@ async function handleTransactionStatusWebhook(body: any) {
       });
 
       await logPaymentStatusUpdated(
-        transaction.id.toString(),
+        transactionId.toString(),
         oldStatus || 'unknown',
         newStatus,
-        { fortisTransactionId: transactionId }
+        transaction.id,
+        { source: 'fortis_webhook' }
       );
 
       // Update donor totals if status changed from failed to succeeded
