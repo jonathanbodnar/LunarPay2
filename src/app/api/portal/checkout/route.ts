@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getPortalSession } from '@/lib/portal-auth';
+import { createFortisClient } from '@/lib/fortis/client';
+import { dollarsToCents, calculateFee } from '@/lib/utils';
+import { logPaymentEvent } from '@/lib/payment-logger';
 
 // POST /api/portal/checkout - Process a purchase or subscription
 export async function POST(request: Request) {
@@ -47,6 +50,7 @@ export async function POST(request: Request) {
         id: paymentMethodId,
         donorId: session.customerId,
         organizationId: session.organizationId,
+        isActive: true,
       },
     });
 
@@ -57,27 +61,172 @@ export async function POST(request: Request) {
       );
     }
 
-    // TODO: Integrate with actual payment processor (Fortis)
-    // For now, we'll create the records but not actually charge
-    
+    if (!paymentMethod.fortisWalletId) {
+      return NextResponse.json(
+        { error: 'Payment method is not configured for processing' },
+        { status: 400 }
+      );
+    }
+
+    // Get organization with Fortis credentials
+    const organization = await prisma.organization.findUnique({
+      where: { id: session.organizationId },
+      include: {
+        fortisOnboarding: true,
+      },
+    });
+
+    if (!organization?.fortisOnboarding?.authUserId) {
+      return NextResponse.json(
+        { error: 'Payment processing is not configured for this merchant' },
+        { status: 400 }
+      );
+    }
+
+    // Get customer info
+    const customer = await prisma.donor.findUnique({
+      where: { id: session.customerId },
+    });
+
+    if (!customer) {
+      return NextResponse.json(
+        { error: 'Customer not found' },
+        { status: 404 }
+      );
+    }
+
+    const amount = Number(product.price);
+    const fee = calculateFee(amount, 0.023, 0.30);
+    const netAmount = amount - fee;
+
     console.log('[PORTAL CHECKOUT] Processing purchase:', {
       customerId: session.customerId,
       productId: product.id,
       productName: product.name,
-      price: product.price,
+      price: amount,
       isSubscription: product.isSubscription,
       paymentMethodId: paymentMethod.id,
     });
 
-    if (product.isSubscription) {
-      // Create subscription record
+    // For subscriptions with trial period, don't charge now
+    const hasTrialPeriod = product.isSubscription && product.subscriptionTrialDays && product.subscriptionTrialDays > 0;
+    
+    if (hasTrialPeriod) {
+      // Create subscription without charging (first charge on trial end)
       const nextPaymentDate = new Date();
-      
-      // Apply trial period if exists
-      if (product.subscriptionTrialDays && product.subscriptionTrialDays > 0) {
-        nextPaymentDate.setDate(nextPaymentDate.getDate() + product.subscriptionTrialDays);
-      } else {
-        // Set next payment based on interval
+      nextPaymentDate.setDate(nextPaymentDate.getDate() + (product.subscriptionTrialDays || 0));
+
+      const subscription = await prisma.subscription.create({
+        data: {
+          userId: organization.userId,
+          organizationId: session.organizationId,
+          donorId: session.customerId,
+          sourceId: paymentMethod.id,
+          firstName: customer.firstName || '',
+          lastName: customer.lastName || '',
+          email: customer.email || '',
+          amount,
+          frequency: mapInterval(product.subscriptionInterval),
+          status: 'A',
+          nextPaymentOn: nextPaymentDate,
+          source: paymentMethod.sourceType === 'ach' ? 'ACH' : 'CC',
+          givingSource: 'portal',
+          template: 'lunarpayfr',
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Subscription started with ${product.subscriptionTrialDays} day trial`,
+        subscription: {
+          id: subscription.id,
+          productName: product.name,
+          amount,
+          interval: product.subscriptionInterval,
+          nextPaymentDate: nextPaymentDate.toISOString(),
+          trialDays: product.subscriptionTrialDays,
+        },
+      });
+    }
+
+    // Create Fortis client with merchant credentials
+    const fortisEnv = process.env.fortis_environment || 'dev';
+    const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
+    const fortisClient = createFortisClient(
+      env as 'sandbox' | 'production',
+      organization.fortisOnboarding.authUserId,
+      organization.fortisOnboarding.authUserApiKey!
+    );
+
+    // Create transaction record (pending)
+    const transaction = await prisma.transaction.create({
+      data: {
+        userId: organization.userId,
+        organizationId: session.organizationId,
+        donorId: session.customerId,
+        firstName: customer.firstName || '',
+        lastName: customer.lastName || '',
+        email: customer.email || '',
+        totalAmount: amount,
+        subTotalAmount: netAmount,
+        fee,
+        source: paymentMethod.sourceType === 'ach' ? 'ACH' : 'CC',
+        status: 'N',
+        transactionType: product.isSubscription ? 'Subscription' : 'Payment',
+        givingSource: 'portal',
+        template: 'lunarpayfr',
+      },
+    });
+
+    // Process payment
+    const amountInCents = dollarsToCents(amount);
+    const transactionC1 = `PORTAL-${transaction.id}-${Date.now()}`;
+
+    const result = paymentMethod.sourceType === 'ach'
+      ? await fortisClient.processACHDebit({
+          transaction_amount: amountInCents,
+          token_id: paymentMethod.fortisWalletId,
+          client_customer_id: session.customerId.toString(),
+          transaction_c1: transactionC1,
+          transaction_c2: transaction.id.toString(),
+        })
+      : await fortisClient.processCreditCardSale({
+          transaction_amount: amountInCents,
+          token_id: paymentMethod.fortisWalletId,
+          client_customer_id: session.customerId.toString(),
+          transaction_c1: transactionC1,
+          transaction_c2: transaction.id.toString(),
+        });
+
+    if (result.status) {
+      const isPending = paymentMethod.sourceType === 'ach';
+
+      // Update transaction
+      await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: isPending ? 'pending' : 'succeeded',
+          statusAch: isPending ? 'pending' : null,
+          fortisTransactionId: result.transaction?.id,
+          requestResponse: JSON.stringify(result),
+        },
+      });
+
+      // Update donor totals for CC (ACH updates via webhook)
+      if (!isPending) {
+        await prisma.donor.update({
+          where: { id: session.customerId },
+          data: {
+            amountAcum: { increment: amount },
+            feeAcum: { increment: fee },
+            netAcum: { increment: netAmount },
+          },
+        });
+      }
+
+      // If subscription, create subscription record
+      if (product.isSubscription) {
+        const nextPaymentDate = new Date();
         switch (product.subscriptionInterval) {
           case 'W':
             nextPaymentDate.setDate(nextPaymentDate.getDate() + 7 * (product.subscriptionIntervalCount || 1));
@@ -91,42 +240,82 @@ export async function POST(request: Request) {
           default:
             nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
         }
+
+        await prisma.subscription.create({
+          data: {
+            userId: organization.userId,
+            organizationId: session.organizationId,
+            donorId: session.customerId,
+            sourceId: paymentMethod.id,
+            firstName: customer.firstName || '',
+            lastName: customer.lastName || '',
+            email: customer.email || '',
+            amount,
+            frequency: mapInterval(product.subscriptionInterval),
+            status: 'A',
+            nextPaymentOn: nextPaymentDate,
+            lastPaymentOn: new Date(),
+            source: paymentMethod.sourceType === 'ach' ? 'ACH' : 'CC',
+            givingSource: 'portal',
+            template: 'lunarpayfr',
+            successTrxns: 1,
+          },
+        });
       }
 
-      // Create subscription using raw SQL
-      await prisma.$executeRaw`
-        INSERT INTO epicpay_customer_subscriptions (
-          account_donor_id, church_id, amount, interval_type, subscription_status,
-          next_payment_on, created_at
-        ) VALUES (
-          ${session.customerId}, ${session.organizationId}, ${product.price},
-          ${product.subscriptionInterval || 'M'}, 'A',
-          ${nextPaymentDate}, NOW()
-        )
-      `;
+      await logPaymentEvent({
+        eventType: isPending ? 'ACH_PENDING' : 'PAYMENT_SUCCEEDED',
+        organizationId: session.organizationId,
+        transactionId: transaction.id,
+        data: {
+          productId: product.id,
+          productName: product.name,
+          amount,
+          isSubscription: product.isSubscription,
+        },
+      });
 
       return NextResponse.json({
         success: true,
-        message: 'Subscription created successfully',
-        subscription: {
+        message: isPending
+          ? 'Payment initiated. Bank transfer is being processed.'
+          : product.isSubscription
+            ? 'Subscription started successfully'
+            : 'Purchase completed successfully',
+        transaction: {
+          id: transaction.id,
+          status: isPending ? 'pending' : 'succeeded',
+        },
+        purchase: {
           productName: product.name,
-          amount: product.price,
-          interval: product.subscriptionInterval,
-          nextPaymentDate: nextPaymentDate.toISOString(),
-          trialDays: product.subscriptionTrialDays || 0,
+          amount,
+          isSubscription: product.isSubscription,
         },
       });
     } else {
-      // One-time purchase - create a transaction record
-      // For now, just log it - actual payment integration would go here
-      
-      return NextResponse.json({
-        success: true,
-        message: 'Purchase completed successfully',
-        purchase: {
-          productName: product.name,
-          amount: product.price,
+      // Payment failed
+      await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: 'failed',
+          requestResponse: JSON.stringify(result),
         },
+      });
+
+      await logPaymentEvent({
+        eventType: 'PAYMENT_FAILED',
+        organizationId: session.organizationId,
+        transactionId: transaction.id,
+        data: {
+          productId: product.id,
+          error: result.message,
+          reasonCode: result.reasonCode,
+        },
+      });
+
+      return NextResponse.json({
+        success: false,
+        error: result.message || 'Payment failed',
       });
     }
   } catch (error) {
@@ -138,3 +327,13 @@ export async function POST(request: Request) {
   }
 }
 
+// Helper to map subscription interval to frequency
+function mapInterval(interval: string | null): string {
+  switch (interval) {
+    case 'W': return 'weekly';
+    case 'M': return 'monthly';
+    case 'Q': return 'quarterly';
+    case 'Y': return 'yearly';
+    default: return 'monthly';
+  }
+}

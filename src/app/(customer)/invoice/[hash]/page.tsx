@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { FileText, Download, CreditCard, Landmark, Lock } from 'lucide-react';
+import { FileText, Download, CreditCard, Landmark, Lock, CheckCircle } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 interface Invoice {
@@ -16,6 +16,7 @@ interface Invoice {
   memo: string | null;
   pdfUrl: string | null;
   hash: string;
+  organizationId: number;
   organization: {
     name: string;
     logo: string | null;
@@ -26,6 +27,7 @@ interface Invoice {
     buttonTextColor: string | null;
   };
   donor: {
+    id: number;
     firstName: string | null;
     lastName: string | null;
     email: string | null;
@@ -42,6 +44,12 @@ interface Invoice {
       subscriptionTrialDays: number | null;
     } | null;
   }>;
+}
+
+declare global {
+  interface Window {
+    PayForm?: any;
+  }
 }
 
 // Helper to format subscription frequency
@@ -67,14 +75,19 @@ export default function PublicInvoicePage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'amex' | 'bank'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'bank'>('card');
   const [processing, setProcessing] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
   
   // Form state
   const [email, setEmail] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cardName, setCardName] = useState('');
+  const [savePaymentMethod, setSavePaymentMethod] = useState(false);
+  
+  // Fortis Elements state
+  const [clientToken, setClientToken] = useState<string | null>(null);
+  const [fortisLoaded, setFortisLoaded] = useState(false);
+  const [payForm, setPayForm] = useState<any>(null);
 
   // Branding colors with defaults
   const primaryColor = invoice?.organization?.primaryColor || '#000000';
@@ -84,6 +97,93 @@ export default function PublicInvoicePage() {
   useEffect(() => {
     fetchInvoice();
   }, [hash]);
+
+  // Load Fortis Elements script
+  useEffect(() => {
+    if (!invoice) return;
+    
+    // Check if already loaded
+    if (window.PayForm) {
+      setFortisLoaded(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://js.fortis.tech/commercejs-v1.0.0.min.js';
+    script.async = true;
+    script.onload = () => {
+      setFortisLoaded(true);
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    };
+  }, [invoice]);
+
+  // Initialize Fortis payment form when token is available
+  useEffect(() => {
+    if (!clientToken || !fortisLoaded || !window.PayForm) return;
+
+    try {
+      // Configure payment form
+      const config = {
+        container: '#payment-form-container',
+        theme: 'default',
+        environment: 'sandbox', // Will be overridden by token
+        floatingLabels: true,
+        showReceipt: false,
+        showSubmitButton: false, // We'll use our own button
+        fields: paymentMethod === 'card' 
+          ? ['account_holder_name', 'account_number', 'exp_date', 'cvv']
+          : ['account_holder_name', 'routing_number', 'account_number', 'account_type'],
+        submitButton: {
+          className: 'hidden',
+        },
+        styles: {
+          'input': {
+            'border': '1px solid #d1d5db',
+            'border-radius': '0.5rem',
+            'padding': '0.75rem 1rem',
+            'font-size': '1rem',
+          },
+          'input:focus': {
+            'border-color': primaryColor,
+            'outline': 'none',
+            'box-shadow': `0 0 0 2px ${primaryColor}33`,
+          },
+          'label': {
+            'color': '#374151',
+            'font-size': '0.875rem',
+            'font-weight': '500',
+          },
+        },
+      };
+
+      const form = new window.PayForm(clientToken, config);
+      
+      form.on('ready', () => {
+        console.log('[Fortis] Payment form ready');
+      });
+
+      form.on('error', (err: any) => {
+        console.error('[Fortis] Form error:', err);
+        setPaymentError(err.message || 'Payment form error');
+      });
+
+      form.on('tokenized', async (response: any) => {
+        console.log('[Fortis] Payment tokenized:', response);
+        await processPayment(response);
+      });
+
+      setPayForm(form);
+    } catch (err) {
+      console.error('[Fortis] Init error:', err);
+      setPaymentError('Failed to initialize payment form');
+    }
+  }, [clientToken, fortisLoaded, paymentMethod, primaryColor]);
 
   const fetchInvoice = async () => {
     try {
@@ -99,6 +199,9 @@ export default function PublicInvoicePage() {
       if (data.invoice.donor?.email) {
         setEmail(data.invoice.donor.email);
       }
+
+      // Get transaction intention token
+      await getPaymentToken(data.invoice.organizationId, data.invoice.totalAmount - data.invoice.paidAmount, data.invoice.id);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -106,31 +209,87 @@ export default function PublicInvoicePage() {
     }
   };
 
-  const formatCardNumber = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    const matches = v.match(/\d{4,16}/g);
-    const match = (matches && matches[0]) || '';
-    const parts = [];
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4));
+  const getPaymentToken = async (orgId: number, amount: number, invoiceId: number) => {
+    try {
+      const response = await fetch('/api/public/fortis/transaction-intention', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: orgId,
+          amount,
+          action: 'sale',
+          type: 'invoice',
+          referenceId: invoiceId,
+          savePaymentMethod,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success && data.clientToken) {
+        setClientToken(data.clientToken);
+      } else {
+        setPaymentError(data.error || 'Unable to initialize payment');
+      }
+    } catch (err) {
+      console.error('Token error:', err);
+      setPaymentError('Unable to initialize payment form');
     }
-    return parts.length ? parts.join(' ') : v;
   };
 
-  const formatExpiry = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    if (v.length >= 2) {
-      return v.substring(0, 2) + '/' + v.substring(2, 4);
+  const processPayment = async (fortisResponse: any) => {
+    if (!invoice) return;
+
+    try {
+      const response = await fetch('/api/public/fortis/process-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'invoice',
+          referenceId: invoice.id,
+          organizationId: invoice.organizationId,
+          customerId: invoice.donor?.id,
+          customerEmail: email,
+          fortisResponse,
+          savePaymentMethod,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setPaymentSuccess(true);
+        setProcessing(false);
+      } else {
+        setPaymentError(data.error || 'Payment failed');
+        setProcessing(false);
+      }
+    } catch (err) {
+      console.error('Process error:', err);
+      setPaymentError('Failed to process payment');
+      setProcessing(false);
     }
-    return v;
   };
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!payForm) {
+      setPaymentError('Payment form not ready');
+      return;
+    }
+
     setProcessing(true);
-    // TODO: Integrate with Fortis payment processing
-    alert('Payment processing will be integrated with Fortis Elements');
-    setProcessing(false);
+    setPaymentError('');
+
+    try {
+      // Submit the Fortis payment form
+      payForm.submit();
+    } catch (err) {
+      console.error('Submit error:', err);
+      setPaymentError('Failed to submit payment');
+      setProcessing(false);
+    }
   };
 
   const handleDownloadPDF = async () => {
@@ -138,6 +297,17 @@ export default function PublicInvoicePage() {
       window.open(`/api/invoices/public/${hash}/pdf`, '_blank');
     } catch (error) {
       console.error('Failed to download PDF:', error);
+    }
+  };
+
+  // Handle payment method change - need new token
+  const handlePaymentMethodChange = async (method: 'card' | 'bank') => {
+    setPaymentMethod(method);
+    setClientToken(null);
+    setPayForm(null);
+    if (invoice) {
+      const amountDue = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+      await getPaymentToken(invoice.organizationId, amountDue, invoice.id);
     }
   };
 
@@ -170,6 +340,39 @@ export default function PublicInvoicePage() {
   // Check if any product is a subscription
   const hasSubscription = invoice.products.some(p => p.product?.isSubscription);
   const subscriptionProduct = invoice.products.find(p => p.product?.isSubscription);
+
+  // Show success state
+  if (paymentSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor }}>
+        <div className="bg-white rounded-lg shadow-sm p-8 max-w-md w-full text-center">
+          <div 
+            className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
+            style={{ backgroundColor: `${primaryColor}15` }}
+          >
+            <CheckCircle className="w-10 h-10" style={{ color: primaryColor }} />
+          </div>
+          <h3 className="text-2xl font-bold mb-2">Payment Successful!</h3>
+          <p className="text-gray-500 mb-6">Thank you for your payment.</p>
+          <p className="text-3xl font-bold mb-2" style={{ color: primaryColor }}>
+            {formatCurrency(amountDue)}
+          </p>
+          <p className="text-sm text-gray-500 mb-6">
+            A receipt has been sent to {email}
+          </p>
+          
+          <button 
+            onClick={handleDownloadPDF}
+            className="w-full py-3 rounded-lg font-medium border-2 flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+            style={{ borderColor: primaryColor, color: primaryColor }}
+          >
+            <Download className="h-5 w-5" />
+            Download Receipt
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor }}>
@@ -312,10 +515,10 @@ export default function PublicInvoicePage() {
                 {/* Payment Method */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-3">Payment method</label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setPaymentMethod('card')}
+                      onClick={() => handlePaymentMethodChange('card')}
                       className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
                         paymentMethod === 'card' 
                           ? 'border-black bg-gray-50' 
@@ -323,25 +526,11 @@ export default function PublicInvoicePage() {
                       }`}
                     >
                       <CreditCard className="h-6 w-6" />
-                      <span className="text-xs font-medium">Credit / Debit</span>
+                      <span className="text-xs font-medium">Card</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPaymentMethod('amex')}
-                      className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
-                        paymentMethod === 'amex' 
-                          ? 'border-black bg-gray-50' 
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="h-6 w-10 bg-blue-600 rounded text-white text-[8px] font-bold flex items-center justify-center">
-                        AMEX
-                      </div>
-                      <span className="text-xs font-medium">American Express</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('bank')}
+                      onClick={() => handlePaymentMethodChange('bank')}
                       className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
                         paymentMethod === 'bank' 
                           ? 'border-black bg-gray-50' 
@@ -349,95 +538,49 @@ export default function PublicInvoicePage() {
                       }`}
                     >
                       <Landmark className="h-6 w-6" />
-                      <span className="text-xs font-medium">Bank Transfer</span>
+                      <span className="text-xs font-medium">Bank</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Payment Info */}
+                {/* Fortis Elements Payment Form Container */}
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Info</h3>
                   
-                  {paymentMethod !== 'bank' ? (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Card Number</label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            required
-                            value={cardNumber}
-                            onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-                            maxLength={19}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none pr-12"
-                            placeholder="1234 5678 9012 3456"
-                          />
-                          <CreditCard className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Expiration Date (MM/YY)</label>
-                        <input
-                          type="text"
-                          required
-                          value={expiry}
-                          onChange={(e) => setExpiry(formatExpiry(e.target.value))}
-                          maxLength={5}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
-                          placeholder="MM/YY"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Name on Card</label>
-                        <input
-                          type="text"
-                          required
-                          value={cardName}
-                          onChange={(e) => setCardName(e.target.value)}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
-                          placeholder="John Smith"
-                        />
+                  {!clientToken || !fortisLoaded ? (
+                    <div className="h-48 flex items-center justify-center bg-gray-50 rounded-lg">
+                      <div className="text-center">
+                        <div className="animate-spin h-6 w-6 border-2 border-black border-t-transparent rounded-full mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">Loading secure payment form...</p>
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Routing Number</label>
-                        <input
-                          type="text"
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
-                          placeholder="123456789"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Account Number</label>
-                        <input
-                          type="text"
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
-                          placeholder="1234567890"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Account Holder Name</label>
-                        <input
-                          type="text"
-                          required
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
-                          placeholder="John Smith"
-                        />
-                      </div>
-                    </div>
+                    <div id="payment-form-container" className="min-h-[200px]" />
                   )}
+                  
+                  {paymentError && (
+                    <p className="text-red-500 text-sm mt-2">{paymentError}</p>
+                  )}
+                </div>
+
+                {/* Save Payment Method */}
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="savePayment"
+                    checked={savePaymentMethod}
+                    onChange={(e) => setSavePaymentMethod(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <label htmlFor="savePayment" className="text-sm text-gray-600">
+                    Save payment method for future use
+                  </label>
                 </div>
 
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={processing}
+                  disabled={processing || !clientToken || !fortisLoaded}
                   className="w-full py-4 rounded-lg font-medium text-lg transition-opacity hover:opacity-90 disabled:opacity-50"
                   style={{ backgroundColor: primaryColor, color: buttonTextColor }}
                 >
@@ -451,7 +594,7 @@ export default function PublicInvoicePage() {
 
                 {/* Terms */}
                 <p className="text-xs text-gray-500 text-center leading-relaxed">
-                  By clicking on "{hasSubscription ? 'Subscribe' : 'Pay'}", you agree to allow {invoice.organization.name} to charge your card for this payment{hasSubscription ? ' and future payments according to the payment frequency listed' : ''}.
+                  By clicking on &ldquo;{hasSubscription ? 'Subscribe' : 'Pay'}&rdquo;, you agree to allow {invoice.organization.name} to charge your card for this payment{hasSubscription ? ' and future payments according to the payment frequency listed' : ''}.
                 </p>
 
                 {/* Security */}

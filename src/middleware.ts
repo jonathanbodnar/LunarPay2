@@ -41,6 +41,8 @@ const publicApiRoutes = [
   '/api/admin/add-customer-sessions-table', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-zapier-table', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-customer-otp-table', // TEMPORARY - DELETE AFTER USE!
+  '/api/public/', // All public APIs (payment forms, etc.)
+  '/api/fortis/webhooks', // Fortis webhook callbacks
   '/api/admin/debug-portals', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/debug-email', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/test-email', // TEMPORARY - DELETE AFTER USE!
