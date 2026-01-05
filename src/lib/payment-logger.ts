@@ -12,6 +12,7 @@ export type PaymentEventType =
   | 'payment.failed'
   | 'payment.refunded'
   | 'payment.status_updated'
+  | 'ach.pending'
   | 'webhook.received'
   | 'webhook.processed'
   | 'webhook.failed';

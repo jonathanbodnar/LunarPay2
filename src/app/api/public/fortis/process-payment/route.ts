@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
     if (!isSuccessful && !isPending) {
       await logPaymentEvent({
-        eventType: 'PAYMENT_FAILED',
+        eventType: 'payment.failed',
         organizationId,
         transactionId: fortisTransactionId,
         data: {
@@ -235,7 +235,7 @@ export async function POST(request: Request) {
 
     // Log successful payment
     await logPaymentEvent({
-      eventType: isPending ? 'ACH_PENDING' : 'PAYMENT_SUCCEEDED',
+      eventType: isPending ? 'ach.pending' : 'payment.succeeded',
       organizationId,
       transactionId: transaction.id,
       data: {

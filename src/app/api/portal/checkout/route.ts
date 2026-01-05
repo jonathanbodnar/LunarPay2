@@ -264,7 +264,7 @@ export async function POST(request: Request) {
       }
 
       await logPaymentEvent({
-        eventType: isPending ? 'ACH_PENDING' : 'PAYMENT_SUCCEEDED',
+        eventType: isPending ? 'ach.pending' : 'payment.succeeded',
         organizationId: session.organizationId,
         transactionId: transaction.id,
         data: {
@@ -303,7 +303,7 @@ export async function POST(request: Request) {
       });
 
       await logPaymentEvent({
-        eventType: 'PAYMENT_FAILED',
+        eventType: 'payment.failed',
         organizationId: session.organizationId,
         transactionId: transaction.id,
         data: {
