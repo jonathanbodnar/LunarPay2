@@ -401,8 +401,8 @@ export default function PaymentLinkPage() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <span className="text-sm">Powered by</span>
-            <Image src="/logo.png" alt="LunarPay" width={100} height={28} className="opacity-70 hover:opacity-100 transition-opacity" />
+            <span className="text-xs">Powered by</span>
+            <Image src="/logo.png" alt="LunarPay" width={50} height={14} className="opacity-60 hover:opacity-100 transition-opacity" />
           </a>
         </footer>
       </div>
@@ -417,22 +417,22 @@ export default function PaymentLinkPage() {
           {/* Left Column - Order Summary (2 cols) */}
           <div className="lg:col-span-2 space-y-6">
             {/* Merchant Info */}
-            <div className="flex items-center gap-4">
+            <div className="space-y-2">
               {paymentLink.organization.logo ? (
                 <img 
                   src={paymentLink.organization.logo} 
                   alt={paymentLink.organization.name} 
-                  className="h-14 w-auto max-w-[180px] object-contain" 
+                  className="h-12 w-auto max-w-[200px] object-contain" 
                 />
               ) : (
                 <div 
-                  className="h-14 w-14 rounded-lg flex items-center justify-center text-white font-bold text-xl"
+                  className="h-12 w-12 rounded-lg flex items-center justify-center text-white font-bold text-xl"
                   style={{ backgroundColor: primaryColor }}
                 >
                   {paymentLink.organization.name.charAt(0)}
                 </div>
               )}
-              <span className="font-medium text-gray-900">{paymentLink.organization.name}</span>
+              <p className="text-gray-600 text-sm">Pay <span className="font-medium text-gray-900">{paymentLink.organization.name}</span> easily.</p>
             </div>
 
             {/* Amount */}
@@ -668,8 +668,8 @@ export default function PaymentLinkPage() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-600 transition-colors"
         >
-          <span className="text-sm">Powered by</span>
-          <Image src="/logo.png" alt="LunarPay" width={100} height={28} className="opacity-70 hover:opacity-100 transition-opacity" />
+          <span className="text-xs">Powered by</span>
+          <Image src="/logo.png" alt="LunarPay" width={50} height={14} className="opacity-60 hover:opacity-100 transition-opacity" />
         </a>
       </footer>
     </div>
