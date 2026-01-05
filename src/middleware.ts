@@ -17,7 +17,7 @@ const APP_DOMAINS = [
 ];
 
 // Routes that don't require authentication
-const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal', '/invite', '/privacy', '/terms'];
+const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal', '/invite', '/privacy', '/terms', '/fortiswebhooks'];
 
 // Routes that are public APIs (invoices, payment links by hash)
 const publicApiRoutes = [
