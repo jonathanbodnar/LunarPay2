@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { dollarsToCents, centsToDollars, calculateFee } from '@/lib/utils';
+import { logPaymentCreated, logPaymentProcessed, logPaymentSucceeded, logPaymentFailed } from '@/lib/payment-logger';
 
 export async function POST(request: Request) {
   try {
@@ -114,6 +115,22 @@ export async function POST(request: Request) {
       },
     });
 
+    // Log payment creation
+    await logPaymentCreated(
+      transaction.id,
+      organizationId,
+      currentUser.userId,
+      donorId,
+      amount,
+      source.sourceType === 'card' ? 'credit_card' : 'ach',
+      {
+        invoiceId,
+        paymentLinkId,
+        fundId,
+        isFeeCovered,
+      }
+    );
+
     // Prepare Fortis request
     const amountInCents = dollarsToCents(amount);
     const systemLetterId = 'L'; // LunarPay
@@ -174,7 +191,28 @@ export async function POST(request: Request) {
       data: updateData,
     });
 
+    // Log payment processing
+    await logPaymentProcessed(
+      transaction.id,
+      result.transaction?.id || '',
+      result.status ? 'P' : 'N',
+      {
+        reasonCode: result.reasonCode,
+        amount: amountInCents,
+      }
+    );
+
     if (result.status) {
+      // Log success
+      await logPaymentSucceeded(
+        transaction.id,
+        amount,
+        result.transaction?.id || '',
+        {
+          sourceType: source.sourceType,
+        }
+      );
+
       return NextResponse.json({
         status: true,
         transactionId: transaction.id,
@@ -182,6 +220,16 @@ export async function POST(request: Request) {
         message: 'Payment processed successfully',
       });
     } else {
+      // Log failure
+      await logPaymentFailed(
+        transaction.id,
+        result.message || 'Payment failed',
+        result.transaction?.id,
+        {
+          reasonCode: result.reasonCode,
+        }
+      );
+
       return NextResponse.json(
         {
           status: false,

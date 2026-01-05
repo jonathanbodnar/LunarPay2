@@ -75,26 +75,6 @@ export default function TransactionsPage() {
     alert('CSV export coming soon!');
   };
 
-  const handleRefund = async (transactionId: number) => {
-    if (!confirm('Are you sure you want to refund this transaction?')) return;
-
-    try {
-      const response = await fetch(`/api/transactions/${transactionId}/refund`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        alert('Transaction refunded successfully');
-        fetchTransactions();
-      } else {
-        alert('Failed to refund transaction');
-      }
-    } catch (error) {
-      alert('Error refunding transaction');
-    }
-  };
-
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       succeeded: 'bg-green-100 text-green-800',
@@ -256,19 +236,6 @@ export default function TransactionsPage() {
                     <p className="text-xs text-gray-500">
                       Fee: {formatCurrency(Number(transaction.fee))}
                     </p>
-                    {transaction.status === 'succeeded' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRefund(transaction.id);
-                        }}
-                      >
-                        Refund
-                      </Button>
-                    )}
                   </div>
                 </div>
               ))}
