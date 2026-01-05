@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
+import { TransactionIntentionData } from '@/types/fortis';
 
 /**
  * PUBLIC API - No authentication required
@@ -114,10 +115,11 @@ export async function POST(request: Request) {
     // Determine the action for Fortis
     // If saving payment method without charging, use 'store'
     // Otherwise use 'sale' for direct payment
-    const fortisAction = savePaymentMethod && !amount ? 'store' : (action || 'sale');
+    const fortisAction: 'sale' | 'store' | 'tokenization' | 'avsonly' | 'authonly' = 
+      savePaymentMethod && !amount ? 'store' : (action as 'sale' | 'avsonly' | 'authonly' || 'sale');
 
     // Build transaction intention data
-    const intentionData: Record<string, any> = {
+    const intentionData: TransactionIntentionData = {
       location_id: locationId,
       action: fortisAction,
     };
@@ -125,11 +127,6 @@ export async function POST(request: Request) {
     // Add amount for sale action (in cents)
     if (fortisAction === 'sale' && amount) {
       intentionData.amount = Math.round(amount * 100); // Convert dollars to cents
-    }
-
-    // Add transaction reference for tracking
-    if (referenceId) {
-      intentionData.transaction_c1 = `${type.toUpperCase()}-${referenceId}`;
     }
 
     console.log('[PUBLIC Fortis Intention] Creating intention:', {

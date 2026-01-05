@@ -164,11 +164,7 @@ export async function POST(request: Request) {
           },
         });
 
-        // Create invoice-product link for tracking
-        await prisma.invoiceProduct.updateMany({
-          where: { invoiceId: referenceId },
-          data: { transactionId: transaction.id },
-        });
+        // Invoice products are already linked via invoiceId
       }
     }
 
@@ -196,11 +192,11 @@ export async function POST(request: Request) {
 
       if (!existingSource) {
         // Parse expiration date
-        let expMonth: number | null = null;
-        let expYear: number | null = null;
+        let expMonth: string | null = null;
+        let expYear: string | null = null;
         if (exp_date && exp_date.length === 4) {
-          expMonth = parseInt(exp_date.substring(0, 2));
-          expYear = parseInt('20' + exp_date.substring(2, 4));
+          expMonth = exp_date.substring(0, 2);
+          expYear = '20' + exp_date.substring(2, 4);
         }
 
         await prisma.source.create({

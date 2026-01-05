@@ -63,7 +63,6 @@ export async function POST(
         data: {
           status: isPartialRefund ? 'partial_refund' : 'refunded',
           refundedAt: new Date(),
-          refundedAmount: amountToRefund,
         },
       });
 
@@ -133,8 +132,6 @@ export async function POST(
       data: {
         status: isPartialRefund ? 'partial_refund' : 'refunded',
         refundedAt: new Date(),
-        refundedAmount: amountToRefund,
-        refundResponse: JSON.stringify(result.refund),
       },
     });
 

@@ -118,7 +118,6 @@ export async function POST(request: Request) {
 
       const subscription = await prisma.subscription.create({
         data: {
-          userId: organization.userId,
           organizationId: session.organizationId,
           donorId: session.customerId,
           sourceId: paymentMethod.id,
@@ -128,6 +127,7 @@ export async function POST(request: Request) {
           amount,
           frequency: mapInterval(product.subscriptionInterval),
           status: 'A',
+          startOn: new Date(),
           nextPaymentOn: nextPaymentDate,
           source: paymentMethod.sourceType === 'ach' ? 'ACH' : 'CC',
           givingSource: 'portal',
@@ -243,7 +243,6 @@ export async function POST(request: Request) {
 
         await prisma.subscription.create({
           data: {
-            userId: organization.userId,
             organizationId: session.organizationId,
             donorId: session.customerId,
             sourceId: paymentMethod.id,
@@ -253,6 +252,7 @@ export async function POST(request: Request) {
             amount,
             frequency: mapInterval(product.subscriptionInterval),
             status: 'A',
+            startOn: new Date(),
             nextPaymentOn: nextPaymentDate,
             lastPaymentOn: new Date(),
             source: paymentMethod.sourceType === 'ach' ? 'ACH' : 'CC',
