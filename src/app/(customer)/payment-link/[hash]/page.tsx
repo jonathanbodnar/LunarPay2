@@ -529,13 +529,20 @@ export default function PaymentLinkPage() {
                       
                       {/* Quantity selector for unlimited/multi-qty products */}
                       {(allowMultiple || isUnlimited) && (
-                        <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                        <div 
+                          className="flex items-center justify-between rounded-lg p-3"
+                          style={{ backgroundColor: `${primaryColor}08` }}
+                        >
                           <span className="text-sm text-gray-600">Quantity</span>
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, -1)}
-                              className="h-8 w-8 rounded-lg border border-gray-300 bg-white flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 text-gray-600"
+                              className="h-9 w-9 rounded-lg flex items-center justify-center transition-all disabled:opacity-30"
+                              style={{ 
+                                backgroundColor: quantity <= 1 ? '#e5e7eb' : primaryColor,
+                                color: quantity <= 1 ? '#9ca3af' : buttonTextColor 
+                              }}
                               disabled={quantity <= 1}
                             >
                               <Minus className="h-4 w-4" />
@@ -549,12 +556,21 @@ export default function PaymentLinkPage() {
                                 const val = Math.max(1, Math.min(maxQty, parseInt(e.target.value) || 1));
                                 setCart({ [item.id]: val });
                               }}
-                              className="w-16 text-center text-sm font-medium border border-gray-300 rounded-lg py-1.5 focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                              className="w-14 text-center text-sm font-semibold border-2 rounded-lg py-2 outline-none transition-colors"
+                              style={{ 
+                                borderColor: `${primaryColor}40`,
+                              }}
+                              onFocus={(e) => e.target.style.borderColor = primaryColor}
+                              onBlur={(e) => e.target.style.borderColor = `${primaryColor}40`}
                             />
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, 1)}
-                              className="h-8 w-8 rounded-lg border border-gray-300 bg-white flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 text-gray-600"
+                              className="h-9 w-9 rounded-lg flex items-center justify-center transition-all disabled:opacity-30"
+                              style={{ 
+                                backgroundColor: quantity >= maxQty ? '#e5e7eb' : primaryColor,
+                                color: quantity >= maxQty ? '#9ca3af' : buttonTextColor 
+                              }}
                               disabled={quantity >= maxQty}
                             >
                               <Plus className="h-4 w-4" />
@@ -565,9 +581,9 @@ export default function PaymentLinkPage() {
                       
                       {/* Total for multiple items */}
                       {quantity > 1 && (
-                        <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
+                        <div className="flex justify-between text-sm pt-3 mt-1 border-t border-gray-200">
                           <span className="text-gray-600">Total ({quantity} items)</span>
-                          <span className="text-gray-900 font-semibold">
+                          <span className="font-semibold" style={{ color: primaryColor }}>
                             {formatCurrency(Number(item.product.price) * quantity)}
                           </span>
                         </div>
