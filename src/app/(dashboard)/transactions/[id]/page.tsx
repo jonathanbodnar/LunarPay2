@@ -359,7 +359,7 @@ export default function TransactionDetailPage() {
               <CardContent>
                 <Button
                   variant="outline"
-                  onClick={() => router.push(`/transactions/${transaction.originalTransaction.id}`)}
+                  onClick={() => router.push(`/transactions/${transaction.originalTransaction?.id}`)}
                 >
                   View Original Transaction
                 </Button>
