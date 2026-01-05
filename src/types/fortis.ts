@@ -100,7 +100,7 @@ export interface TransactionIntentionData {
   location_id: string;
   contact_id?: string;
   product_transaction_id?: string;
-  action: 'sale' | 'avsonly' | 'authonly';
+  action: 'sale' | 'avsonly' | 'authonly' | 'store' | 'tokenization';
   amount?: number; // in cents, required for 'sale'
 }
 
