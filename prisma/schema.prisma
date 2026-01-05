@@ -179,7 +179,7 @@ model FortisOnboarding {
   locationId            String?   @map("location_id") @db.VarChar(255)
   productTransactionId  String?   @map("product_transaction_id") @db.VarChar(255)
   authUserId            String?   @map("auth_user_id") @db.VarChar(255)
-  authUserApiKey        String?   @map("auth_user_api_key") @db.VarChar(255)
+  authUserApiKey        String?   @map("auth_user_api_key") @db.VarChar(500)
   
   // Audit
   processorResponse     String?   @map("processor_response") @db.Text
