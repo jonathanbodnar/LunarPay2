@@ -17,7 +17,10 @@ import {
   CheckCircle,
   XCircle,
   Building2,
-  X
+  X,
+  Receipt,
+  ArrowUpRight,
+  ArrowDownLeft
 } from 'lucide-react';
 import { formatCurrency, formatDate, getSubscriptionFrequencyText } from '@/lib/utils';
 
@@ -70,7 +73,19 @@ interface Product {
   subscriptionTrialDays: number | null;
 }
 
-type Tab = 'overview' | 'payment-methods' | 'subscriptions' | 'products';
+interface Transaction {
+  id: number;
+  totalAmount: number;
+  fee: number;
+  source: string;
+  bankType: string | null;
+  status: string;
+  transactionType: string | null;
+  givingSource: string;
+  date: string;
+}
+
+type Tab = 'overview' | 'transactions' | 'payment-methods' | 'subscriptions' | 'products';
 
 export default function PortalDashboard() {
   const params = useParams();
@@ -81,6 +96,7 @@ export default function PortalDashboard() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -103,11 +119,12 @@ export default function PortalDashboard() {
 
   const fetchData = async () => {
     try {
-      const [meRes, pmRes, subRes, prodRes] = await Promise.all([
+      const [meRes, pmRes, subRes, prodRes, trxRes] = await Promise.all([
         fetch('/api/portal/me', { credentials: 'include' }),
         fetch('/api/portal/payment-methods', { credentials: 'include' }),
         fetch('/api/portal/subscriptions', { credentials: 'include' }),
         fetch('/api/portal/products', { credentials: 'include' }),
+        fetch('/api/portal/transactions', { credentials: 'include' }),
       ]);
 
       if (!meRes.ok) {
@@ -132,6 +149,11 @@ export default function PortalDashboard() {
       if (prodRes.ok) {
         const prodData = await prodRes.json();
         setProducts(prodData.products || []);
+      }
+
+      if (trxRes.ok) {
+        const trxData = await trxRes.json();
+        setTransactions(trxData.transactions || []);
       }
     } catch (error) {
       console.error('Fetch error:', error);
@@ -287,6 +309,7 @@ export default function PortalDashboard() {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Building2 },
+    { id: 'transactions', label: 'Transaction History', icon: Receipt },
     { id: 'payment-methods', label: 'Payment Methods', icon: CreditCard },
     { id: 'subscriptions', label: 'Subscriptions', icon: RefreshCcw },
     { id: 'products', label: 'Shop', icon: ShoppingBag },
@@ -434,6 +457,91 @@ export default function PortalDashboard() {
                   </div>
                 </CardContent>
               </Card>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'transactions' && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-semibold">Transaction History</h2>
+
+            {transactions.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <Receipt className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">No transactions yet.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {transactions.map(trx => {
+                  const isRefund = trx.transactionType === 'refund';
+                  const isPaid = trx.status === 'P';
+                  const isFailed = trx.status === 'N';
+                  
+                  return (
+                    <Card key={trx.id}>
+                      <CardContent className="py-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div 
+                              className="p-3 rounded-lg"
+                              style={{ 
+                                backgroundColor: isRefund 
+                                  ? '#fef2f2' 
+                                  : isPaid 
+                                    ? `${primaryColor}15` 
+                                    : '#f5f5f5' 
+                              }}
+                            >
+                              {isRefund ? (
+                                <ArrowDownLeft className="h-5 w-5 text-red-500" />
+                              ) : (
+                                <ArrowUpRight 
+                                  className="h-5 w-5" 
+                                  style={{ color: isPaid ? primaryColor : '#999' }} 
+                                />
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-medium">
+                                {isRefund ? 'Refund' : 'Payment'} - {trx.givingSource}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {formatDate(trx.date)}
+                                {trx.bankType && (
+                                  <span className="ml-2">• {trx.bankType.toUpperCase()}</span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p 
+                              className={`text-lg font-semibold ${
+                                isRefund ? 'text-red-600' : ''
+                              }`}
+                              style={!isRefund && isPaid ? { color: primaryColor } : {}}
+                            >
+                              {isRefund ? '-' : '+'}{formatCurrency(Number(trx.totalAmount))}
+                            </p>
+                            <span 
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                isPaid 
+                                  ? 'bg-green-100 text-green-700' 
+                                  : isFailed
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-yellow-100 text-yellow-700'
+                              }`}
+                            >
+                              {isPaid ? 'Completed' : isFailed ? 'Failed' : 'Pending'}
+                            </span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
