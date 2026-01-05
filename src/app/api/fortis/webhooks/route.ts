@@ -187,6 +187,9 @@ async function handleTransactionStatusWebhook(body: any) {
     where: {
       fortisTransactionId: fortisTransactionId.toString(),
     },
+    include: {
+      donor: true,
+    },
   });
 
   if (!transaction) {
@@ -231,7 +234,7 @@ async function handleTransactionStatusWebhook(body: any) {
     });
 
     // Update donor totals if status changed from failed to succeeded
-    if (oldStatus === 'N' && newStatus === 'P') {
+    if (oldStatus === 'N' && newStatus === 'P' && transaction.donorId && transaction.donor) {
       const amount = Number(transaction.totalAmount);
       const fee = Number(transaction.fee);
       const netAmount = Number(transaction.subTotalAmount);
