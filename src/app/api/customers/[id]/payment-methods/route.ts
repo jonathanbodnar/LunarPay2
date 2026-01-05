@@ -204,12 +204,12 @@ export async function POST(
         );
       }
 
-      // Parse expiration date if present
-      let expMonth: number | null = null;
-      let expYear: number | null = null;
+      // Parse expiration date if present (as strings for Prisma)
+      let expMonth: string | null = null;
+      let expYear: string | null = null;
       if (exp_date && exp_date.length === 4) {
-        expMonth = parseInt(exp_date.substring(0, 2));
-        expYear = parseInt('20' + exp_date.substring(2, 4));
+        expMonth = exp_date.substring(0, 2);
+        expYear = '20' + exp_date.substring(2, 4);
       }
 
       // If setting as default, unset other defaults first
