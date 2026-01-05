@@ -277,7 +277,8 @@ export default function PaymentLinkPage() {
     if (!paymentLink) return;
     if (paymentLink.products.length === 1) {
       const item = paymentLink.products[0];
-      const isAvailable = item.unlimited || (item.available !== null && item.available > 0);
+      const isUnlimited = item.unlimited || item.unlimitedQty;
+      const isAvailable = isUnlimited || (item.available !== null && item.available > 0);
       if (isAvailable && !cart[item.id]) {
         setCart({ [item.id]: 1 });
       }
@@ -485,16 +486,29 @@ export default function PaymentLinkPage() {
               </p>
             </div>
 
+            {/* Payment Link Title */}
+            {paymentLink.name && (
+              <div className="border-t border-gray-200 pt-4">
+                <h2 className="font-semibold text-gray-900">{paymentLink.name}</h2>
+                {paymentLink.description && (
+                  <p className="text-sm text-gray-500 mt-1">{paymentLink.description}</p>
+                )}
+              </div>
+            )}
+
             {/* Products */}
-            <div className="border-t border-gray-200 pt-4 space-y-3">
+            <div className={`${paymentLink.name ? 'pt-3' : 'border-t border-gray-200 pt-4'} space-y-3`}>
               {paymentLink.products.length === 1 ? (
                 // Single product display
                 (() => {
                   const item = paymentLink.products[0];
                   const quantity = cart[item.id] || 1;
-                  const isAvailable = item.unlimited || (item.available !== null && item.available > 0);
-                  const maxQty = item.unlimited ? 999 : (item.available || 1);
-                  const allowMultiple = item.unlimited || (item.available !== null && item.available > 1);
+                  // Check both unlimited and unlimitedQty flags
+                  const isUnlimited = item.unlimited || item.unlimitedQty;
+                  const isAvailable = isUnlimited || (item.available !== null && item.available > 0);
+                  const maxQty = isUnlimited ? 999 : (item.available || 1);
+                  // Allow multiple for unlimited products OR products with available > 1
+                  const allowMultiple = isUnlimited || (item.available !== null && item.available > 1);
                   
                   return (
                     <div className="space-y-3">
@@ -514,7 +528,7 @@ export default function PaymentLinkPage() {
                       </div>
                       
                       {/* Quantity selector for unlimited/multi-qty products */}
-                      {allowMultiple && !item.product.isSubscription && (
+                      {(allowMultiple || isUnlimited) && !item.product.isSubscription && (
                         <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
                           <span className="text-sm text-gray-600">Quantity</span>
                           <div className="flex items-center gap-3">
@@ -565,8 +579,9 @@ export default function PaymentLinkPage() {
                 // Multiple products - selectable with quantity
                 paymentLink.products.map((item) => {
                   const quantity = cart[item.id] || 0;
-                  const isAvailable = item.unlimited || (item.available !== null && item.available > 0);
-                  const maxQty = item.unlimited ? 999 : (item.available || 0);
+                  const isUnlimited = item.unlimited || item.unlimitedQty;
+                  const isAvailable = isUnlimited || (item.available !== null && item.available > 0);
+                  const maxQty = isUnlimited ? 999 : (item.available || 0);
 
                   return (
                     <div 
