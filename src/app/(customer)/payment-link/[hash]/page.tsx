@@ -272,6 +272,18 @@ export default function PaymentLinkPage() {
     });
   };
 
+  // Auto-initialize cart for single products
+  useEffect(() => {
+    if (!paymentLink) return;
+    if (paymentLink.products.length === 1) {
+      const item = paymentLink.products[0];
+      const isAvailable = item.unlimited || (item.available !== null && item.available > 0);
+      if (isAvailable && !cart[item.id]) {
+        setCart({ [item.id]: 1 });
+      }
+    }
+  }, [paymentLink]);
+
   // Recalculate token when cart changes
   useEffect(() => {
     if (!paymentLink) return;
@@ -476,20 +488,79 @@ export default function PaymentLinkPage() {
             {/* Products */}
             <div className="border-t border-gray-200 pt-4 space-y-3">
               {paymentLink.products.length === 1 ? (
-                // Single product - compact display
-                <div className="flex justify-between text-sm">
-                  <div className="text-gray-600">
-                    <span>{paymentLink.products[0].product.name}</span>
-                    {paymentLink.products[0].product.isSubscription && (
-                      <span className="text-gray-400 ml-1">
-                        {formatFrequency(paymentLink.products[0].product.subscriptionInterval, paymentLink.products[0].product.subscriptionIntervalCount)}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-gray-900 font-medium">
-                    {formatCurrency(Number(paymentLink.products[0].product.price))}
-                  </span>
-                </div>
+                // Single product display
+                (() => {
+                  const item = paymentLink.products[0];
+                  const quantity = cart[item.id] || 1;
+                  const isAvailable = item.unlimited || (item.available !== null && item.available > 0);
+                  const maxQty = item.unlimited ? 999 : (item.available || 1);
+                  const allowMultiple = item.unlimited || (item.available !== null && item.available > 1);
+                  
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <div className="text-gray-600">
+                          <span>{item.product.name}</span>
+                          {item.product.isSubscription && (
+                            <span className="text-gray-400 ml-1">
+                              {formatFrequency(item.product.subscriptionInterval, item.product.subscriptionIntervalCount)}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-gray-900 font-medium">
+                          {formatCurrency(Number(item.product.price))}
+                          {quantity > 1 && <span className="text-gray-500 font-normal"> each</span>}
+                        </span>
+                      </div>
+                      
+                      {/* Quantity selector for unlimited/multi-qty products */}
+                      {allowMultiple && !item.product.isSubscription && (
+                        <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                          <span className="text-sm text-gray-600">Quantity</span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.id, -1)}
+                              className="h-8 w-8 rounded-lg border border-gray-300 bg-white flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 text-gray-600"
+                              disabled={quantity <= 1}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              max={maxQty}
+                              value={quantity}
+                              onChange={(e) => {
+                                const val = Math.max(1, Math.min(maxQty, parseInt(e.target.value) || 1));
+                                setCart({ [item.id]: val });
+                              }}
+                              className="w-16 text-center text-sm font-medium border border-gray-300 rounded-lg py-1.5 focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.id, 1)}
+                              className="h-8 w-8 rounded-lg border border-gray-300 bg-white flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 text-gray-600"
+                              disabled={quantity >= maxQty}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Total for multiple items */}
+                      {quantity > 1 && (
+                        <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
+                          <span className="text-gray-600">Total ({quantity} items)</span>
+                          <span className="text-gray-900 font-semibold">
+                            {formatCurrency(Number(item.product.price) * quantity)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
               ) : (
                 // Multiple products - selectable with quantity
                 paymentLink.products.map((item) => {
