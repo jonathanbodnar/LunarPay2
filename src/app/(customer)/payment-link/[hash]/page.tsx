@@ -402,7 +402,7 @@ export default function PaymentLinkPage() {
             className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-600 transition-colors"
           >
             <span className="text-sm">Powered by</span>
-            <Image src="/logo.svg" alt="LunarPay" width={80} height={20} className="opacity-60 hover:opacity-100 transition-opacity" />
+            <Image src="/logo.png" alt="LunarPay" width={100} height={28} className="opacity-70 hover:opacity-100 transition-opacity" />
           </a>
         </footer>
       </div>
@@ -417,16 +417,16 @@ export default function PaymentLinkPage() {
           {/* Left Column - Order Summary (2 cols) */}
           <div className="lg:col-span-2 space-y-6">
             {/* Merchant Info */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               {paymentLink.organization.logo ? (
                 <img 
                   src={paymentLink.organization.logo} 
                   alt={paymentLink.organization.name} 
-                  className="h-10 w-10 rounded-lg object-contain" 
+                  className="h-14 w-auto max-w-[180px] object-contain" 
                 />
               ) : (
                 <div 
-                  className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold text-lg"
+                  className="h-14 w-14 rounded-lg flex items-center justify-center text-white font-bold text-xl"
                   style={{ backgroundColor: primaryColor }}
                 >
                   {paymentLink.organization.name.charAt(0)}
@@ -669,7 +669,7 @@ export default function PaymentLinkPage() {
           className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-600 transition-colors"
         >
           <span className="text-sm">Powered by</span>
-          <Image src="/logo.svg" alt="LunarPay" width={80} height={20} className="opacity-60 hover:opacity-100 transition-opacity" />
+          <Image src="/logo.png" alt="LunarPay" width={100} height={28} className="opacity-70 hover:opacity-100 transition-opacity" />
         </a>
       </footer>
     </div>
