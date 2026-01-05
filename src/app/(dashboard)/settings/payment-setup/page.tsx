@@ -703,8 +703,8 @@ export default function PaymentSetupPage() {
                 <div className="text-center mb-4">
                   <h2 className="text-xl font-semibold mb-2">Complete Merchant Processing Agreement</h2>
                   <p className="text-muted-foreground text-sm">
-                    Please complete the form below to finalize your merchant account setup.
-                    A verification code will be sent to your email.
+                    Please review your application below and fill in any missing information, to finalize your merchant account setup with our partner, Fortis.{' '}
+                    <strong>A verification code will be sent to your email from Fortis to access the form.</strong>
                   </p>
                 </div>
                 <div className="border rounded-lg overflow-hidden bg-white">
