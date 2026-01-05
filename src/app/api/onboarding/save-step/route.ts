@@ -80,7 +80,6 @@ export async function POST(request: Request) {
       merchantState: state,
       merchantCity: city,
       merchantPostalCode: postalCode,
-      stepCompleted: step,
       processorResponse: additionalData, // Store extra fields as JSON
     };
 

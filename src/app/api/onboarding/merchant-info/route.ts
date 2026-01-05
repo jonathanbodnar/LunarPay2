@@ -112,7 +112,6 @@ export async function POST(request: Request) {
       merchantState: validatedData.merchantState,
       merchantCity: validatedData.merchantCity,
       merchantPostalCode: validatedData.merchantPostalCode,
-      stepCompleted: 1, // Merchant information step completed
     };
 
     if (organization.fortisOnboarding) {
@@ -132,7 +131,6 @@ export async function POST(request: Request) {
           merchantState: validatedData.merchantState,
           merchantCity: validatedData.merchantCity,
           merchantPostalCode: validatedData.merchantPostalCode,
-          stepCompleted: 1,
           userId: currentUser.userId,
           organization: { connect: { id: validatedData.organizationId } },
           appStatus: 'PENDING',
@@ -159,7 +157,6 @@ export async function POST(request: Request) {
       status: true,
       message: 'Merchant information saved successfully',
       organizationId: updatedOrganization.id,
-      stepCompleted: 1,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

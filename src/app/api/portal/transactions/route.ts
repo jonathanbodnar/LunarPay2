@@ -13,7 +13,7 @@ export async function GET() {
     // Fetch transactions for this customer
     const transactions = await prisma.transaction.findMany({
       where: {
-        donorId: session.donorId,
+        donorId: session.customerId,
         organizationId: session.organizationId,
       },
       orderBy: {

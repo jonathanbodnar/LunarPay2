@@ -34,7 +34,6 @@ export async function GET() {
             select: {
               appStatus: true,
               mpaLink: true,
-              stepCompleted: true,
               signFirstName: true,
               signLastName: true,
               signPhoneNumber: true,
