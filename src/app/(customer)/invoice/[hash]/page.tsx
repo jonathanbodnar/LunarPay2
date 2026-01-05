@@ -89,6 +89,14 @@ export default function PublicInvoicePage() {
   const [clientToken, setClientToken] = useState<string | null>(null);
   const [fortisLoaded, setFortisLoaded] = useState(false);
   const [payForm, setPayForm] = useState<any>(null);
+  const [demoMode, setDemoMode] = useState(false);
+  
+  // Demo form state (for screenshot/preview when Fortis not configured)
+  const [demoCardNumber, setDemoCardNumber] = useState('');
+  const [demoExpiry, setDemoExpiry] = useState('');
+  const [demoCvc, setDemoCvc] = useState('');
+  const [demoAccountNumber, setDemoAccountNumber] = useState('');
+  const [demoRoutingNumber, setDemoRoutingNumber] = useState('');
 
   // Branding colors with defaults
   const primaryColor = invoice?.organization?.primaryColor || '#000000';
@@ -229,12 +237,18 @@ export default function PublicInvoicePage() {
       
       if (data.success && data.clientToken) {
         setClientToken(data.clientToken);
+        setDemoMode(false);
       } else {
-        setPaymentError(data.error || 'Unable to initialize payment');
+        // Enable demo mode for screenshots/preview when Fortis not configured
+        console.log('[Invoice] Enabling demo mode - Fortis not configured');
+        setDemoMode(true);
+        setPaymentError('');
       }
     } catch (err) {
       console.error('Token error:', err);
-      setPaymentError('Unable to initialize payment form');
+      // Enable demo mode on error
+      setDemoMode(true);
+      setPaymentError('');
     }
   };
 
@@ -274,6 +288,12 @@ export default function PublicInvoicePage() {
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Demo mode - show preview message
+    if (demoMode) {
+      setPaymentError('Demo mode - Payment processing not available. Please contact merchant to complete setup.');
+      return;
+    }
     
     if (!payForm) {
       setPaymentError('Payment form not ready');
@@ -519,9 +539,79 @@ export default function PublicInvoicePage() {
                     </div>
                   </div>
 
-                  {/* Fortis Elements Payment Form Container */}
+                  {/* Payment Form Container */}
                   <div>
-                    {!clientToken || !fortisLoaded ? (
+                    {demoMode ? (
+                      /* Demo Mode - Simple card fields for screenshots */
+                      paymentMethod === 'card' ? (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Card number</label>
+                            <input
+                              type="text"
+                              value={demoCardNumber}
+                              onChange={(e) => setDemoCardNumber(e.target.value.replace(/\D/g, '').replace(/(\d{4})/g, '$1 ').trim())}
+                              maxLength={19}
+                              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                              placeholder="1234 5678 9012 3456"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Expiry</label>
+                              <input
+                                type="text"
+                                value={demoExpiry}
+                                onChange={(e) => {
+                                  let val = e.target.value.replace(/\D/g, '');
+                                  if (val.length >= 2) val = val.slice(0, 2) + '/' + val.slice(2, 4);
+                                  setDemoExpiry(val);
+                                }}
+                                maxLength={5}
+                                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                placeholder="MM/YY"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">CVC</label>
+                              <input
+                                type="text"
+                                value={demoCvc}
+                                onChange={(e) => setDemoCvc(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                                maxLength={4}
+                                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                                placeholder="123"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Routing number</label>
+                            <input
+                              type="text"
+                              value={demoRoutingNumber}
+                              onChange={(e) => setDemoRoutingNumber(e.target.value.replace(/\D/g, '').slice(0, 9))}
+                              maxLength={9}
+                              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                              placeholder="110000000"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Account number</label>
+                            <input
+                              type="text"
+                              value={demoAccountNumber}
+                              onChange={(e) => setDemoAccountNumber(e.target.value.replace(/\D/g, '').slice(0, 17))}
+                              maxLength={17}
+                              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"
+                              placeholder="000123456789"
+                            />
+                          </div>
+                        </div>
+                      )
+                    ) : !clientToken || !fortisLoaded ? (
                       <div className="h-40 flex items-center justify-center bg-gray-50 rounded-lg">
                         <div className="text-center">
                           <div className="animate-spin h-5 w-5 border-2 border-gray-400 border-t-transparent rounded-full mx-auto mb-2" />
@@ -551,7 +641,7 @@ export default function PublicInvoicePage() {
                   {/* Submit Button */}
                   <button
                     type="submit"
-                    disabled={processing || !clientToken || !fortisLoaded}
+                    disabled={processing || (!demoMode && (!clientToken || !fortisLoaded))}
                     className="w-full py-3 rounded-lg font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ backgroundColor: primaryColor, color: buttonTextColor }}
                   >
