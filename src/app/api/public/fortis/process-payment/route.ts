@@ -62,8 +62,8 @@ export async function POST(request: Request) {
       await logPaymentEvent({
         eventType: 'payment.failed',
         organizationId,
-        transactionId: fortisTransactionId,
-        data: {
+        fortisTransactionId,
+        metadata: {
           type,
           referenceId,
           statusCode: status_code,
@@ -238,12 +238,12 @@ export async function POST(request: Request) {
       eventType: isPending ? 'ach.pending' : 'payment.succeeded',
       organizationId,
       transactionId: transaction.id,
-      data: {
+      amount: amountInDollars,
+      fortisTransactionId,
+      metadata: {
         type,
         referenceId,
-        amount: amountInDollars,
         fee,
-        fortisTransactionId,
       },
     });
 

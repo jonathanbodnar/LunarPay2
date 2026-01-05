@@ -113,14 +113,12 @@ export async function POST(
       console.error('[Refund] Fortis refund failed:', result.message);
       
       await logPaymentEvent({
-        eventType: 'REFUND_FAILED',
+        eventType: 'refund.failed',
         organizationId: transaction.organizationId,
         transactionId: transaction.id,
-        data: {
-          fortisTransactionId: transaction.fortisTransactionId,
-          amount: amountToRefund,
-          error: result.message,
-        },
+        amount: amountToRefund,
+        error: result.message,
+        fortisTransactionId: transaction.fortisTransactionId || undefined,
       });
 
       return NextResponse.json(
@@ -157,12 +155,12 @@ export async function POST(
 
     // Log successful refund
     await logPaymentEvent({
-      eventType: 'REFUND_SUCCEEDED',
+      eventType: 'refund.succeeded',
       organizationId: transaction.organizationId,
       transactionId: transaction.id,
-      data: {
-        fortisTransactionId: transaction.fortisTransactionId,
-        amount: amountToRefund,
+      amount: amountToRefund,
+      fortisTransactionId: transaction.fortisTransactionId || undefined,
+      metadata: {
         isPartialRefund,
         refundId: result.refund?.id,
       },

@@ -267,10 +267,10 @@ export async function POST(request: Request) {
         eventType: isPending ? 'ach.pending' : 'payment.succeeded',
         organizationId: session.organizationId,
         transactionId: transaction.id,
-        data: {
+        amount,
+        metadata: {
           productId: product.id,
           productName: product.name,
-          amount,
           isSubscription: product.isSubscription,
         },
       });
@@ -306,9 +306,9 @@ export async function POST(request: Request) {
         eventType: 'payment.failed',
         organizationId: session.organizationId,
         transactionId: transaction.id,
-        data: {
+        error: result.message,
+        metadata: {
           productId: product.id,
-          error: result.message,
           reasonCode: result.reasonCode,
         },
       });

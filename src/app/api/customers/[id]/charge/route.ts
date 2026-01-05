@@ -201,11 +201,11 @@ export async function POST(
         eventType: isPending ? 'ach.pending' : 'payment.succeeded',
         organizationId: customer.organizationId,
         transactionId: transaction.id,
-        data: {
-          amount,
+        amount,
+        fortisTransactionId: result.transaction?.id,
+        metadata: {
           customerId,
           sourceId,
-          fortisTransactionId: result.transaction?.id,
         },
       });
 
@@ -235,11 +235,11 @@ export async function POST(
         eventType: 'payment.failed',
         organizationId: customer.organizationId,
         transactionId: transaction.id,
-        data: {
-          amount,
+        amount,
+        error: result.message,
+        metadata: {
           customerId,
           sourceId,
-          error: result.message,
           reasonCode: result.reasonCode,
         },
       });
