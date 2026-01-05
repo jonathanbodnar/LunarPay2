@@ -764,7 +764,7 @@ export default function PaymentSetupPage() {
                   </button>
                 </div>
               ) : (
-                // Show MPA iframe
+                // Show MPA iframe with tips
                 <div className="space-y-4">
                   <div className="text-center mb-4">
                     <h2 className="text-xl font-semibold mb-2">Complete Merchant Processing Agreement</h2>
@@ -773,14 +773,70 @@ export default function PaymentSetupPage() {
                       <strong>A verification code will be sent to your email from Fortis to access the form.</strong>
                     </p>
                   </div>
-                  <div className="border rounded-lg overflow-hidden bg-white">
-                    <iframe
-                      src={selectedOrg.fortisOnboarding.mpaLink}
-                      className="w-full"
-                      style={{ height: '700px', border: 'none' }}
-                      title="Fortis MPA Form"
-                      allow="payment"
-                    />
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    {/* MPA Iframe - Takes 3 columns */}
+                    <div className="lg:col-span-3">
+                      <div className="border rounded-lg overflow-hidden bg-white">
+                        <iframe
+                          src={selectedOrg.fortisOnboarding.mpaLink}
+                          className="w-full"
+                          style={{ height: '700px', border: 'none' }}
+                          title="Fortis MPA Form"
+                          allow="payment"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Tips Panel - Takes 1 column */}
+                    <div className="lg:col-span-1 space-y-4">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Who is Fortis?
+                        </h3>
+                        <p className="text-sm text-blue-800">
+                          They're our banking partner that completes all underwriting.
+                        </p>
+                      </div>
+                      
+                      <div className="bg-amber-50 border border-amber-300 rounded-lg p-4">
+                        <h3 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          Volume Fields
+                        </h3>
+                        <p className="text-sm text-amber-800">
+                          Your high transaction amount cannot exceed the amount you enter in monthly volume or echeck fields.
+                        </p>
+                      </div>
+                      
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <h3 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Approval Process
+                        </h3>
+                        <p className="text-sm text-green-800">
+                          This application approval will only take 24-48 hours, but once approved, you're in and can process without fear of political persecution!
+                        </p>
+                      </div>
+                      
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                        <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Why So Thorough?
+                        </h3>
+                        <p className="text-sm text-purple-800">
+                          Most processors let you process immediately, then when they get around to underwriting you will hold your funds until you complete the exact same process. We like to be upfront and transparent!
+                        </p>
+                      </div>
+                    </div>
                   </div>
                   <div className="flex justify-between items-center pt-4">
                     <Button variant="outline" onClick={() => window.open(selectedOrg.fortisOnboarding!.mpaLink!, '_blank')}>
