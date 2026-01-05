@@ -117,7 +117,6 @@ export async function POST(
         status: 'N', // Pending
         transactionType: 'Payment',
         template: 'lunarpayfr',
-        memo: description || null,
       },
     });
 

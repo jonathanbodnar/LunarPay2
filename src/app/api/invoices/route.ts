@@ -168,6 +168,7 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error('Invoice validation error:', error.issues);
       return NextResponse.json(
         { error: 'Validation error', details: error.issues },
         { status: 400 }
@@ -183,7 +184,7 @@ export async function POST(request: Request) {
 
     console.error('Create invoice error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: String(error) },
       { status: 500 }
     );
   }
