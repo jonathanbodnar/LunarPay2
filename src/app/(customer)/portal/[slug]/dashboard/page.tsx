@@ -348,17 +348,20 @@ export default function PortalDashboard() {
       {/* Navigation */}
       <nav className="border-b bg-white">
         <div className="max-w-5xl mx-auto px-4">
-          <div className="flex gap-6 overflow-x-auto">
+          <div className="flex gap-1 overflow-x-auto py-2">
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as Tab)}
-                className={`flex items-center gap-2 py-4 px-2 border-b-2 transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-2 py-2.5 px-4 rounded-lg transition-all whitespace-nowrap text-sm ${
                   activeTab === tab.id 
-                    ? 'border-current font-medium' 
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                    ? 'font-medium shadow-sm' 
+                    : 'text-muted-foreground hover:text-foreground hover:bg-gray-100'
                 }`}
-                style={activeTab === tab.id ? { color: primaryColor, borderColor: primaryColor } : {}}
+                style={activeTab === tab.id ? { 
+                  backgroundColor: `${primaryColor}10`, 
+                  color: primaryColor 
+                } : {}}
               >
                 <tab.icon className="h-4 w-4" />
                 {tab.label}
@@ -463,121 +466,151 @@ export default function PortalDashboard() {
 
         {activeTab === 'transactions' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold">Transaction History</h2>
+            <div>
+              <h2 className="text-2xl font-semibold">Transaction History</h2>
+              <p className="text-muted-foreground text-sm mt-1">View your past payments and refunds</p>
+            </div>
 
             {transactions.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Receipt className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">No transactions yet.</p>
+              <Card className="border-dashed">
+                <CardContent className="py-16 text-center">
+                  <div 
+                    className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+                    style={{ backgroundColor: `${primaryColor}10` }}
+                  >
+                    <Receipt className="h-8 w-8" style={{ color: primaryColor }} />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">No transactions yet</h3>
+                  <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                    Your payment history will appear here once you make a purchase.
+                  </p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-3">
-                {transactions.map(trx => {
-                  const isRefund = trx.transactionType === 'refund';
-                  const isPaid = trx.status === 'P';
-                  const isFailed = trx.status === 'N';
-                  
-                  return (
-                    <Card key={trx.id}>
-                      <CardContent className="py-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div 
-                              className="p-3 rounded-lg"
-                              style={{ 
-                                backgroundColor: isRefund 
-                                  ? '#fef2f2' 
-                                  : isPaid 
-                                    ? `${primaryColor}15` 
-                                    : '#f5f5f5' 
-                              }}
-                            >
-                              {isRefund ? (
-                                <ArrowDownLeft className="h-5 w-5 text-red-500" />
-                              ) : (
-                                <ArrowUpRight 
-                                  className="h-5 w-5" 
-                                  style={{ color: isPaid ? primaryColor : '#999' }} 
-                                />
-                              )}
-                            </div>
-                            <div>
-                              <p className="font-medium">
-                                {isRefund ? 'Refund' : 'Payment'} - {trx.givingSource}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {formatDate(trx.date)}
-                                {trx.bankType && (
-                                  <span className="ml-2">• {trx.bankType.toUpperCase()}</span>
-                                )}
-                              </p>
-                            </div>
+              <Card>
+                <CardContent className="p-0 divide-y">
+                  {transactions.map(trx => {
+                    const isRefund = trx.transactionType === 'refund';
+                    const isPaid = trx.status === 'P';
+                    const isFailed = trx.status === 'N';
+                    
+                    return (
+                      <div key={trx.id} className="flex items-center justify-between p-4 hover:bg-gray-50/50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div 
+                            className="w-10 h-10 rounded-full flex items-center justify-center"
+                            style={{ 
+                              backgroundColor: isRefund 
+                                ? '#fef2f2' 
+                                : isPaid 
+                                  ? `${primaryColor}10` 
+                                  : '#f5f5f5' 
+                            }}
+                          >
+                            {isRefund ? (
+                              <ArrowDownLeft className="h-5 w-5 text-red-500" />
+                            ) : (
+                              <ArrowUpRight 
+                                className="h-5 w-5" 
+                                style={{ color: isPaid ? primaryColor : '#999' }} 
+                              />
+                            )}
                           </div>
-                          <div className="text-right">
-                            <p 
-                              className={`text-lg font-semibold ${
-                                isRefund ? 'text-red-600' : ''
-                              }`}
-                              style={!isRefund && isPaid ? { color: primaryColor } : {}}
-                            >
-                              {isRefund ? '-' : '+'}{formatCurrency(Number(trx.totalAmount))}
+                          <div>
+                            <p className="font-medium">
+                              {isRefund ? 'Refund' : 'Payment'}
+                              <span className="text-muted-foreground font-normal"> via {trx.givingSource}</span>
                             </p>
-                            <span 
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                isPaid 
-                                  ? 'bg-green-100 text-green-700' 
-                                  : isFailed
-                                    ? 'bg-red-100 text-red-700'
-                                    : 'bg-yellow-100 text-yellow-700'
-                              }`}
-                            >
-                              {isPaid ? 'Completed' : isFailed ? 'Failed' : 'Pending'}
-                            </span>
+                            <p className="text-sm text-muted-foreground">
+                              {formatDate(trx.date)}
+                              {trx.bankType && (
+                                <span className="ml-2">• {trx.bankType.charAt(0).toUpperCase() + trx.bankType.slice(1)}</span>
+                              )}
+                            </p>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+                        <div className="text-right">
+                          <p 
+                            className={`text-lg font-semibold ${
+                              isRefund ? 'text-red-600' : ''
+                            }`}
+                            style={!isRefund && isPaid ? { color: primaryColor } : {}}
+                          >
+                            {isRefund ? '-' : '+'}{formatCurrency(Number(trx.totalAmount))}
+                          </p>
+                          <span 
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              isPaid 
+                                ? 'bg-green-100 text-green-700' 
+                                : isFailed
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-yellow-100 text-yellow-700'
+                            }`}
+                          >
+                            {isPaid ? 'Completed' : isFailed ? 'Failed' : 'Pending'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
             )}
           </div>
         )}
 
         {activeTab === 'payment-methods' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-semibold">Payment Methods</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-semibold">Payment Methods</h2>
+                <p className="text-muted-foreground text-sm mt-1">Manage your saved cards and bank accounts</p>
+              </div>
               <Button style={{ backgroundColor: primaryColor, color: buttonTextColor }}>
                 <Plus className="h-4 w-4 mr-2" />
-                Add Payment Method
+                Add New
               </Button>
             </div>
 
             {paymentMethods.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <CreditCard className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">No payment methods saved yet.</p>
+              <Card className="border-dashed">
+                <CardContent className="py-16 text-center">
+                  <div 
+                    className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+                    style={{ backgroundColor: `${primaryColor}10` }}
+                  >
+                    <CreditCard className="h-8 w-8" style={{ color: primaryColor }} />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">No payment methods yet</h3>
+                  <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">
+                    Add a card or bank account to make purchases and manage subscriptions.
+                  </p>
+                  <Button style={{ backgroundColor: primaryColor, color: buttonTextColor }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Payment Method
+                  </Button>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4">
+              <div className="space-y-3">
                 {paymentMethods.map(pm => (
-                  <Card key={pm.id}>
-                    <CardContent className="py-4">
+                  <Card key={pm.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-5">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                          {pm.sourceType === 'card' ? (
-                            <CreditCard className="h-8 w-8 text-muted-foreground" />
-                          ) : (
-                            <Building2 className="h-8 w-8 text-muted-foreground" />
-                          )}
+                          <div 
+                            className="w-12 h-12 rounded-xl flex items-center justify-center"
+                            style={{ backgroundColor: `${primaryColor}10` }}
+                          >
+                            {pm.sourceType === 'cc' || pm.sourceType === 'card' ? (
+                              <CreditCard className="h-6 w-6" style={{ color: primaryColor }} />
+                            ) : (
+                              <Building2 className="h-6 w-6" style={{ color: primaryColor }} />
+                            )}
+                          </div>
                           <div>
-                            <p className="font-medium">
-                              {pm.sourceType === 'card' ? 'Card' : pm.bankType || 'Bank Account'} ending in {pm.lastDigits}
+                            <p className="font-semibold">
+                              {pm.bankType ? pm.bankType.charAt(0).toUpperCase() + pm.bankType.slice(1) : 'Card'} •••• {pm.lastDigits}
                             </p>
                             <p className="text-sm text-muted-foreground">
                               {pm.nameHolder}
@@ -585,7 +618,7 @@ export default function PortalDashboard() {
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           {pm.isDefault ? (
                             <span 
                               className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
@@ -632,34 +665,45 @@ export default function PortalDashboard() {
 
         {activeTab === 'subscriptions' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold">Subscriptions</h2>
+            <div>
+              <h2 className="text-2xl font-semibold">Subscriptions</h2>
+              <p className="text-muted-foreground text-sm mt-1">Manage your recurring payments</p>
+            </div>
 
             {subscriptions.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <RefreshCcw className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">No subscriptions yet.</p>
+              <Card className="border-dashed">
+                <CardContent className="py-16 text-center">
+                  <div 
+                    className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+                    style={{ backgroundColor: `${primaryColor}10` }}
+                  >
+                    <RefreshCcw className="h-8 w-8" style={{ color: primaryColor }} />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">No active subscriptions</h3>
+                  <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">
+                    Subscribe to products to set up recurring payments.
+                  </p>
                   <Button 
-                    className="mt-4"
                     onClick={() => setActiveTab('products')}
                     style={{ backgroundColor: primaryColor, color: buttonTextColor }}
                   >
+                    <ShoppingBag className="h-4 w-4 mr-2" />
                     Browse Products
                   </Button>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4">
+              <div className="space-y-3">
                 {subscriptions.map(sub => {
                   const isActive = sub.status === 'A';
                   return (
-                    <Card key={sub.id}>
-                      <CardContent className="py-4">
-                        <div className="flex items-center justify-between">
+                    <Card key={sub.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div className="flex items-center gap-4">
                             <div 
-                              className="p-3 rounded-lg"
-                              style={{ backgroundColor: isActive ? `${primaryColor}15` : '#f0f0f0' }}
+                              className="w-12 h-12 rounded-xl flex items-center justify-center"
+                              style={{ backgroundColor: isActive ? `${primaryColor}10` : '#f5f5f5' }}
                             >
                               <RefreshCcw 
                                 className="h-6 w-6" 
@@ -667,38 +711,42 @@ export default function PortalDashboard() {
                               />
                             </div>
                             <div>
-                              <p className="font-medium">
-                                {formatCurrency(Number(sub.amount))} / {sub.frequency}
+                              <p className="font-semibold text-lg">
+                                {formatCurrency(Number(sub.amount))}
+                                <span className="text-sm font-normal text-muted-foreground ml-1">
+                                  / {sub.frequency}
+                                </span>
                               </p>
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mt-1">
                                 <span className="flex items-center gap-1">
-                                  <Calendar className="h-3 w-3" />
+                                  <Calendar className="h-3.5 w-3.5" />
                                   Next: {formatDate(sub.nextPaymentOn)}
                                 </span>
                                 {sub.lastPaymentOn && (
-                                  <span>Last: {formatDate(sub.lastPaymentOn)}</span>
+                                  <span>• Last: {formatDate(sub.lastPaymentOn)}</span>
                                 )}
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 ml-16 sm:ml-0">
                             <span 
-                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
                                 isActive 
                                   ? 'bg-green-100 text-green-700' 
-                                  : 'bg-gray-100 text-gray-700'
+                                  : 'bg-gray-100 text-gray-600'
                               }`}
                             >
                               {isActive ? (
-                                <><CheckCircle className="h-3 w-3 mr-1" /> Active</>
+                                <><CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Active</>
                               ) : (
-                                <><XCircle className="h-3 w-3 mr-1" /> Cancelled</>
+                                <><XCircle className="h-3.5 w-3.5 mr-1.5" /> Cancelled</>
                               )}
                             </span>
                             {isActive && (
                               <Button 
                                 variant="outline" 
                                 size="sm"
+                                className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
                                 onClick={() => handleCancelSubscription(sub.id)}
                                 disabled={actionLoading === `sub-cancel-${sub.id}`}
                               >
@@ -722,51 +770,77 @@ export default function PortalDashboard() {
 
         {activeTab === 'products' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-semibold">Shop</h2>
+            <div>
+              <h2 className="text-2xl font-semibold">Shop</h2>
+              <p className="text-muted-foreground text-sm mt-1">Browse available products and subscriptions</p>
+            </div>
 
             {products.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <ShoppingBag className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">No products available at the moment.</p>
+              <Card className="border-dashed">
+                <CardContent className="py-16 text-center">
+                  <div 
+                    className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+                    style={{ backgroundColor: `${primaryColor}10` }}
+                  >
+                    <ShoppingBag className="h-8 w-8" style={{ color: primaryColor }} />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">No products available</h3>
+                  <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                    Check back later for available products and subscriptions.
+                  </p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid md:grid-cols-2 gap-5">
                 {products.map(product => (
-                  <Card key={product.id} className="overflow-hidden">
-                    <CardContent className="p-6">
-                      <h3 className="font-semibold text-lg mb-1">{product.name}</h3>
-                      <p className="text-sm text-muted-foreground mb-4 min-h-[20px]">
-                        {product.description || (product.isSubscription ? (
-                          <>
-                            {getSubscriptionFrequencyText(
-                              product.subscriptionInterval, 
-                              product.subscriptionIntervalCount
+                  <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                    <CardContent className="p-0">
+                      <div className="p-6">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              {product.isSubscription && (
+                                <span 
+                                  className="text-xs font-medium px-2 py-0.5 rounded-full"
+                                  style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}
+                                >
+                                  Subscription
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="font-semibold text-xl mb-2">{product.name}</h3>
+                            {product.description && (
+                              <p className="text-muted-foreground text-sm mb-3">{product.description}</p>
                             )}
-                            {product.subscriptionTrialDays && product.subscriptionTrialDays > 0 && (
-                              <> • {product.subscriptionTrialDays} day trial</>
+                            {product.isSubscription && (
+                              <p className="text-sm text-muted-foreground">
+                                Billed {getSubscriptionFrequencyText(
+                                  product.subscriptionInterval, 
+                                  product.subscriptionIntervalCount
+                                )}
+                                {product.subscriptionTrialDays && product.subscriptionTrialDays > 0 && (
+                                  <span className="text-green-600 ml-2">
+                                    • {product.subscriptionTrialDays} day free trial
+                                  </span>
+                                )}
+                              </p>
                             )}
-                          </>
-                        ) : '\u00A0')}
-                      </p>
-                      {product.description && product.isSubscription && (
-                        <p className="text-sm text-muted-foreground mb-4">
-                          {getSubscriptionFrequencyText(
-                            product.subscriptionInterval, 
-                            product.subscriptionIntervalCount
-                          )}
-                          {product.subscriptionTrialDays && product.subscriptionTrialDays > 0 && (
-                            <> • {product.subscriptionTrialDays} day trial</>
-                          )}
-                        </p>
-                      )}
-                      <div className="flex items-center justify-between">
+                          </div>
+                        </div>
+                      </div>
+                      <div 
+                        className="px-6 py-4 flex items-center justify-between border-t"
+                        style={{ backgroundColor: `${primaryColor}05` }}
+                      >
                         <p className="text-2xl font-bold" style={{ color: primaryColor }}>
                           {formatCurrency(Number(product.price))}
+                          {product.isSubscription && (
+                            <span className="text-sm font-normal text-muted-foreground ml-1">
+                              /{product.subscriptionInterval === 'monthly' ? 'mo' : product.subscriptionInterval === 'yearly' ? 'yr' : product.subscriptionInterval}
+                            </span>
+                          )}
                         </p>
                         <Button 
-                          size="sm"
                           style={{ backgroundColor: primaryColor, color: buttonTextColor }}
                           onClick={() => handleOpenCheckout(product)}
                         >
