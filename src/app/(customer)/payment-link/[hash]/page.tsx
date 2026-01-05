@@ -528,7 +528,7 @@ export default function PaymentLinkPage() {
                       </div>
                       
                       {/* Quantity selector for unlimited/multi-qty products */}
-                      {(allowMultiple || isUnlimited) && !item.product.isSubscription && (
+                      {(allowMultiple || isUnlimited) && (
                         <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
                           <span className="text-sm text-gray-600">Quantity</span>
                           <div className="flex items-center gap-3">
