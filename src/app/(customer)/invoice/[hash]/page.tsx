@@ -49,7 +49,13 @@ interface Invoice {
 
 declare global {
   interface Window {
-    PayForm?: any;
+    Commerce?: {
+      elements: new (token: string) => {
+        create: (config: any) => void;
+        on: (event: string, callback: (data?: any) => void) => void;
+        submit: () => void;
+      };
+    };
   }
 }
 
@@ -113,7 +119,8 @@ export default function PublicInvoicePage() {
     if (!invoice) return;
     
     // Check if already loaded
-    if (window.PayForm) {
+    if (window.Commerce?.elements) {
+      console.log('[Fortis] Commerce.elements already loaded');
       setFortisLoaded(true);
       return;
     }
@@ -122,7 +129,12 @@ export default function PublicInvoicePage() {
     script.src = 'https://js.fortis.tech/commercejs-v1.0.0.min.js';
     script.async = true;
     script.onload = () => {
+      console.log('[Fortis] Script loaded, Commerce available:', !!window.Commerce);
       setFortisLoaded(true);
+    };
+    script.onerror = () => {
+      console.error('[Fortis] Failed to load script');
+      setDemoMode(true);
     };
     document.body.appendChild(script);
 
@@ -135,71 +147,57 @@ export default function PublicInvoicePage() {
 
   // Initialize Fortis payment form when token is available
   useEffect(() => {
-    if (!clientToken || !fortisLoaded || !window.PayForm) {
-      console.log('[Fortis] Not ready:', { clientToken: !!clientToken, fortisLoaded, hasPayForm: !!window.PayForm });
+    if (!clientToken || !fortisLoaded || !window.Commerce?.elements) {
+      console.log('[Fortis] Not ready:', { clientToken: !!clientToken, fortisLoaded, hasCommerce: !!window.Commerce?.elements });
       return;
     }
 
-    console.log('[Fortis] Initializing payment form with environment:', fortisEnvironment);
+    console.log('[Fortis] Initializing Commerce.elements with environment:', fortisEnvironment);
 
     try {
-      // Configure payment form
-      const config = {
+      // Create elements instance with the token
+      const elements = new window.Commerce.elements(clientToken);
+      
+      // Create the payment form
+      elements.create({
         container: '#payment-form-container',
         theme: 'default',
-        environment: fortisEnvironment,
-        floatingLabels: true,
+        hideTotal: true,
         showReceipt: false,
-        showSubmitButton: false, // We'll use our own button
-        fields: paymentMethod === 'card' 
-          ? ['account_holder_name', 'account_number', 'exp_date', 'cvv']
-          : ['account_holder_name', 'routing_number', 'account_number', 'account_type'],
-        submitButton: {
-          className: 'hidden',
+        showSubmitButton: false,
+        appearance: {
+          colorButtonSelectedBackground: primaryColor,
+          colorButtonText: buttonTextColor,
+          colorButtonBackground: '#9b9b9b',
+          fontSize: '0.9em',
         },
-        styles: {
-          'input': {
-            'border': '1px solid #d1d5db',
-            'border-radius': '0.5rem',
-            'padding': '0.75rem 1rem',
-            'font-size': '1rem',
-          },
-          'input:focus': {
-            'border-color': primaryColor,
-            'outline': 'none',
-            'box-shadow': `0 0 0 2px ${primaryColor}33`,
-          },
-          'label': {
-            'color': '#374151',
-            'font-size': '0.875rem',
-            'font-weight': '500',
-          },
-        },
-      };
+      });
 
-      console.log('[Fortis] Creating PayForm with config:', JSON.stringify(config, null, 2));
-      const form = new window.PayForm(clientToken, config);
-      
-      form.on('ready', () => {
+      elements.on('ready', () => {
         console.log('[Fortis] Payment form ready');
       });
 
-      form.on('error', (err: any) => {
+      elements.on('error', (err: any) => {
         console.error('[Fortis] Form error:', err);
-        setPaymentError(err.message || 'Payment form error');
+        setPaymentError(err?.message || 'Payment form error');
       });
 
-      form.on('tokenized', async (response: any) => {
-        console.log('[Fortis] Payment tokenized:', response);
+      elements.on('validationError', (err: any) => {
+        console.log('[Fortis] Validation error:', err);
+        setProcessing(false);
+      });
+
+      elements.on('done', async (response: any) => {
+        console.log('[Fortis] Payment done:', response);
         await processPayment(response);
       });
 
-      setPayForm(form);
+      setPayForm(elements);
     } catch (err) {
       console.error('[Fortis] Init error:', err);
       setPaymentError('Failed to initialize payment form');
     }
-  }, [clientToken, fortisLoaded, paymentMethod, primaryColor, fortisEnvironment]);
+  }, [clientToken, fortisLoaded, paymentMethod, primaryColor, buttonTextColor, fortisEnvironment]);
 
   const fetchInvoice = async () => {
     try {
