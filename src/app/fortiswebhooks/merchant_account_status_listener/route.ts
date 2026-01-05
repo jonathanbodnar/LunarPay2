@@ -218,7 +218,7 @@ async function handleTransactionStatusWebhook(body: any) {
       });
 
       await logPaymentStatusUpdated(
-        Number(transaction.id),
+        transaction.id.toString(),
         oldStatus || 'unknown',
         newStatus,
         { fortisTransactionId: transactionId }
