@@ -16,7 +16,10 @@ import {
   ExternalLink,
   ArrowRight,
   ArrowLeft,
-  Lock
+  Lock,
+  RefreshCw,
+  Clock,
+  Mail
 } from 'lucide-react';
 
 interface Organization {
@@ -49,6 +52,8 @@ export default function PaymentSetupPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
+  const [mpaSubmitted, setMpaSubmitted] = useState(false);
+  const [refreshingStatus, setRefreshingStatus] = useState(false);
 
   // Step 1: Merchant Info
   const [merchantInfo, setMerchantInfo] = useState({
@@ -98,6 +103,27 @@ export default function PaymentSetupPage() {
       console.error('Failed to fetch organizations:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshApplicationStatus = async () => {
+    setRefreshingStatus(true);
+    try {
+      const res = await fetch('/api/organizations', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.organizations?.length > 0) {
+          const org = data.organizations.find((o: Organization) => o.id === selectedOrg?.id) || data.organizations[0];
+          setSelectedOrg(org);
+          if (org.fortisOnboarding?.appStatus === 'ACTIVE') {
+            setSuccess('Your application has been approved!');
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to refresh status:', err);
+    } finally {
+      setRefreshingStatus(false);
     }
   };
 
@@ -699,43 +725,101 @@ export default function PaymentSetupPage() {
                 </Button>
               </div>
             ) : selectedOrg?.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' && selectedOrg?.fortisOnboarding?.mpaLink ? (
-              <div className="space-y-4">
-                <div className="text-center mb-4">
-                  <h2 className="text-xl font-semibold mb-2">Complete Merchant Processing Agreement</h2>
-                  <p className="text-muted-foreground text-sm">
-                    Please review your application below and fill in any missing information, to finalize your merchant account setup with our partner, Fortis.{' '}
-                    <strong>A verification code will be sent to your email from Fortis to access the form.</strong>
+              mpaSubmitted ? (
+                // Thank you message after submitting MPA
+                <div className="text-center py-8">
+                  <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Mail className="h-10 w-10 text-green-600" />
+                  </div>
+                  <h2 className="text-2xl font-semibold mb-4">Thank you!</h2>
+                  <p className="text-muted-foreground mb-2 max-w-md mx-auto">
+                    We'll email you as soon as your application is approved. You may receive communication from Fortis (our banking partner) with additional questions.
                   </p>
+                  <p className="text-sm text-muted-foreground mb-8 flex items-center justify-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    This can take 24 to 48 hours.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <Button 
+                      variant="outline" 
+                      onClick={refreshApplicationStatus}
+                      disabled={refreshingStatus}
+                    >
+                      {refreshingStatus ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                      )}
+                      Refresh Status
+                    </Button>
+                    <Button onClick={() => router.push('/dashboard')}>
+                      Go to Dashboard
+                    </Button>
+                  </div>
+                  <button 
+                    onClick={() => setMpaSubmitted(false)}
+                    className="mt-6 text-sm text-muted-foreground hover:text-foreground underline"
+                  >
+                    Need to make changes? View application again
+                  </button>
                 </div>
-                <div className="border rounded-lg overflow-hidden bg-white">
-                  <iframe
-                    src={selectedOrg.fortisOnboarding.mpaLink}
-                    className="w-full"
-                    style={{ height: '700px', border: 'none' }}
-                    title="Fortis MPA Form"
-                    allow="payment"
-                  />
+              ) : (
+                // Show MPA iframe
+                <div className="space-y-4">
+                  <div className="text-center mb-4">
+                    <h2 className="text-xl font-semibold mb-2">Complete Merchant Processing Agreement</h2>
+                    <p className="text-muted-foreground text-sm">
+                      Please review your application below and fill in any missing information, to finalize your merchant account setup with our partner, Fortis.{' '}
+                      <strong>A verification code will be sent to your email from Fortis to access the form.</strong>
+                    </p>
+                  </div>
+                  <div className="border rounded-lg overflow-hidden bg-white">
+                    <iframe
+                      src={selectedOrg.fortisOnboarding.mpaLink}
+                      className="w-full"
+                      style={{ height: '700px', border: 'none' }}
+                      title="Fortis MPA Form"
+                      allow="payment"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center pt-4">
+                    <Button variant="outline" onClick={() => window.open(selectedOrg.fortisOnboarding!.mpaLink!, '_blank')}>
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Open in New Tab
+                    </Button>
+                    <Button onClick={() => setMpaSubmitted(true)}>
+                      I've Completed the Application
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(2)}>
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back
-                  </Button>
-                  <Button variant="ghost" onClick={() => window.open(selectedOrg.fortisOnboarding!.mpaLink!, '_blank')}>
-                    Open in New Tab
-                    <ExternalLink className="h-4 w-4 ml-2" />
-                  </Button>
-                </div>
-              </div>
+              )
             ) : selectedOrg?.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' ? (
-              <div className="text-center">
-                <div className="h-16 w-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Loader2 className="h-8 w-8 text-yellow-600 animate-spin" />
+              // Fallback for BANK_INFORMATION_SENT without mpaLink
+              <div className="text-center py-8">
+                <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Mail className="h-10 w-10 text-green-600" />
                 </div>
-                <h2 className="text-2xl font-semibold mb-2">Application Submitted</h2>
-                <p className="text-muted-foreground mb-6">
-                  Your application is being processed. Please wait...
+                <h2 className="text-2xl font-semibold mb-4">Thank you!</h2>
+                <p className="text-muted-foreground mb-2 max-w-md mx-auto">
+                  We'll email you as soon as your application is approved. You may receive communication from Fortis (our banking partner) with additional questions.
                 </p>
+                <p className="text-sm text-muted-foreground mb-8 flex items-center justify-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  This can take 24 to 48 hours.
+                </p>
+                <Button 
+                  variant="outline" 
+                  onClick={refreshApplicationStatus}
+                  disabled={refreshingStatus}
+                >
+                  {refreshingStatus ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Refresh Application Status
+                </Button>
               </div>
             ) : (
               <div className="text-center">
