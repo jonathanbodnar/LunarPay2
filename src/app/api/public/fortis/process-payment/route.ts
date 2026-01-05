@@ -128,7 +128,7 @@ export async function POST(request: Request) {
       data: {
         userId: organization.userId,
         organizationId,
-        donorId: donor?.id || null,
+        donorId: donor?.id || 0, // Default to 0 if no donor (guest checkout)
         firstName: customerFirstName || account_holder_name?.split(' ')[0] || 'Guest',
         lastName: customerLastName || account_holder_name?.split(' ').slice(1).join(' ') || '',
         email: customerEmail || '',
@@ -139,6 +139,7 @@ export async function POST(request: Request) {
         status: isPending ? 'pending' : 'succeeded',
         statusAch: isPending ? 'pending' : null,
         transactionType: 'Payment',
+        givingSource: type === 'invoice' ? 'invoice' : 'payment_link',
         fortisTransactionId,
         requestResponse: JSON.stringify(fortisResponse),
         template: 'lunarpayfr', // Default template
