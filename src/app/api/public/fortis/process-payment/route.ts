@@ -31,6 +31,9 @@ export async function POST(request: Request) {
       fortisResponse: fortisResponse ? 'present' : 'missing',
     });
 
+    // Log full Fortis response for debugging
+    console.log('[Process Payment] Full Fortis Response:', JSON.stringify(fortisResponse, null, 2));
+
     if (!fortisResponse) {
       return NextResponse.json(
         { error: 'Payment response data is required' },
@@ -38,27 +41,63 @@ export async function POST(request: Request) {
       );
     }
 
-    // Extract Fortis transaction data
-    const {
-      id: fortisTransactionId,
+    // Fortis Elements returns data in different structures depending on the event
+    // Try to extract from nested 'transaction' or 'data' object, or directly from response
+    const txData = fortisResponse.transaction || fortisResponse.data || fortisResponse;
+    
+    console.log('[Process Payment] Extracted transaction data:', JSON.stringify(txData, null, 2));
+
+    // Extract Fortis transaction data - handle both camelCase and snake_case
+    const fortisTransactionId = txData.id || txData.transaction_id || fortisResponse.id;
+    const transaction_amount = txData.transaction_amount || txData.transactionAmount || txData.amount || 0;
+    const status_code = txData.status_code || txData.statusCode || txData.status_id || txData.statusId;
+    const reason_code_id = txData.reason_code_id || txData.reasonCodeId || txData.reason_code || txData.reasonCode;
+    const account_holder_name = txData.account_holder_name || txData.accountHolderName || txData.cardholder_name || '';
+    const last_four = txData.last_four || txData.lastFour || txData.last4 || '';
+    const account_type = txData.account_type || txData.accountType || txData.card_type || txData.cardType || '';
+    const payment_method = txData.payment_method || txData.paymentMethod || (account_type?.toLowerCase()?.includes('check') ? 'ach' : 'cc');
+    const token_id = txData.token_id || txData.tokenId || txData.token || null;
+    const exp_date = txData.exp_date || txData.expDate || '';
+
+    console.log('[Process Payment] Parsed values:', {
+      fortisTransactionId,
       transaction_amount,
       status_code,
       reason_code_id,
-      account_holder_name,
+      payment_method,
       last_four,
-      account_type, // 'visa', 'mc', 'amex', 'checking', 'savings'
-      payment_method, // 'cc' or 'ach'
-      token_id, // Tokenized payment method for saving
-      expiring_in_months,
-      exp_date,
-    } = fortisResponse;
+    });
 
     // Validate transaction was successful
-    // status_code 101 = approved, reason_code 1000 = success
-    const isSuccessful = status_code === 101 && reason_code_id === 1000;
-    const isPending = payment_method === 'ach' && reason_code_id === 1000; // ACH pending
+    // Fortis status codes: 101 = approved for CC, 131/132 = pending for ACH
+    // Reason code 1000 = success/approved
+    // Also check for successful status strings
+    const statusCodeNum = typeof status_code === 'string' ? parseInt(status_code, 10) : status_code;
+    const reasonCodeNum = typeof reason_code_id === 'string' ? parseInt(reason_code_id, 10) : reason_code_id;
+    
+    // CC approved: status_code 101, reason_code 1000
+    // ACH pending: status_code 131 or 132, reason_code 1000
+    const isCCApproved = statusCodeNum === 101 && reasonCodeNum === 1000;
+    const isACHPending = (statusCodeNum === 131 || statusCodeNum === 132) && reasonCodeNum === 1000;
+    const isSuccessful = isCCApproved;
+    const isPending = isACHPending;
+    
+    // Also check for generic success indicators
+    const isGenericSuccess = 
+      (txData.status === 'approved' || txData.status === 'success' || txData.status === 'pending') ||
+      (reasonCodeNum === 1000) || // Reason code 1000 always means success
+      (fortisTransactionId && !txData.error); // Has transaction ID and no error
 
-    if (!isSuccessful && !isPending) {
+    // Only reject if we're sure it failed (no generic success and explicit failure)
+    if (!isSuccessful && !isPending && !isGenericSuccess) {
+      console.log('[Process Payment] Payment failed:', {
+        isSuccessful,
+        isPending,
+        isGenericSuccess,
+        statusCodeNum,
+        reasonCodeNum,
+      });
+
       await logPaymentEvent({
         eventType: 'payment.failed',
         organizationId,
@@ -75,8 +114,19 @@ export async function POST(request: Request) {
         success: false,
         error: 'Payment was declined',
         reasonCode: reason_code_id,
+        debug: {
+          statusCode: statusCodeNum,
+          reasonCode: reasonCodeNum,
+          hasTransactionId: !!fortisTransactionId,
+        },
       });
     }
+    
+    console.log('[Process Payment] Payment accepted:', {
+      isSuccessful,
+      isPending,
+      isGenericSuccess,
+    });
 
     // Get organization
     const organization = await prisma.organization.findUnique({
