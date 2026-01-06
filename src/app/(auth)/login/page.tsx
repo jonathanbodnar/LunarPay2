@@ -77,14 +77,23 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
+      {/* Logo */}
+      <div className="mb-8">
+        <img 
+          src="/logo.png" 
+          alt="LunarPay" 
+          className="h-12 w-auto"
+        />
+      </div>
+      
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-3xl font-bold text-center">
-            Welcome to LunarPay
+          <CardTitle className="text-2xl font-bold text-center">
+            Sign in to your account
           </CardTitle>
           <CardDescription className="text-center">
-            Sign in to your account to continue
+            Enter your credentials to continue
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -156,74 +165,24 @@ export default function LoginPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex justify-center">
+        <CardFooter className="flex flex-col items-center gap-3">
           <p className="text-sm text-gray-600">
             Don't have an account?{' '}
             <Link href="/register" className="text-blue-600 hover:underline font-medium">
               Sign up
             </Link>
           </p>
+          <div className="flex items-center gap-4 text-xs text-gray-500">
+            <Link href="/privacy" className="hover:text-gray-700">
+              Privacy Policy
+            </Link>
+            <span>•</span>
+            <Link href="/terms" className="hover:text-gray-700">
+              Terms of Use
+            </Link>
+          </div>
         </CardFooter>
       </Card>
-
-      {/* Test Credentials - Always show for now */}
-      <Card className="w-full max-w-md mt-6 bg-blue-50 border-blue-200">
-          <CardHeader>
-            <CardTitle className="text-lg">🧪 Test Credentials</CardTitle>
-            <CardDescription>
-              Use these accounts for testing (development only)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-2 bg-white rounded border border-blue-100 hover:border-blue-300 cursor-pointer"
-                   onClick={() => {
-                     setEmail('admin@lunarpay.io');
-                     setPassword('Admin123456!');
-                   }}>
-                <div>
-                  <p className="text-sm font-medium">Admin Account</p>
-                  <p className="text-xs text-gray-500">admin@lunarpay.io</p>
-                </div>
-                <button className="text-xs text-blue-600 hover:text-blue-800">
-                  Use →
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between p-2 bg-white rounded border border-blue-100 hover:border-blue-300 cursor-pointer"
-                   onClick={() => {
-                     setEmail('merchant@test.com');
-                     setPassword('Merchant123!');
-                   }}>
-                <div>
-                  <p className="text-sm font-medium">Merchant Account</p>
-                  <p className="text-xs text-gray-500">merchant@test.com</p>
-                </div>
-                <button className="text-xs text-blue-600 hover:text-blue-800">
-                  Use →
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between p-2 bg-white rounded border border-blue-100 hover:border-blue-300 cursor-pointer"
-                   onClick={() => {
-                     setEmail('demo@lunarpay.io');
-                     setPassword('Demo123456!');
-                   }}>
-                <div>
-                  <p className="text-sm font-medium">Demo Account</p>
-                  <p className="text-xs text-gray-500">demo@lunarpay.io</p>
-                </div>
-                <button className="text-xs text-blue-600 hover:text-blue-800">
-                  Use →
-                </button>
-              </div>
-            </div>
-
-            <p className="text-xs text-gray-500 italic text-center mt-2">
-              Click any account to auto-fill credentials
-            </p>
-          </CardContent>
-        </Card>
     </div>
   );
 }

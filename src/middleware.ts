@@ -13,10 +13,11 @@ const APP_DOMAINS = [
   'new.lunarpay.com',
   'app.lunarpay.com',
   'lunarpay.com',
+  // Note: portal.lunarpay.com is NOT included - it's the CNAME target for custom domains
 ];
 
 // Routes that don't require authentication
-const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal', '/invite'];
+const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal', '/invite', '/privacy', '/terms', '/fortiswebhooks'];
 
 // Routes that are public APIs (invoices, payment links by hash)
 const publicApiRoutes = [
@@ -35,10 +36,26 @@ const publicApiRoutes = [
   '/api/admin/add-email-templates-table', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-team-tables', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/enable-portal', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/add-onboarding-columns', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/debug-products', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-customer-sessions-table', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-zapier-table', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/add-customer-otp-table', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/fetch-location-id', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/debug-fortis-onboarding', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/set-fortis-credentials', // TEMPORARY - DELETE AFTER USE!
+  '/api/public/', // All public APIs (payment forms, etc.)
+  '/api/fortis/webhooks', // Fortis webhook callbacks
+  '/api/admin/debug-portals', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/debug-email', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/test-email', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/debug-sessions', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/debug-custom-domain', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/link-org', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/add-fortis-tables', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/reset-fortis-onboarding', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/debug-fortis-config', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/debug-merchant-config', // TEMPORARY - DELETE AFTER USE!
   '/api/zapier', // Zapier integration endpoints (use API key auth)
   '/api/team/invite', // Public invite endpoints
   '/api/invoices/public',
@@ -51,7 +68,11 @@ const publicApiRoutes = [
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const hostname = request.headers.get('host') || '';
+  // Check X-Original-Host first (set by Cloudflare Transform Rule for custom domains),
+  // then X-Forwarded-Host, then fall back to Host header
+  const hostname = request.headers.get('x-original-host') || 
+                   request.headers.get('x-forwarded-host') || 
+                   request.headers.get('host') || '';
   
   // Check if this is a custom domain request (not our app domains)
   // Skip custom domain check for API routes (they need normal routing)
@@ -97,7 +118,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Define protected routes
-  const protectedRoutes = ['/dashboard', '/organizations', '/invoices', '/customers', '/transactions', '/subscriptions', '/funds', '/payouts', '/settings', '/payment-links'];
+  const protectedRoutes = ['/dashboard', '/organizations', '/invoices', '/customers', '/transactions', '/subscriptions', '/funds', '/payouts', '/settings', '/payment-links', '/getting-started', '/products', '/statements', '/team'];
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
   const isProtectedApi = pathname.startsWith('/api') && !publicApiRoutes.some(route => pathname.startsWith(route));
 

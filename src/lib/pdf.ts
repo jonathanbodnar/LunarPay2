@@ -5,11 +5,14 @@ interface InvoiceData {
   id: number;
   reference: string | null;
   totalAmount: number;
+  paidAmount?: number;
+  status?: string; // 'draft', 'sent', 'paid', 'partial', 'canceled'
   fee: number;
   dueDate: string | null;
   memo: string | null;
   footer: string | null;
   createdAt: string;
+  paidAt?: string | null;
   hash?: string;
   coverFee?: boolean;
   baseUrl?: string; // Base URL for generating pay online link
@@ -73,6 +76,17 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> 
   doc.setTextColor(100, 100, 100);
   doc.setFont('helvetica', 'bold');
   doc.text('INVOICE', 20, 25);
+  
+  // Add PAID badge if invoice is paid
+  if (invoice.status === 'paid') {
+    // Green background badge
+    doc.setFillColor(34, 197, 94); // Green
+    doc.roundedRect(55, 19, 30, 10, 2, 2, 'F');
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PAID', 70, 26, { align: 'center' });
+  }
   
   // Merchant name/logo (as text for now, could be image if logo URL provided)
   doc.setFontSize(28);

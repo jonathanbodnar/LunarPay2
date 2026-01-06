@@ -21,12 +21,12 @@ export async function GET(request: Request) {
 
     // Look up organization by custom domain
     const org = await prisma.$queryRaw<Array<{
-      id: number;
+      ch_id: number;
       portal_slug: string | null;
       portal_enabled: boolean;
       portal_custom_domain: string | null;
     }>>`
-      SELECT id, portal_slug, portal_enabled, portal_custom_domain
+      SELECT ch_id, portal_slug, portal_enabled, portal_custom_domain
       FROM church_detail
       WHERE LOWER(portal_custom_domain) = ${cleanDomain}
       AND portal_enabled = true
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       portalSlug: organization.portal_slug,
-      organizationId: organization.id,
+      organizationId: organization.ch_id,
     });
   } catch (error) {
     console.error('Domain lookup error:', error);

@@ -9,7 +9,8 @@ const registerSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
-  phone: z.string().optional(),
+  phone: z.string().min(1, 'Phone number is required'),
+  businessName: z.string().min(1, 'Business name is required'),
   paymentProcessor: z.enum(['FTS', 'PSF', 'EPP', 'ETH']).default('FTS'),
 });
 
@@ -34,12 +35,12 @@ export async function POST(request: Request) {
         console.log('Completing partial registration for user:', existingUser.id);
         
         const result = await prisma.$transaction(async (tx) => {
-          // Create initial organization
+          // Create initial organization with business name
           const orgToken = generateRandomToken(32);
           const organization = await tx.organization.create({
             data: {
               userId: existingUser.id,
-              name: 'My Organization',
+              name: validatedData.businessName || 'My Organization',
               token: orgToken,
             },
           });
@@ -54,12 +55,16 @@ export async function POST(request: Request) {
             },
           });
 
-          // Create Fortis onboarding
+          // Create Fortis onboarding with pre-filled user data
           await tx.fortisOnboarding.create({
             data: {
               userId: existingUser.id,
               organizationId: organization.id,
               appStatus: 'PENDING',
+              signFirstName: existingUser.firstName || validatedData.firstName,
+              signLastName: existingUser.lastName || validatedData.lastName,
+              signPhoneNumber: validatedData.phone,
+              email: existingUser.email,
             },
           });
 
@@ -125,12 +130,12 @@ export async function POST(request: Request) {
         },
       });
 
-      // Create initial organization for user
+      // Create initial organization for user with business name
       const orgToken = generateRandomToken(32);
       const organization = await tx.organization.create({
         data: {
           userId: user.id,
-          name: 'My Organization',
+          name: validatedData.businessName,
           token: orgToken,
         },
       });
@@ -145,12 +150,16 @@ export async function POST(request: Request) {
         },
       });
 
-      // Create Fortis onboarding record
+      // Create Fortis onboarding record with pre-filled user data
       await tx.fortisOnboarding.create({
         data: {
           userId: user.id,
           organizationId: organization.id,
           appStatus: 'PENDING',
+          signFirstName: validatedData.firstName,
+          signLastName: validatedData.lastName,
+          signPhoneNumber: validatedData.phone,
+          email: validatedData.email,
         },
       });
 

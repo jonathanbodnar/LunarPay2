@@ -17,9 +17,10 @@ import {
   Menu,
   X,
   HelpCircle,
-  ChevronDown
+  ChevronDown,
+  Rocket
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 
 interface NavItem {
@@ -65,11 +66,74 @@ const navigation: NavItem[] = [
   },
 ];
 
+interface SetupProgress {
+  completed: number;
+  total: number;
+  isComplete: boolean;
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>(['Payments']);
+  const [setupProgress, setSetupProgress] = useState<SetupProgress | null>(null);
+  const [organizationName, setOrganizationName] = useState<string>('');
+
+  useEffect(() => {
+    checkSetupProgress();
+  }, []);
+
+  const checkSetupProgress = async () => {
+    try {
+      // Add small delay to ensure auth cookie is properly set after login redirect
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const [orgsRes, customersRes, productsRes, invoicesRes] = await Promise.all([
+        fetch('/api/organizations', { credentials: 'include' }).catch(() => null),
+        fetch('/api/customers', { credentials: 'include' }).catch(() => null),
+        fetch('/api/products', { credentials: 'include' }).catch(() => null),
+        fetch('/api/invoices', { credentials: 'include' }).catch(() => null),
+      ]);
+
+      // If any request failed completely or returned 401, don't show the banner
+      if (!orgsRes || !orgsRes.ok) {
+        console.log('[SetupProgress] API calls failed or unauthorized, skipping banner');
+        return;
+      }
+
+      const [orgs, customers, products, invoices] = await Promise.all([
+        orgsRes?.ok ? orgsRes.json().catch(() => ({ organizations: [] })) : { organizations: [] },
+        customersRes?.ok ? customersRes.json().catch(() => ({ customers: [] })) : { customers: [] },
+        productsRes?.ok ? productsRes.json().catch(() => ({ products: [] })) : { products: [] },
+        invoicesRes?.ok ? invoicesRes.json().catch(() => ({ invoices: [] })) : { invoices: [] },
+      ]);
+
+      // Set organization name from first org
+      if (orgs.organizations?.length > 0) {
+        setOrganizationName(orgs.organizations[0].name || '');
+      }
+
+      const steps = [
+        orgs.organizations?.length > 0,
+        customers.customers?.length > 0,
+        products.products?.length > 0,
+        invoices.invoices?.length > 0,
+        false, // Branding - TODO: check if set
+        orgs.organizations?.[0]?.fortisOnboarding?.appStatus === 'ACTIVE',
+      ];
+
+      const completed = steps.filter(Boolean).length;
+      setSetupProgress({
+        completed,
+        total: steps.length,
+        isComplete: completed === steps.length,
+      });
+    } catch (error) {
+      console.error('Failed to check setup progress:', error);
+      // Don't break the layout if setup check fails
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -230,18 +294,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Top header */}
         <header className="sticky top-0 z-40 flex h-16 items-center justify-between bg-background px-4 lg:px-8">
           <div className="flex items-center gap-4">
-          <button
-            type="button"
+            <button
+              type="button"
               className="lg:hidden p-2 rounded-lg hover:bg-muted"
-            onClick={() => setSidebarOpen(true)}
-          >
+              onClick={() => setSidebarOpen(true)}
+            >
               <Menu className="h-5 w-5" />
-          </button>
-            {/* Organization selector placeholder */}
-            <div className="hidden sm:block">
-              <span className="text-sm font-medium">Apollo Eleven Inc</span>
+            </button>
+            {/* Organization name with setup badge */}
+            <div className="hidden sm:flex items-center gap-3">
+              {organizationName && (
+                <span className="text-sm font-medium">{organizationName}</span>
+              )}
+              {/* Setup Progress Badge */}
+              {setupProgress && !setupProgress.isComplete && pathname !== '/getting-started' && (
+                <Link
+                  href="/getting-started"
+                  className="flex items-center gap-2 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full text-xs font-medium text-blue-700 transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Rocket className="h-3 w-3" />
+                    <span>{setupProgress.completed}/{setupProgress.total}</span>
+                  </div>
+                  <div className="w-12 h-1.5 bg-blue-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                      style={{ width: `${(setupProgress.completed / setupProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </Link>
+              )}
             </div>
-        </div>
+          </div>
           
           <div className="flex items-center gap-3">
             <Button

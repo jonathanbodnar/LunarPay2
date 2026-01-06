@@ -89,9 +89,10 @@ export async function POST(request: Request) {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     // Create session using raw SQL for reliability
+    // Use gen_random_uuid() for PostgreSQL UUID generation
     await prisma.$executeRaw`
       INSERT INTO customer_sessions (id, donor_id, organization_id, token, expires_at, created_at)
-      VALUES (${crypto.randomUUID()}, ${customer.id}, ${organization.id}, ${sessionToken}, ${expiresAt}, NOW())
+      VALUES (gen_random_uuid(), ${customer.id}, ${organization.id}, ${sessionToken}, ${expiresAt}::timestamp, NOW())
     `;
 
     console.log('[PORTAL] Session created for customer:', customer.email, 'token:', sessionToken.substring(0, 10) + '...');
@@ -107,9 +108,16 @@ export async function POST(request: Request) {
       },
     });
 
+    // Always use secure for HTTPS (Railway uses HTTPS)
+    const isSecure = process.env.NODE_ENV === 'production' || 
+                     process.env.RAILWAY_ENVIRONMENT !== undefined ||
+                     true; // Force secure for now
+    
+    console.log('[PORTAL] Setting cookie, secure:', isSecure, 'NODE_ENV:', process.env.NODE_ENV);
+    
     response.cookies.set('portal_session', sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
       path: '/',
@@ -118,8 +126,13 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error('Verify code error:', error);
+    // Log more details
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     return NextResponse.json(
-      { error: 'Failed to verify code' },
+      { error: 'Failed to verify code', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

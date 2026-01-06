@@ -23,6 +23,15 @@ interface CustomHostname {
   };
   status: string;
   created_at: string;
+  ownership_verification?: {
+    type: string;
+    name: string;
+    value: string;
+  };
+  ownership_verification_http?: {
+    http_url: string;
+    http_body: string;
+  };
 }
 
 /**
@@ -75,12 +84,28 @@ export async function addCustomHostname(hostname: string): Promise<{
     }
 
     console.log('[CLOUDFLARE] Custom hostname added:', data.result.id);
+    console.log('[CLOUDFLARE] Full response:', JSON.stringify(data.result, null, 2));
 
-    // Extract validation records if present
-    const validationRecords = data.result.ssl?.validation_records?.map(record => ({
-      name: record.txt_name,
-      value: record.txt_value,
-    })) || [];
+    // Extract all validation records
+    const validationRecords: Array<{ name: string; value: string }> = [];
+    
+    // SSL/TLS validation records (for certificate)
+    if (data.result.ssl?.validation_records) {
+      data.result.ssl.validation_records.forEach(record => {
+        validationRecords.push({
+          name: record.txt_name,
+          value: record.txt_value,
+        });
+      });
+    }
+    
+    // Ownership verification TXT record (for hostname ownership)
+    if (data.result.ownership_verification) {
+      validationRecords.push({
+        name: data.result.ownership_verification.name,
+        value: data.result.ownership_verification.value,
+      });
+    }
 
     return {
       success: true,
@@ -154,12 +179,13 @@ export async function deleteCustomHostname(hostname: string): Promise<{
 }
 
 /**
- * Get the status of a custom hostname
+ * Get the status and validation records of a custom hostname
  */
 export async function getCustomHostnameStatus(hostname: string): Promise<{
   success: boolean;
   status?: string;
   sslStatus?: string;
+  validationRecords?: Array<{ name: string; value: string }>;
   error?: string;
 }> {
   const zoneId = process.env.CLOUDFLARE_ZONE_ID;
@@ -186,10 +212,33 @@ export async function getCustomHostnameStatus(hostname: string): Promise<{
     }
 
     const hostnameData = data.result[0];
+    
+    // Extract all validation records
+    const validationRecords: Array<{ name: string; value: string }> = [];
+    
+    // SSL/TLS validation records (for certificate)
+    if (hostnameData.ssl?.validation_records) {
+      hostnameData.ssl.validation_records.forEach(record => {
+        validationRecords.push({
+          name: record.txt_name,
+          value: record.txt_value,
+        });
+      });
+    }
+    
+    // Ownership verification TXT record (for hostname ownership)
+    if (hostnameData.ownership_verification) {
+      validationRecords.push({
+        name: hostnameData.ownership_verification.name,
+        value: hostnameData.ownership_verification.value,
+      });
+    }
+    
     return {
       success: true,
       status: hostnameData.status,
       sslStatus: hostnameData.ssl?.status,
+      validationRecords,
     };
   } catch (error) {
     console.error('[CLOUDFLARE] Error getting hostname status:', error);
@@ -200,17 +249,19 @@ export async function getCustomHostnameStatus(hostname: string): Promise<{
 /**
  * Get the DCV delegation target for customers to add as a CNAME
  * This is the _acme-challenge CNAME target
+ * Find this in Cloudflare Dashboard -> SSL/TLS -> Custom Hostnames -> "DCV Delegation"
  */
 export function getDcvDelegationTarget(): string {
-  // This is shown in your Cloudflare dashboard under Custom Hostnames
-  // It's static for your zone
-  return '066217d657c42286.dcv.cloudflare.com';
+  // This is shown in your Cloudflare dashboard under Custom Hostnames -> DCV Delegation
+  // It's specific to your zone - set via environment variable or use default
+  return process.env.CLOUDFLARE_DCV_TARGET || '066217d657c42286.dcv.cloudflare.com';
 }
 
 /**
  * Get the CNAME target that merchants should point their domain to
+ * Uses the Worker proxy to handle Host header rewriting
  */
 export function getPortalCnameTarget(): string {
-  return 'portal.lunarpay.com';
+  return process.env.PORTAL_CNAME_TARGET || 'portal.lunarpay.com';
 }
 

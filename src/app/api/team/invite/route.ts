@@ -105,7 +105,7 @@ export async function POST(request: Request) {
 
     // Send invitation email
     const inviterName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'A team member';
-    const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/invite/${token}`;
+    const inviteUrl = `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/invite/${token}`;
     
     await sendTeamInviteEmail({
       to: email,

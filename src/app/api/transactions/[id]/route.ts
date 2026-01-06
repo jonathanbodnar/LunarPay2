@@ -4,11 +4,12 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const currentUser = await requireAuth();
-    const transactionId = BigInt(params.id);
+    const transactionId = BigInt(id);
 
     const transaction = await prisma.transaction.findFirst({
       where: {

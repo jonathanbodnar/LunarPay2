@@ -13,9 +13,8 @@ export async function POST(
     const currentUser = await requireAuth();
     const invoiceId = parseInt(id);
 
-    // Get base URL from request
-    const url = new URL(request.url);
-    const baseUrl = `${url.protocol}//${url.host}`;
+    // Get base URL - prefer env variable for consistent URLs in emails
+    const baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com';
 
     // Get invoice with all details
     const invoice = await prisma.invoice.findFirst({

@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { addCustomHostname, deleteCustomHostname, getDcvDelegationTarget, getPortalCnameTarget } from '@/lib/cloudflare';
+import { addCustomHostname, deleteCustomHostname, getCustomHostnameStatus, getDcvDelegationTarget, getPortalCnameTarget } from '@/lib/cloudflare';
+import { addRailwayCustomDomain } from '@/lib/railway';
 
 const portalSettingsSchema = z.object({
   portalSlug: z.string()
@@ -50,7 +51,19 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ organization });
+    // If custom domain exists, fetch validation records from Cloudflare
+    let customDomain = null;
+    if (organization.portalCustomDomain) {
+      const cfStatus = await getCustomHostnameStatus(organization.portalCustomDomain);
+      customDomain = {
+        cnameTarget: getPortalCnameTarget(),
+        validationRecords: cfStatus.validationRecords || [],
+        status: cfStatus.status,
+        sslStatus: cfStatus.sslStatus,
+      };
+    }
+
+    return NextResponse.json({ organization, customDomain });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -124,7 +137,7 @@ export async function PUT(
         await deleteCustomHostname(oldCustomDomain);
       }
 
-      // Add new custom hostname to Cloudflare if provided
+      // Add new custom hostname to Cloudflare and Railway if provided
       if (newCustomDomain) {
         console.log('[PORTAL] Adding new custom domain to Cloudflare:', newCustomDomain);
         cloudflareResult = await addCustomHostname(newCustomDomain);
@@ -132,6 +145,17 @@ export async function PUT(
         if (!cloudflareResult.success) {
           console.error('[PORTAL] Failed to add custom domain to Cloudflare:', cloudflareResult.error);
           // Don't fail the request, just warn
+        }
+
+        // Also add to Railway so it accepts the hostname
+        console.log('[PORTAL] Adding new custom domain to Railway:', newCustomDomain);
+        const railwayResult = await addRailwayCustomDomain(newCustomDomain);
+        
+        if (!railwayResult.success) {
+          console.error('[PORTAL] Failed to add custom domain to Railway:', railwayResult.error);
+          // Don't fail the request, Railway domain can be added later
+        } else {
+          console.log('[PORTAL] Successfully added custom domain to Railway');
         }
       }
     }
@@ -164,8 +188,10 @@ export async function PUT(
       dcvTarget: getDcvDelegationTarget(),
       steps: [
         `Add CNAME record: ${newCustomDomain} → ${getPortalCnameTarget()}`,
+        `Add TXT record for hostname validation (value provided by Cloudflare)`,
         `Add DCV CNAME record: _acme-challenge.${newCustomDomain} → ${getDcvDelegationTarget()}`,
       ],
+      validationRecords: cloudflareResult?.validationRecords || [],
       cloudflareStatus: cloudflareResult?.success ? 'added' : 'failed',
       cloudflareError: cloudflareResult?.error,
     } : null;

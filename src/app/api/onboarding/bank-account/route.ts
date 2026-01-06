@@ -79,9 +79,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if merchant info is completed (stepCompleted defaults to 0, so < 1 means not started)
-    if (!organization.fortisOnboarding || 
-        (organization.fortisOnboarding.stepCompleted ?? 0) < 1) {
+    // Check if merchant info is completed (need at least merchant address info)
+    const fortis = organization.fortisOnboarding;
+    if (!fortis || !fortis.merchantAddressLine1 || !fortis.merchantCity || !fortis.merchantState) {
       return NextResponse.json(
         { status: false, message: 'Please complete merchant information first' },
         { status: 400 }
@@ -90,8 +90,8 @@ export async function POST(request: Request) {
 
     // Check if already completed onboarding (future-proof for additional statuses)
     const completedStatuses = ['ACTIVE'];
-    if (organization.fortisOnboarding.appStatus && 
-        completedStatuses.includes(organization.fortisOnboarding.appStatus)) {
+    if (fortis.appStatus && 
+        completedStatuses.includes(fortis.appStatus)) {
       return NextResponse.json(
         { status: false, message: 'Organization already onboarded' },
         { status: 400 }
@@ -104,33 +104,52 @@ export async function POST(request: Request) {
     const accountNumberLast4 = getLast4Digits(validatedData.achAccountNumber);
     const routingNumberLast4 = getLast4Digits(validatedData.achRoutingNumber);
 
-    // Prepare update data with type safety
-    const updateData: Prisma.FortisOnboardingUpdateInput = {
-      achAccountNumber: encryptedAccountNumber,
-      achRoutingNumber: encryptedRoutingNumber,
-      accountNumberLast4,
-      routingNumberLast4,
-      accountHolderName: validatedData.accountHolderName,
-      stepCompleted: 2, // Bank account step completed
+    // Prepare update data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateData: Record<string, any> = {
+      ach_account_number: encryptedAccountNumber,
+      ach_routing_number: encryptedRoutingNumber,
+      account_number_last4: accountNumberLast4,
+      routing_number_last4: routingNumberLast4,
+      account_holder_name: validatedData.accountHolderName,
     };
 
-    // Handle alternative bank account if provided (consistent naming with primary account)
+    // Handle alternative bank account if provided
     if (validatedData.achAccountNumber2 && validatedData.achRoutingNumber2 && validatedData.accountHolderName2) {
-      updateData.achAccountNumber2 = encrypt(validatedData.achAccountNumber2);
-      updateData.achRoutingNumber2 = encrypt(validatedData.achRoutingNumber2);
-      updateData.account2NumberLast4 = getLast4Digits(validatedData.achAccountNumber2);
-      updateData.routing2NumberLast4 = getLast4Digits(validatedData.achRoutingNumber2);
-      updateData.account2HolderName = validatedData.accountHolderName2;
+      updateData.ach_account_number2 = encrypt(validatedData.achAccountNumber2);
+      updateData.ach_routing_number2 = encrypt(validatedData.achRoutingNumber2);
+      updateData.account2_number_last4 = getLast4Digits(validatedData.achAccountNumber2);
+      updateData.routing2_number_last4 = getLast4Digits(validatedData.achRoutingNumber2);
+      updateData.account2_holder_name = validatedData.accountHolderName2;
     }
 
-    // Update Fortis onboarding record with bank account info first
-    await prisma.fortisOnboarding.update({
-      where: { organizationId: validatedData.organizationId },
-      data: updateData,
-    });
+    // Update Fortis onboarding record using raw SQL to avoid Prisma type issues
+    await prisma.$executeRaw`
+      UPDATE church_onboard_fortis 
+      SET 
+        ach_account_number = ${updateData.ach_account_number},
+        ach_routing_number = ${updateData.ach_routing_number},
+        account_number_last4 = ${updateData.account_number_last4},
+        routing_number_last4 = ${updateData.routing_number_last4},
+        account_holder_name = ${updateData.account_holder_name},
+        ach_account_number2 = ${updateData.ach_account_number2 || null},
+        ach_routing_number2 = ${updateData.ach_routing_number2 || null},
+        account2_number_last4 = ${updateData.account2_number_last4 || null},
+        routing2_number_last4 = ${updateData.routing2_number_last4 || null},
+        account2_holder_name = ${updateData.account2_holder_name || null},
+        updated_at = NOW()
+      WHERE church_id = ${validatedData.organizationId}
+    `;
 
     // Now call Fortis onboarding API with all merchant data
     const onboarding = organization.fortisOnboarding;
+    
+    if (!onboarding) {
+      return NextResponse.json(
+        { status: false, message: 'Onboarding record not found' },
+        { status: 404 }
+      );
+    }
     
     // Determine test mode - treat 'dev', 'development', 'test' as sandbox
     const envRaw = process.env.FORTIS_ENVIRONMENT || 'sandbox';
@@ -165,10 +184,12 @@ export async function POST(request: Request) {
         routing_number: validatedData.achRoutingNumber2,
         account_number: validatedData.achAccountNumber2,
         account_holder_name: validatedData.accountHolderName2,
+        deposit_type: 'fees_adjustments',
       } : {
         routing_number: validatedData.achRoutingNumber,
         account_number: validatedData.achAccountNumber,
         account_holder_name: validatedData.accountHolderName,
+        deposit_type: 'fees_adjustments',
       },
       legal_name: organization.legalName || organization.name || '',
       contact: {

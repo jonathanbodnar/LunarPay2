@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     });
 
     // Send reset email using SendGrid
-    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://lunarpay2-production.up.railway.app'}/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/reset-password?token=${resetToken}`;
     
     try {
       await sendPasswordResetEmail(user.email, resetUrl);

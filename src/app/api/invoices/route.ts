@@ -2,22 +2,25 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateHash } from '@/lib/auth';
+import { sendInvoiceEmail } from '@/lib/email';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { z } from 'zod';
 
 const createInvoiceSchema = z.object({
   organizationId: z.number(),
   donorId: z.number(),
   products: z.array(z.object({
-    productId: z.number().optional(),
-    productName: z.string(),
+    productId: z.number().optional().nullable(),
+    productName: z.string().min(1, 'Product name is required'),
     qty: z.number().positive(),
     price: z.number().nonnegative(),
-  })),
-  dueDate: z.string().optional(),
-  memo: z.string().optional(),
-  footer: z.string().optional(),
+  })).min(1, 'At least one line item is required'),
+  dueDate: z.string().optional().nullable(),
+  memo: z.string().optional().nullable(),
+  footer: z.string().optional().nullable(),
   paymentOptions: z.enum(['cc', 'ach', 'both']).default('both'),
   coverFee: z.boolean().default(false),
+  sendNow: z.boolean().optional().default(false),
 });
 
 // GET /api/invoices - List all invoices
@@ -137,7 +140,7 @@ export async function POST(request: Request) {
       data: {
         organizationId: validatedData.organizationId,
         donorId: validatedData.donorId,
-        status: 'draft',
+        status: validatedData.sendNow ? 'sent' : 'draft',
         totalAmount,
         paidAmount: 0,
         dueDate: validatedData.dueDate ? new Date(validatedData.dueDate) : null,
@@ -146,6 +149,7 @@ export async function POST(request: Request) {
         paymentOptions: validatedData.paymentOptions,
         coverFee: validatedData.coverFee,
         hash,
+        sentAt: validatedData.sendNow ? new Date() : null,
         products: {
           create: validatedData.products.map((product) => ({
             productId: product.productId,
@@ -159,15 +163,54 @@ export async function POST(request: Request) {
       include: {
         products: true,
         donor: true,
+        organization: true,
       },
     });
 
+    // Send email if sendNow is true and donor has email
+    let emailSent = false;
+    if (validatedData.sendNow && invoice.donor.email) {
+      const customerName = `${invoice.donor.firstName || ''} ${invoice.donor.lastName || ''}`.trim() || 'Customer';
+      // Use APP_URL (runtime) or NEXT_PUBLIC_APP_URL, with production fallback
+      const baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com';
+      const invoiceUrl = `${baseUrl}/invoice/${invoice.hash}`;
+      
+      console.log('[Invoice Create] Sending invoice email to:', invoice.donor.email);
+      
+      emailSent = await sendInvoiceEmail({
+        customerName,
+        customerEmail: invoice.donor.email,
+        invoiceNumber: invoice.reference || `INV-${invoice.id}`,
+        totalAmount: formatCurrency(totalAmount),
+        dueDate: invoice.dueDate ? formatDate(invoice.dueDate.toISOString()) : undefined,
+        invoiceUrl,
+        organizationName: invoice.organization.name,
+        organizationEmail: invoice.organization.email || undefined,
+        organizationId: invoice.organizationId,
+        memo: invoice.memo || undefined,
+        brandColor: invoice.organization.primaryColor || undefined,
+      });
+      
+      if (!emailSent) {
+        console.error('[Invoice Create] Failed to send invoice email');
+        // Update status back to draft if email failed
+        await prisma.invoice.update({
+          where: { id: invoice.id },
+          data: { status: 'draft', sentAt: null },
+        });
+      }
+    }
+
     return NextResponse.json(
-      { invoice },
+      { 
+        invoice,
+        emailSent: validatedData.sendNow ? emailSent : undefined,
+      },
       { status: 201 }
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error('Invoice validation error:', error.issues);
       return NextResponse.json(
         { error: 'Validation error', details: error.issues },
         { status: 400 }
@@ -183,7 +226,7 @@ export async function POST(request: Request) {
 
     console.error('Create invoice error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: String(error) },
       { status: 500 }
     );
   }

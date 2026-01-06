@@ -22,8 +22,6 @@ interface Organization {
   portalSlug: string | null;
   portalEnabled: boolean;
   portalCustomDomain: string | null;
-  portalTitle: string | null;
-  portalDescription: string | null;
 }
 
 function CopyableValue({ value, label }: { value: string; label: string }) {
@@ -60,27 +58,27 @@ function DnsInstructions({ domain }: { domain: string }) {
     <div className="text-xs text-muted-foreground space-y-3 mt-3">
       <p className="font-medium text-foreground">Add these DNS records to your domain:</p>
       
+      {/* Record 1: Main CNAME */}
       <div className="bg-muted p-3 rounded space-y-2">
-        <p className="font-medium text-foreground text-xs">1. Main CNAME (points your domain to LunarPay)</p>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-medium">CNAME</span>
+          <span className="font-medium text-foreground text-xs">Point your domain to LunarPay</span>
+        </div>
         <div className="font-mono text-xs space-y-1">
-          <CopyableValue label="Type" value="CNAME" />
           <CopyableValue label="Name" value={subdomain} />
-          <CopyableValue label="Value" value="portal.lunarpay.com" />
+          <CopyableValue label="Value" value="app.lunarpay.com" />
         </div>
       </div>
 
-      <div className="bg-muted p-3 rounded space-y-2">
-        <p className="font-medium text-foreground text-xs">2. DCV CNAME (for SSL certificate validation)</p>
-        <div className="font-mono text-xs space-y-1">
-          <CopyableValue label="Type" value="CNAME" />
-          <CopyableValue label="Name" value={`_acme-challenge.${subdomain}`} />
-          <CopyableValue label="Value" value="066217d657c42286.dcv.cloudflare.com" />
-        </div>
+      <div className="bg-green-50 border border-green-200 rounded p-3 space-y-1">
+        <p className="font-medium text-green-800 text-xs">That&apos;s it!</p>
+        <ul className="text-[10px] text-green-700 list-disc pl-4 space-y-1">
+          <li>Save your settings, then add the CNAME record above</li>
+          <li>SSL certificate will be automatically provisioned</li>
+          <li>If using Cloudflare DNS, set to <strong>DNS only</strong> (gray cloud)</li>
+          <li>DNS changes may take up to 24 hours to propagate</li>
+        </ul>
       </div>
-
-      <p className="text-amber-600">
-        ⚠️ Both records are required for the custom domain to work with SSL.
-      </p>
     </div>
   );
 }
@@ -98,8 +96,6 @@ export default function CustomerPortalSettingsPage() {
     portalSlug: '',
     portalEnabled: false,
     portalCustomDomain: '',
-    portalTitle: '',
-    portalDescription: '',
   });
 
   useEffect(() => {
@@ -131,8 +127,6 @@ export default function CustomerPortalSettingsPage() {
       portalSlug: org.portalSlug || org.slug || '',
       portalEnabled: org.portalEnabled || false,
       portalCustomDomain: org.portalCustomDomain || '',
-      portalTitle: org.portalTitle || '',
-      portalDescription: org.portalDescription || '',
     });
   };
 
@@ -334,33 +328,6 @@ export default function CustomerPortalSettingsPage() {
                   Use your own domain for the customer portal (e.g., pay.yourcompany.com)
                 </p>
               )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-medium">Portal Customization</CardTitle>
-            <CardDescription>Customize the portal appearance</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Portal Title</Label>
-              <Input
-                value={formData.portalTitle}
-                onChange={(e) => setFormData({ ...formData, portalTitle: e.target.value })}
-                placeholder="Customer Portal"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Welcome Message</Label>
-              <textarea
-                className="w-full min-h-[80px] px-3 py-2 rounded-lg border border-border bg-background text-sm"
-                value={formData.portalDescription}
-                onChange={(e) => setFormData({ ...formData, portalDescription: e.target.value })}
-                placeholder="Welcome to our customer portal. Sign in to manage your account."
-              />
             </div>
           </CardContent>
         </Card>

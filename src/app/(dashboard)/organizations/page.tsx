@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Plus, ExternalLink } from 'lucide-react';
+import { Building2, Plus, ExternalLink, RefreshCw, Clock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -28,6 +28,7 @@ export default function OrganizationsPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshingId, setRefreshingId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchOrganizations();
@@ -51,6 +52,22 @@ export default function OrganizationsPage() {
       setError((err as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshStatus = async (orgId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRefreshingId(orgId);
+    try {
+      const response = await fetch('/api/organizations');
+      const data = await response.json();
+      if (response.ok) {
+        setOrganizations(data.organizations);
+      }
+    } catch (err) {
+      console.error('Failed to refresh:', err);
+    } finally {
+      setRefreshingId(null);
     }
   };
 
@@ -143,19 +160,23 @@ export default function OrganizationsPage() {
                     </div>
                   </div>
 
-                  {org.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' && org.fortisOnboarding.mpaLink && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(org.fortisOnboarding!.mpaLink!, '_blank');
-                      }}
-                    >
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Complete Application
-                    </Button>
+                  {org.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
+                        <Clock className="h-3 w-3" />
+                        <span>Can take up to 24-48 hours</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={(e) => refreshStatus(org.id, e)}
+                        disabled={refreshingId === org.id}
+                      >
+                        <RefreshCw className={`mr-2 h-4 w-4 ${refreshingId === org.id ? 'animate-spin' : ''}`} />
+                        {refreshingId === org.id ? 'Checking...' : 'Refresh Status'}
+                      </Button>
+                    </div>
                   )}
 
                   {org.fortisOnboarding?.appStatus === 'PENDING' && (

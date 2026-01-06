@@ -112,7 +112,6 @@ export async function POST(request: Request) {
       merchantState: validatedData.merchantState,
       merchantCity: validatedData.merchantCity,
       merchantPostalCode: validatedData.merchantPostalCode,
-      stepCompleted: 1, // Merchant information step completed
     };
 
     if (organization.fortisOnboarding) {
@@ -121,23 +120,21 @@ export async function POST(request: Request) {
         data: onboardingData,
       });
     } else {
-      // Create data with proper type safety - using direct fields as per schema
-      const createData = {
-        signFirstName: validatedData.signFirstName,
-        signLastName: validatedData.signLastName,
-        signPhoneNumber: validatedData.signPhoneNumber,
-        email: validatedData.email,
-        merchantAddressLine1: validatedData.merchantAddressLine1,
-        merchantState: validatedData.merchantState,
-        merchantCity: validatedData.merchantCity,
-        merchantPostalCode: validatedData.merchantPostalCode,
-        stepCompleted: 1,
-        userId: currentUser.userId,
-        organizationId: validatedData.organizationId,
-        appStatus: 'PENDING',
-      } satisfies Prisma.FortisOnboardingCreateInput;
+      // Create new onboarding record - use relation connect for organization
       await prisma.fortisOnboarding.create({
-        data: createData,
+        data: {
+          signFirstName: validatedData.signFirstName,
+          signLastName: validatedData.signLastName,
+          signPhoneNumber: validatedData.signPhoneNumber,
+          email: validatedData.email,
+          merchantAddressLine1: validatedData.merchantAddressLine1,
+          merchantState: validatedData.merchantState,
+          merchantCity: validatedData.merchantCity,
+          merchantPostalCode: validatedData.merchantPostalCode,
+          userId: currentUser.userId,
+          organization: { connect: { id: validatedData.organizationId } },
+          appStatus: 'PENDING',
+        },
       });
     }
 
@@ -160,7 +157,6 @@ export async function POST(request: Request) {
       status: true,
       message: 'Merchant information saved successfully',
       organizationId: updatedOrganization.id,
-      stepCompleted: 1,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

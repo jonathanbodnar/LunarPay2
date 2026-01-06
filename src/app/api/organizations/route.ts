@@ -34,6 +34,15 @@ export async function GET() {
             select: {
               appStatus: true,
               mpaLink: true,
+              signFirstName: true,
+              signLastName: true,
+              signPhoneNumber: true,
+              email: true,
+              merchantAddressLine1: true,
+              merchantCity: true,
+              merchantState: true,
+              merchantPostalCode: true,
+              processorResponse: true, // Contains additional saved fields as JSON
             },
           },
           _count: {

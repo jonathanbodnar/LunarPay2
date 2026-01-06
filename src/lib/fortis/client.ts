@@ -145,6 +145,54 @@ export class FortisClient {
   }
 
   /**
+   * GET MERCHANT APPLICATION STATUS
+   * GET /v1/onboarding/{client_app_id}
+   * 
+   * Retrieves the current status of a merchant onboarding application
+   */
+  async getOnboardingStatus(clientAppId: string): Promise<{
+    status: boolean;
+    data?: {
+      id: string;
+      client_app_id: string;
+      status: string;
+      status_message?: string;
+      users?: Array<{
+        user_id: string;
+        user_api_key: string;
+        location_id?: string;
+        locations?: Array<{ id: string }>;
+      }>;
+      locations?: Array<{
+        id: string;
+        product_transactions?: Array<{ id: string }>;
+      }>;
+    };
+    message?: string;
+  }> {
+    try {
+      const response = await this.client.get(`onboarding/${clientAppId}`);
+      
+      if (response.data?.data) {
+        return {
+          status: true,
+          data: response.data.data,
+        };
+      }
+      
+      return {
+        status: false,
+        message: 'No data returned from Fortis',
+      };
+    } catch (error) {
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
    * 2. TRANSACTION INTENTION (Elements)
    * POST /v1/elements/transaction/intention
    * 
@@ -317,6 +365,96 @@ export class FortisClient {
   }
 
   /**
+   * 6. GET LOCATIONS
+   * GET /v1/locations
+   * 
+   * Fetches locations for the authenticated user
+   * Used when location_id is not provided in onboarding webhook
+   */
+  async getLocations(): Promise<{
+    status: boolean;
+    locations?: Array<{
+      id: string;
+      name: string;
+      product_transactions?: Array<{
+        id: string;
+        payment_method: string;
+      }>;
+    }>;
+    message?: string;
+  }> {
+    try {
+      const response = await this.client.get('locations');
+      
+      if (response.data?.list && Array.isArray(response.data.list)) {
+        return {
+          status: true,
+          locations: response.data.list.map((loc: any) => ({
+            id: loc.id,
+            name: loc.name || loc.dba_name || 'Unknown',
+            product_transactions: loc.product_transactions,
+          })),
+        };
+      }
+      
+      return {
+        status: false,
+        message: 'No locations found',
+      };
+    } catch (error) {
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
+   * 7. GET LOCATION DETAILS
+   * GET /v1/locations/{locationId}
+   * 
+   * Fetches details for a specific location
+   */
+  async getLocation(locationId: string): Promise<{
+    status: boolean;
+    location?: {
+      id: string;
+      name: string;
+      product_transactions?: Array<{
+        id: string;
+        payment_method: string;
+      }>;
+    };
+    message?: string;
+  }> {
+    try {
+      const response = await this.client.get(`locations/${locationId}`);
+      
+      if (response.data?.data) {
+        const loc = response.data.data;
+        return {
+          status: true,
+          location: {
+            id: loc.id,
+            name: loc.name || loc.dba_name || 'Unknown',
+            product_transactions: loc.product_transactions,
+          },
+        };
+      }
+      
+      return {
+        status: false,
+        message: 'Location not found',
+      };
+    } catch (error) {
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
    * Format error for user-friendly message
    */
   private formatError(error: unknown): string {
@@ -353,30 +491,36 @@ export class FortisClient {
 
 /**
  * Factory function to create Fortis client
+ * Uses environment variables matching original LunarPay config:
+ * - fortis_environment: 'dev' or 'prd'
+ * - fortis_developer_id_sandbox / fortis_developer_id_production
+ * - fortis_onboarding_user_id_sandbox / fortis_onboarding_user_id_production
+ * - fortis_onboarding_user_api_key_sandbox / fortis_onboarding_user_api_key_production
  */
 export function createFortisClient(
   environment?: 'sandbox' | 'production',
   userId?: string,
   userApiKey?: string
 ): FortisClient {
-  // Normalize environment - handle 'dev', 'development', 'test' as 'sandbox'
-  const envRaw = environment || process.env.FORTIS_ENVIRONMENT || 'sandbox';
+  // Normalize environment - support both naming conventions and handle 'dev', 'development', 'test' as 'sandbox'
+  const envRaw = environment || process.env.FORTIS_ENVIRONMENT || process.env.fortis_environment || 'sandbox';
   const env = (envRaw === 'production' || envRaw === 'prd' || envRaw === 'prod') 
     ? 'production' 
     : 'sandbox';
   
-  // Get credentials from environment variables and trim whitespace
-  const developerId = env === 'sandbox'
-    ? (process.env.FORTIS_DEVELOPER_ID_SANDBOX || '').trim()
-    : (process.env.FORTIS_DEVELOPER_ID_PRODUCTION || '').trim();
+  // Get credentials from environment variables - support both naming conventions (FORTIS_* and fortis_*)
+  // Priority: FORTIS_* (uppercase) first, then fortis_* (lowercase) as fallback
+  const developerId = (env === 'sandbox'
+    ? (process.env.FORTIS_DEVELOPER_ID_SANDBOX || process.env.fortis_developer_id_sandbox || '').trim()
+    : (process.env.FORTIS_DEVELOPER_ID_PRODUCTION || process.env.fortis_developer_id_production || '').trim());
   
   const fortisUserId = userId?.trim() || (env === 'sandbox'
-    ? (process.env.FORTIS_USER_ID_SANDBOX || '').trim()
-    : (process.env.FORTIS_USER_ID_PRODUCTION || '').trim());
+    ? (process.env.FORTIS_USER_ID_SANDBOX || process.env.fortis_onboarding_user_id_sandbox || '').trim()
+    : (process.env.FORTIS_USER_ID_PRODUCTION || process.env.fortis_onboarding_user_id_production || '').trim());
   
   const fortisUserApiKey = userApiKey?.trim() || (env === 'sandbox'
-    ? (process.env.FORTIS_USER_API_KEY_SANDBOX || '').trim()
-    : (process.env.FORTIS_USER_API_KEY_PRODUCTION || '').trim());
+    ? (process.env.FORTIS_USER_API_KEY_SANDBOX || process.env.fortis_onboarding_user_api_key_sandbox || '').trim()
+    : (process.env.FORTIS_USER_API_KEY_PRODUCTION || process.env.fortis_onboarding_user_api_key_production || '').trim());
 
   // Debug logging in development
   if (process.env.NODE_ENV === 'development') {
@@ -420,5 +564,17 @@ export function createFortisClient(
   };
 
   return new FortisClient(config);
+}
+
+/**
+ * Get Fortis location ID for transaction operations
+ */
+export function getFortisLocationId(): string {
+  const fortisEnv = process.env.fortis_environment || 'dev';
+  const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
+  
+  return env === 'sandbox'
+    ? (process.env.fortis_location_id_sandbox || process.env.FORTIS_LOCATION_ID_SANDBOX || '')
+    : (process.env.fortis_location_id_production || process.env.FORTIS_LOCATION_ID_PRODUCTION || '');
 }
 

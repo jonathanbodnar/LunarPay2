@@ -1,24 +1,48 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
-export default function RegisterPage() {
+function RegisterForm() {
+  // URL format: /register?email=user@example.com&firstName=John&lastName=Doe&phone=+15551234567
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Get pre-filled values from URL params
+  const emailParam = searchParams.get('email') || '';
+  const firstNameParam = searchParams.get('firstName') || searchParams.get('first_name') || '';
+  const lastNameParam = searchParams.get('lastName') || searchParams.get('last_name') || '';
+  const phoneParam = searchParams.get('phone') || '';
+  const businessNameParam = searchParams.get('businessName') || searchParams.get('business_name') || '';
+  
   const [formData, setFormData] = useState({
-    email: '',
+    email: emailParam,
     password: '',
-    confirmPassword: '',
-    firstName: '',
-    lastName: '',
-    phone: '',
+    firstName: firstNameParam,
+    lastName: lastNameParam,
+    phone: phoneParam,
+    businessName: businessNameParam,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Update form if URL params change
+  useEffect(() => {
+    if (emailParam || firstNameParam || lastNameParam || phoneParam || businessNameParam) {
+      setFormData(prev => ({
+        ...prev,
+        email: emailParam || prev.email,
+        firstName: firstNameParam || prev.firstName,
+        lastName: lastNameParam || prev.lastName,
+        phone: phoneParam || prev.phone,
+        businessName: businessNameParam || prev.businessName,
+      }));
+    }
+  }, [emailParam, firstNameParam, lastNameParam, phoneParam, businessNameParam]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -28,13 +52,6 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
-
-    // Validate passwords match
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
 
     try {
       const response = await fetch('/api/auth/register', {
@@ -46,6 +63,7 @@ export default function RegisterPage() {
           firstName: formData.firstName,
           lastName: formData.lastName,
           phone: formData.phone,
+          businessName: formData.businessName,
           paymentProcessor: 'FTS', // Default to Fortis
         }),
       });
@@ -75,11 +93,20 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 py-8">
+      {/* Logo */}
+      <div className="mb-8">
+        <img 
+          src="/logo.png" 
+          alt="LunarPay" 
+          className="h-12 w-auto"
+        />
+      </div>
+      
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-3xl font-bold text-center">
-            Create Account
+          <CardTitle className="text-2xl font-bold text-center">
+            Create your account
           </CardTitle>
           <CardDescription className="text-center">
             Get started with LunarPay in minutes
@@ -142,7 +169,7 @@ export default function RegisterPage() {
 
             <div className="space-y-2">
               <label htmlFor="phone" className="text-sm font-medium">
-                Phone Number (Optional)
+                Phone Number
               </label>
               <Input
                 id="phone"
@@ -151,6 +178,22 @@ export default function RegisterPage() {
                 placeholder="+1 (555) 000-0000"
                 value={formData.phone}
                 onChange={handleChange}
+                required
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="businessName" className="text-sm font-medium">
+                Business Name
+              </label>
+              <Input
+                id="businessName"
+                name="businessName"
+                placeholder="Your Company Inc"
+                value={formData.businessName}
+                onChange={handleChange}
+                required
                 disabled={loading}
               />
             </div>
@@ -175,22 +218,6 @@ export default function RegisterPage() {
               </p>
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirm Password
-              </label>
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                required
-                disabled={loading}
-              />
-            </div>
-
             <Button
               type="submit"
               className="w-full"
@@ -200,16 +227,38 @@ export default function RegisterPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex justify-center">
+        <CardFooter className="flex flex-col items-center gap-3">
           <p className="text-sm text-gray-600">
             Already have an account?{' '}
             <Link href="/login" className="text-blue-600 hover:underline font-medium">
               Sign in
             </Link>
           </p>
+          <p className="text-xs text-gray-500 text-center">
+            By creating an account, you agree to our{' '}
+            <Link href="/terms" className="text-blue-600 hover:underline">
+              Terms of Use
+            </Link>
+            {' '}and{' '}
+            <Link href="/privacy" className="text-blue-600 hover:underline">
+              Privacy Policy
+            </Link>
+          </p>
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="animate-pulse">Loading...</div>
+      </div>
+    }>
+      <RegisterForm />
+    </Suspense>
   );
 }
 

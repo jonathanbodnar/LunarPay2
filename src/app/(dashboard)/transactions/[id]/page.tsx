@@ -313,7 +313,7 @@ export default function TransactionDetailPage() {
                   <Button
                     variant="outline"
                     className="w-full mt-4"
-                    onClick={() => router.push(`/invoices/${transaction.invoice.id}`)}
+                    onClick={() => router.push(`/invoices/${transaction.invoice?.id}`)}
                   >
                     View Invoice
                   </Button>
@@ -359,7 +359,7 @@ export default function TransactionDetailPage() {
               <CardContent>
                 <Button
                   variant="outline"
-                  onClick={() => router.push(`/transactions/${transaction.originalTransaction.id}`)}
+                  onClick={() => router.push(`/transactions/${transaction.originalTransaction?.id}`)}
                 >
                   View Original Transaction
                 </Button>

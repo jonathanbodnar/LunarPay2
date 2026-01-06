@@ -11,20 +11,40 @@ export async function POST(request: Request) {
 
     const {
       organizationId,
+      // Primary contact
       signFirstName,
       signLastName,
       signPhoneNumber,
       email,
+      // Business info
       dbaName,
       legalName,
       website,
+      fedTaxId,
+      ownershipType,
+      // Owner details (optional)
+      ownerTitle,
+      ownershipPercent,
+      dateOfBirth,
+      ownerAddressLine1,
+      ownerCity,
+      ownerState,
+      ownerPostalCode,
+      // Business address
       addressLine1,
+      addressLine2,
       state,
       city,
       postalCode,
+      // Volume estimates (optional)
+      annualRevenue,
+      averageTicket,
+      highestTicket,
+      // Bank info
       routingNumber,
       accountNumber,
       accountHolderName,
+      accountType,
       altRoutingNumber,
       altAccountNumber,
       altAccountHolderName,
@@ -48,7 +68,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if already onboarded
+    // Check if already onboarded (ACTIVE status)
     if (organization.fortisOnboarding?.appStatus === 'ACTIVE') {
       return NextResponse.json(
         { error: 'Organization already onboarded' },
@@ -56,43 +76,103 @@ export async function POST(request: Request) {
       );
     }
 
-    // Determine test mode
-    const isTest = process.env.FORTIS_ENVIRONMENT !== 'prd';
-    const templateCode = isTest ? 'Testing1234' : (organization.fortisTemplate || 'ActiveBase4');
+    // Check if we already have an MPA link stored (user started but didn't finish)
+    // Return the existing link instead of calling Fortis again (which would fail with duplicate client_app_id)
+    if (organization.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' && organization.fortisOnboarding?.mpaLink) {
+      console.log('[Fortis Onboard] Returning existing MPA link for org:', organizationId);
+      return NextResponse.json({
+        status: true,
+        appLink: organization.fortisOnboarding.mpaLink,
+        appStatus: 'BANK_INFORMATION_SENT',
+        message: 'Returning existing merchant application link',
+      });
+    }
 
-    // Prepare Fortis onboarding data
+    // Determine test mode (fortis_environment: 'dev' or 'prd')
+    const fortisEnv = process.env.fortis_environment;
+    const isTest = fortisEnv !== 'prd';
+    const templateCode = isTest ? 'Testing1234' : (organization.fortisTemplate || process.env.FORTIS_TPL_DEFAULT || 'ActiveBase4');
+    
+    console.log('[Fortis Onboard] Environment:', fortisEnv, 'isTest:', isTest, 'templateCode:', templateCode);
+    console.log('[Fortis Onboard] Bank info received - routing:', routingNumber?.slice(-4), 'account:', accountNumber?.slice(-4));
+    console.log('[Fortis Onboard] Merchant data:', {
+      firstName: signFirstName,
+      lastName: signLastName,
+      phone: signPhoneNumber,
+      email,
+      dbaName,
+      legalName,
+      website,
+      address: addressLine1,
+      city,
+      state,
+      postalCode,
+    });
+
+    // Prepare Fortis onboarding data (only allowed fields)
     const merchantData: MerchantOnboardingData = {
+      // Primary principal (owner) - only allowed fields
       primary_principal: {
         first_name: signFirstName,
         last_name: signLastName,
         phone_number: signPhoneNumber,
+        title: ownerTitle || 'Owner',
+        ownership_percent: ownershipPercent ? parseInt(ownershipPercent) : 100,
+        date_of_birth: dateOfBirth || undefined,
+        // Owner's home address
+        address_line_1: ownerAddressLine1 || addressLine1,
+        city: ownerCity || city,
+        state_province: ownerState || state,
+        postal_code: ownerPostalCode || postalCode,
       },
+      
+      // Business contact email
       email,
+      
+      // Business names
       dba_name: dbaName,
+      legal_name: legalName,
+      
+      // Business details
       template_code: templateCode,
       website,
+      fed_tax_id: fedTaxId || undefined,
+      ownership_type: ownershipType || undefined,
+      
+      // Business location (no country field)
       location: {
         address_line_1: addressLine1,
-        state_province: state,
+        address_line_2: addressLine2 || undefined,
         city,
+        state_province: state,
         postal_code: postalCode,
         phone_number: signPhoneNumber,
       },
+      
+      // Application delivery as embedded iframe
       app_delivery: 'link_iframe',
+      
+      // Bank accounts - primary for deposits, alt for fees/adjustments
       bank_account: {
         routing_number: routingNumber,
         account_number: accountNumber,
         account_holder_name: accountHolderName,
       },
       alt_bank_account: {
-        routing_number: altRoutingNumber,
-        account_number: altAccountNumber,
-        account_holder_name: altAccountHolderName,
+        routing_number: altRoutingNumber || routingNumber,
+        account_number: altAccountNumber || accountNumber,
+        account_holder_name: altAccountHolderName || accountHolderName,
+        deposit_type: 'fees_adjustments',
       },
-      legal_name: legalName,
+      
+      // Contact information
       contact: {
+        first_name: signFirstName,
+        last_name: signLastName,
         phone_number: signPhoneNumber,
       },
+      
+      // Our internal organization ID for webhook matching
       client_app_id: organizationId.toString(),
     };
 
@@ -101,17 +181,26 @@ export async function POST(request: Request) {
     const result = await fortisClient.onboardMerchant(merchantData);
 
     if (!result.status) {
+      console.error('[Fortis Onboard] API Error:', JSON.stringify(result, null, 2));
+      
       // Update onboarding record with error
-      await prisma.fortisOnboarding.update({
-        where: { organizationId },
-        data: {
-          appStatus: 'FORM_ERROR',
-          processorResponse: JSON.stringify(result),
-        },
-      });
+      try {
+        await prisma.fortisOnboarding.update({
+          where: { organizationId },
+          data: {
+            appStatus: 'FORM_ERROR',
+            processorResponse: JSON.stringify(result),
+          },
+        });
+      } catch (dbError) {
+        console.error('[Fortis Onboard] DB update error:', dbError);
+      }
 
       return NextResponse.json(
-        { error: result.message || 'Onboarding failed' },
+        { 
+          error: result.message || 'Onboarding failed',
+          details: result,
+        },
         { status: 400 }
       );
     }

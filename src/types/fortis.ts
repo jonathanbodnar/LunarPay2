@@ -9,24 +9,54 @@ export interface FortisConfig {
 }
 
 // Merchant Onboarding Types
+// Fields allowed by Fortis API for pre-filling MPA form
 export interface MerchantOnboardingData {
+  // Primary Principal (Owner) - Required
   primary_principal: {
     first_name: string;
     last_name: string;
     phone_number: string;
+    // Optional owner details to pre-fill MPA
+    title?: string; // Job title (e.g., "Owner", "CEO")
+    ownership_percent?: number; // 1-100
+    date_of_birth?: string; // YYYY-MM-DD format
+    // Owner's home address
+    address_line_1?: string;
+    address_line_2?: string;
+    city?: string;
+    state_province?: string;
+    postal_code?: string;
+    // NOTE: email, country, SSN are collected by Fortis in their secure MPA iframe
   };
+  
+  // Business contact email
   email: string;
+  
+  // Business names
   dba_name: string;
+  legal_name: string;
+  
+  // Business details
   template_code: string;
   website: string;
+  fed_tax_id?: string; // Federal Tax ID / EIN
+  ownership_type?: 'llc' | 'llp' | 'corporation' | 'sole_proprietorship' | 'partnership' | 'non_profit';
+  business_category?: string; // MCC code or category
+  
+  // Business location (country not allowed via API)
   location: {
     address_line_1: string;
-    state_province: string;
+    address_line_2?: string;
     city: string;
+    state_province: string;
     postal_code: string;
     phone_number: string;
   };
+  
+  // Application delivery method
   app_delivery: 'link_iframe' | 'link_full_page';
+  
+  // Bank accounts - primary for deposits, alt for fees/adjustments
   bank_account: {
     routing_number: string;
     account_number: string;
@@ -36,11 +66,17 @@ export interface MerchantOnboardingData {
     routing_number: string;
     account_number: string;
     account_holder_name: string;
+    deposit_type: 'fees_adjustments'; // Required - indicates this account is for fees/adjustments
   };
-  legal_name: string;
+  
+  // Contact information (email not allowed via API)
   contact: {
+    first_name?: string;
+    last_name?: string;
     phone_number: string;
   };
+  
+  // Client reference ID (our organization ID)
   client_app_id: string;
 }
 
@@ -64,7 +100,7 @@ export interface TransactionIntentionData {
   location_id: string;
   contact_id?: string;
   product_transaction_id?: string;
-  action: 'sale' | 'avsonly' | 'authonly';
+  action: 'sale' | 'avsonly' | 'authonly' | 'store' | 'tokenization';
   amount?: number; // in cents, required for 'sale'
 }
 
@@ -122,10 +158,29 @@ export interface RefundResponse {
 export interface FortisWebhookPayload {
   client_app_id: string;
   stage: 'sandbox' | 'production';
+  // Merchant credentials and location
   users?: Array<{
     user_id: string;
     user_api_key: string;
+    // Location may be included per user
+    location_id?: string;
+    locations?: Array<{
+      id: string;
+      name?: string;
+    }>;
   }>;
+  // Location might also be at the top level
+  location_id?: string;
+  locations?: Array<{
+    id: string;
+    name?: string;
+    product_transactions?: Array<{
+      id: string;
+      payment_method: string;
+    }>;
+  }>;
+  // Additional fields that may be in the webhook
+  product_transaction_id?: string;
 }
 
 // Reason Codes
