@@ -129,6 +129,11 @@ export async function POST(request: Request) {
       intentionData.amount = Math.round(amount * 100); // Convert dollars to cents
     }
 
+    // Debug: Log exactly what we're sending to Fortis
+    const baseUrl = env === 'production' 
+      ? 'https://api.fortis.tech/v1/' 
+      : 'https://api.sandbox.fortis.tech/v1/';
+    
     console.log('[PUBLIC Fortis Intention] Creating intention:', {
       organizationId,
       action: fortisAction,
@@ -137,6 +142,10 @@ export async function POST(request: Request) {
       type,
       referenceId,
       environment: env,
+      fortisEnv: process.env.fortis_environment,
+      apiBaseUrl: baseUrl,
+      merchantUserId: merchantUserId?.slice(0, 8) + '...',
+      merchantApiKey: merchantApiKey?.slice(0, 8) + '...',
     });
 
     // Create transaction intention
