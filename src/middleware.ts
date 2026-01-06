@@ -55,6 +55,7 @@ const publicApiRoutes = [
   '/api/admin/add-fortis-tables', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/reset-fortis-onboarding', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/debug-fortis-config', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/debug-merchant-config', // TEMPORARY - DELETE AFTER USE!
   '/api/zapier', // Zapier integration endpoints (use API key auth)
   '/api/team/invite', // Public invite endpoints
   '/api/invoices/public',
