@@ -156,6 +156,7 @@ export default function PublicInvoicePage() {
   }, [invoice, clientToken, fortisEnvironment]);
 
   // Initialize Fortis payment form when token is available
+  // Based on working ShoutOutUS implementation
   useEffect(() => {
     if (!clientToken || !fortisLoaded || !window.Commerce?.elements) {
       console.log('[Fortis] Not ready:', { clientToken: !!clientToken, fortisLoaded, hasCommerce: !!window.Commerce?.elements });
@@ -166,40 +167,68 @@ export default function PublicInvoicePage() {
 
     try {
       // Create elements instance with the token
-      const elements = new window.Commerce.elements(clientToken);
+      // Cast to any since Commerce.js is dynamically loaded
+      const elements: any = new (window as any).Commerce.elements(clientToken);
       
-      // Create the payment form
+      // Handle success events - use eventBus like ShoutOutUS
+      const handleSuccess = async (payload: any) => {
+        console.log('[Fortis] payment_success payload:', payload);
+        const txId = payload?.transaction?.id || payload?.data?.id || payload?.id;
+        if (!txId) {
+          console.warn('[Fortis] No transaction ID in payload');
+          return;
+        }
+        await processPayment(payload);
+      };
+
+      // Attach event handlers using eventBus (like ShoutOutUS)
+      // Events must be attached BEFORE create()
+      if (elements.eventBus) {
+        elements.eventBus.on('ready', () => {
+          console.log('[Fortis] Payment form ready');
+        });
+        
+        elements.eventBus.on('payment_success', handleSuccess);
+        elements.eventBus.on('success', handleSuccess);
+        elements.eventBus.on('done', handleSuccess);
+        
+        elements.eventBus.on('payment_error', (err: any) => {
+          console.error('[Fortis] payment_error:', err);
+          setPaymentError(err?.message || 'Payment failed. Please try again.');
+          setProcessing(false);
+        });
+        
+        elements.eventBus.on('error', (err: any) => {
+          console.error('[Fortis] error:', err);
+          setPaymentError(err?.message || 'Payment form error');
+        });
+      } else {
+        // Fallback to elements.on() if eventBus not available
+        console.log('[Fortis] Using elements.on() fallback');
+        elements.on('ready', () => console.log('[Fortis] Payment form ready'));
+        elements.on('done', handleSuccess);
+        elements.on('error', (err: any) => setPaymentError(err?.message || 'Payment form error'));
+      }
+      
+      // Create the payment form with explicit environment
       elements.create({
         container: '#payment-form-container',
         theme: 'default',
-        hideTotal: true,
+        environment: 'production', // Explicitly set production like ShoutOutUS
+        view: 'default',
+        language: 'en-us',
+        defaultCountry: 'US',
+        floatingLabels: true,
         showReceipt: false,
         showSubmitButton: false,
+        showValidationAnimation: true,
+        hideTotal: true,
         appearance: {
           colorButtonSelectedBackground: primaryColor,
           colorButtonText: buttonTextColor,
           colorButtonBackground: '#9b9b9b',
           fontSize: '0.9em',
         },
-      });
-
-      elements.on('ready', () => {
-        console.log('[Fortis] Payment form ready');
-      });
-
-      elements.on('error', (err: any) => {
-        console.error('[Fortis] Form error:', err);
-        setPaymentError(err?.message || 'Payment form error');
-      });
-
-      elements.on('validationError', (err: any) => {
-        console.log('[Fortis] Validation error:', err);
-        setProcessing(false);
-      });
-
-      elements.on('done', async (response: any) => {
-        console.log('[Fortis] Payment done:', response);
-        await processPayment(response);
       });
 
       setPayForm(elements);
