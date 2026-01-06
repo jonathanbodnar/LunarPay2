@@ -743,38 +743,7 @@ export default function PaymentLinkPage() {
                   />
                 </div>
 
-                {/* Payment Method Tabs */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Payment method</label>
-                  <div className="flex border border-gray-300 rounded-lg overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => handlePaymentMethodChange('card')}
-                      className={`flex-1 py-2.5 px-4 flex items-center justify-center gap-2 text-sm font-medium transition-colors ${
-                        paymentMethod === 'card' 
-                          ? 'bg-gray-900 text-white' 
-                          : 'bg-white text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      <CreditCard className="h-4 w-4" />
-                      Card
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handlePaymentMethodChange('bank')}
-                      className={`flex-1 py-2.5 px-4 flex items-center justify-center gap-2 text-sm font-medium transition-colors border-l border-gray-300 ${
-                        paymentMethod === 'bank' 
-                          ? 'bg-gray-900 text-white' 
-                          : 'bg-white text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      <Landmark className="h-4 w-4" />
-                      Bank
-                    </button>
-                  </div>
-                </div>
-
-                {/* Payment Form Container */}
+                {/* Payment Form Container - Fortis Elements has its own Card/ACH tabs */}
                 <div>
                   {!hasItems ? (
                     <div className="h-40 flex items-center justify-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
@@ -858,7 +827,7 @@ export default function PaymentLinkPage() {
                       </div>
                     </div>
                   ) : (
-                    <div id="payment-form-container" className="min-h-[180px]" />
+                    <div id="payment-form-container" className="min-h-[150px] -mt-2 [&_iframe]:!mb-0" />
                   )}
                   
                   {paymentError && (
