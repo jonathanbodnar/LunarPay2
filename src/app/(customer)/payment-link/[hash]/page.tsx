@@ -211,7 +211,7 @@ export default function PaymentLinkPage() {
         elements.on('error', (err: any) => setPaymentError(err?.message || 'Payment form error'));
       }
       
-      // Create the payment form with explicit environment
+      // Create the payment form with explicit environment and custom styling
       elements.create({
         container: '#payment-form-container',
         theme: 'default',
@@ -224,12 +224,67 @@ export default function PaymentLinkPage() {
         showSubmitButton: false,
         showValidationAnimation: true,
         hideTotal: true,
+        hideAgreementCheckbox: true,
+        hideSaveCardOption: true,
         appearance: {
+          // Primary button colors (Credit Card/ACH selector when selected)
           colorButtonSelectedBackground: primaryColor,
-          colorButtonText: buttonTextColor,
-          colorButtonBackground: '#9b9b9b',
-          fontSize: '0.9em',
+          colorButtonSelectedText: buttonTextColor,
+          colorButtonText: '#4a5568',
+          colorButtonBackground: '#f7fafc',
+          // Input styling
+          colorPrimary: primaryColor,
+          colorBackground: '#ffffff',
+          colorText: '#1a202c',
+          colorTextSecondary: '#718096',
+          colorDanger: '#e53e3e',
+          // Border and focus states
+          colorBorder: '#e2e8f0',
+          colorBorderFocus: primaryColor,
+          // Font settings
+          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fontSize: '16px',
+          fontWeightNormal: '400',
+          fontWeightBold: '600',
+          // Border radius for rounded corners
+          borderRadius: '8px',
+          // Spacing
+          spacingUnit: '4px',
         },
+        // Custom CSS injection for fine-tuned styling
+        css: `
+          .fortis-input {
+            border-radius: 8px !important;
+            border: 1px solid #e2e8f0 !important;
+            padding: 12px 16px !important;
+            font-size: 16px !important;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+          }
+          .fortis-input:focus {
+            border-color: ${primaryColor} !important;
+            box-shadow: 0 0 0 3px ${primaryColor}20 !important;
+            outline: none !important;
+          }
+          .fortis-label {
+            color: #4a5568 !important;
+            font-size: 14px !important;
+            font-weight: 500 !important;
+            margin-bottom: 6px !important;
+          }
+          .fortis-button {
+            border-radius: 8px !important;
+            font-weight: 500 !important;
+            transition: all 0.2s ease !important;
+          }
+          .fortis-button.selected {
+            background-color: ${primaryColor} !important;
+            color: ${buttonTextColor} !important;
+          }
+          .fortis-error {
+            color: #e53e3e !important;
+            font-size: 13px !important;
+          }
+        `,
       });
 
       setPayForm(elements);
