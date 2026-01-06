@@ -24,9 +24,10 @@ export class FortisClient {
   private environment: 'sandbox' | 'production';
 
   constructor(config: FortisConfig) {
-    this.developerId = config.developerId;
-    this.userId = config.userId;
-    this.userApiKey = config.userApiKey;
+    // Trim all credentials to remove any whitespace
+    this.developerId = config.developerId.trim();
+    this.userId = config.userId.trim();
+    this.userApiKey = config.userApiKey.trim();
     this.environment = config.environment;
 
     const baseURL =
@@ -39,9 +40,9 @@ export class FortisClient {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'developer-id': config.developerId,
-        'user-id': config.userId,
-        'user-api-key': config.userApiKey,
+        'developer-id': this.developerId,
+        'user-id': this.userId,
+        'user-api-key': this.userApiKey,
       },
       timeout: 30000, // 30 seconds
     });
@@ -55,9 +56,20 @@ export class FortisClient {
     this.client.interceptors.request.use(
       (config) => {
         if (process.env.NODE_ENV === 'development') {
+          // Mask credentials for logging (show first 4 and last 4 chars)
+          const maskCredential = (cred: string) => {
+            if (!cred || cred.length <= 8) return '***';
+            return `${cred.substring(0, 4)}...${cred.substring(cred.length - 4)}`;
+          };
+          
           console.log('[Fortis Request]', {
             method: config.method?.toUpperCase(),
             url: config.url,
+            headers: {
+              'developer-id': maskCredential(config.headers['developer-id'] as string),
+              'user-id': maskCredential(config.headers['user-id'] as string),
+              'user-api-key': maskCredential(config.headers['user-api-key'] as string),
+            },
             data: config.data,
           });
         }
@@ -92,10 +104,10 @@ export class FortisClient {
 
   // Update credentials (used for merchant-specific operations)
   updateCredentials(userId: string, userApiKey: string) {
-    this.userId = userId;
-    this.userApiKey = userApiKey;
-    this.client.defaults.headers['user-id'] = userId;
-    this.client.defaults.headers['user-api-key'] = userApiKey;
+    this.userId = userId.trim();
+    this.userApiKey = userApiKey.trim();
+    this.client.defaults.headers['user-id'] = this.userId;
+    this.client.defaults.headers['user-api-key'] = this.userApiKey;
   }
 
   /**
@@ -347,19 +359,64 @@ export function createFortisClient(
   userId?: string,
   userApiKey?: string
 ): FortisClient {
-  const env = environment || (process.env.FORTIS_ENVIRONMENT as 'sandbox' | 'production') || 'sandbox';
+  // Normalize environment - handle 'dev', 'development', 'test' as 'sandbox'
+  const envRaw = environment || process.env.FORTIS_ENVIRONMENT || 'sandbox';
+  const env = (envRaw === 'production' || envRaw === 'prd' || envRaw === 'prod') 
+    ? 'production' 
+    : 'sandbox';
   
+  // Get credentials from environment variables and trim whitespace
+  const developerId = env === 'sandbox'
+    ? (process.env.FORTIS_DEVELOPER_ID_SANDBOX || '').trim()
+    : (process.env.FORTIS_DEVELOPER_ID_PRODUCTION || '').trim();
+  
+  const fortisUserId = userId?.trim() || (env === 'sandbox'
+    ? (process.env.FORTIS_USER_ID_SANDBOX || '').trim()
+    : (process.env.FORTIS_USER_ID_PRODUCTION || '').trim());
+  
+  const fortisUserApiKey = userApiKey?.trim() || (env === 'sandbox'
+    ? (process.env.FORTIS_USER_API_KEY_SANDBOX || '').trim()
+    : (process.env.FORTIS_USER_API_KEY_PRODUCTION || '').trim());
+
+  // Debug logging in development
+  if (process.env.NODE_ENV === 'development') {
+    const maskCredential = (cred: string) => {
+      if (!cred || cred.length <= 8) return '***';
+      return `${cred.substring(0, 4)}...${cred.substring(cred.length - 4)}`;
+    };
+    console.log('[Fortis Client] Creating client with:', {
+      environment: env,
+      developerId: maskCredential(developerId),
+      userId: maskCredential(fortisUserId),
+      userApiKey: maskCredential(fortisUserApiKey),
+      developerIdLength: developerId.length,
+      userIdLength: fortisUserId.length,
+      userApiKeyLength: fortisUserApiKey.length,
+    });
+  }
+
+  // Validate all credentials are present
+  if (!developerId || !fortisUserId || !fortisUserApiKey) {
+    const missing = [];
+    if (!developerId) missing.push(`FORTIS_DEVELOPER_ID_${env === 'sandbox' ? 'SANDBOX' : 'PRODUCTION'}`);
+    if (!fortisUserId) missing.push(env === 'sandbox' ? 'FORTIS_USER_ID_SANDBOX' : 'FORTIS_USER_ID_PRODUCTION');
+    if (!fortisUserApiKey) missing.push(env === 'sandbox' ? 'FORTIS_USER_API_KEY_SANDBOX' : 'FORTIS_USER_API_KEY_PRODUCTION');
+    
+    const errorMsg = `Fortis API credentials missing. Please set: ${missing.join(', ')}`;
+    console.error('[Fortis Client]', errorMsg, {
+      env,
+      developerIdPresent: !!developerId,
+      userIdPresent: !!fortisUserId,
+      userApiKeyPresent: !!fortisUserApiKey,
+    });
+    throw new Error(errorMsg);
+  }
+
   const config: FortisConfig = {
     environment: env,
-    developerId: env === 'sandbox'
-      ? process.env.FORTIS_DEVELOPER_ID_SANDBOX!
-      : process.env.FORTIS_DEVELOPER_ID_PRODUCTION!,
-    userId: userId || (env === 'sandbox'
-      ? process.env.FORTIS_USER_ID_SANDBOX!
-      : process.env.FORTIS_USER_ID_PRODUCTION!),
-    userApiKey: userApiKey || (env === 'sandbox'
-      ? process.env.FORTIS_USER_API_KEY_SANDBOX!
-      : process.env.FORTIS_USER_API_KEY_PRODUCTION!),
+    developerId,
+    userId: fortisUserId,
+    userApiKey: fortisUserApiKey,
   };
 
   return new FortisClient(config);

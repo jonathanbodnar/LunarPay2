@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { encrypt, getLast4Digits } from '@/lib/encryption';
 import { z } from 'zod';
+import { createFortisClient } from '@/lib/fortis/client';
+import { MerchantOnboardingData } from '@/types/fortis';
 
 // Validation schema for Bank Account Information
 const bankAccountSchema = z.object({
@@ -121,17 +123,118 @@ export async function POST(request: Request) {
       updateData.account2HolderName = validatedData.accountHolderName2;
     }
 
-    // Update Fortis onboarding record
+    // Update Fortis onboarding record with bank account info first
     await prisma.fortisOnboarding.update({
       where: { organizationId: validatedData.organizationId },
       data: updateData,
     });
 
+    // Now call Fortis onboarding API with all merchant data
+    const onboarding = organization.fortisOnboarding;
+    
+    // Determine test mode - treat 'dev', 'development', 'test' as sandbox
+    const envRaw = process.env.FORTIS_ENVIRONMENT || 'sandbox';
+    const isTest = envRaw !== 'prd' && envRaw !== 'production' && envRaw !== 'prod';
+    const templateCode = isTest ? 'Testing1234' : (organization.fortisTemplate || 'ActiveBase4');
+
+    // Prepare Fortis onboarding data combining step 1 and step 2 data
+    const merchantData: MerchantOnboardingData = {
+      primary_principal: {
+        first_name: onboarding.signFirstName || '',
+        last_name: onboarding.signLastName || '',
+        phone_number: onboarding.signPhoneNumber || '',
+      },
+      email: onboarding.email || '',
+      dba_name: organization.name || '',
+      template_code: templateCode,
+      website: organization.website || '',
+      location: {
+        address_line_1: onboarding.merchantAddressLine1 || '',
+        state_province: onboarding.merchantState || '',
+        city: onboarding.merchantCity || '',
+        postal_code: onboarding.merchantPostalCode || '',
+        phone_number: onboarding.signPhoneNumber || '',
+      },
+      app_delivery: 'link_iframe',
+      bank_account: {
+        routing_number: validatedData.achRoutingNumber,
+        account_number: validatedData.achAccountNumber,
+        account_holder_name: validatedData.accountHolderName,
+      },
+      alt_bank_account: validatedData.achAccountNumber2 && validatedData.achRoutingNumber2 && validatedData.accountHolderName2 ? {
+        routing_number: validatedData.achRoutingNumber2,
+        account_number: validatedData.achAccountNumber2,
+        account_holder_name: validatedData.accountHolderName2,
+      } : {
+        routing_number: validatedData.achRoutingNumber,
+        account_number: validatedData.achAccountNumber,
+        account_holder_name: validatedData.accountHolderName,
+      },
+      legal_name: organization.legalName || organization.name || '',
+      contact: {
+        phone_number: onboarding.signPhoneNumber || '',
+      },
+      client_app_id: validatedData.organizationId.toString(),
+    };
+
+    // Call Fortis API
+    let fortisClient;
+    try {
+      fortisClient = createFortisClient();
+    } catch (error) {
+      console.error('[Bank Account Onboarding] Failed to create Fortis client:', error);
+      return NextResponse.json(
+        { 
+          status: false, 
+          message: (error as Error).message || 'Failed to initialize Fortis client',
+          stepCompleted: 2,
+        },
+        { status: 500 }
+      );
+    }
+    
+    const fortisResult = await fortisClient.onboardMerchant(merchantData);
+
+    // Extract mpa_link from Fortis response
+    const mpaLink = fortisResult.result?.data?.app_link || null;
+
+    // Update onboarding record with mpa_link and status
+    await prisma.fortisOnboarding.update({
+      where: { organizationId: validatedData.organizationId },
+      data: {
+        appStatus: fortisResult.status ? 'BANK_INFORMATION_SENT' : 'FORM_ERROR',
+        mpaLink: mpaLink,
+        processorResponse: JSON.stringify(fortisResult.result),
+      },
+    });
+
+    if (!fortisResult.status) {
+      // Log detailed error for debugging
+      console.error('[Bank Account Onboarding] Fortis API failed:', {
+        message: fortisResult.message,
+        result: fortisResult.result,
+        organizationId: validatedData.organizationId,
+        errorDetail: (fortisResult.result as any)?.detail,
+      });
+      
+      return NextResponse.json(
+        { 
+          status: false, 
+          message: fortisResult.message || 'Fortis onboarding failed',
+          stepCompleted: 2,
+          error: (fortisResult.result as any)?.detail || fortisResult.message,
+        },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json({
       status: true,
-      message: 'Bank account information saved successfully',
+      message: 'Bank account information saved and merchant onboarding initiated successfully',
       organizationId: validatedData.organizationId,
       stepCompleted: 2,
+      mpaLink: mpaLink, // Return MPA link for frontend to display
+      appStatus: 'BANK_INFORMATION_SENT',
       // Return only last 4 digits for confirmation (never full numbers)
       bankAccountInfo: {
         accountNumberLast4,

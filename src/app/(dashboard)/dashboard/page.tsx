@@ -5,7 +5,20 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LayoutDashboard, Users, FileText, DollarSign, TrendingUp, CreditCard, RefreshCw, AlertCircle } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
+
+interface RecentTransaction {
+  id: number;
+  totalAmount: number;
+  status: string;
+  source: string;
+  createdAt: string;
+  donor: {
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  };
+}
 
 interface DashboardStats {
   revenue: {
@@ -236,13 +249,11 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Your latest transactions and updates</CardDescription>
+            <CardTitle>Recent Transactions</CardTitle>
+            <CardDescription>Your latest payment activity</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground text-center py-8 text-sm">
-              No recent activity
-            </p>
+            <RecentTransactions />
           </CardContent>
         </Card>
 
@@ -267,6 +278,82 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function RecentTransactions() {
+  const [transactions, setTransactions] = useState<RecentTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    fetch('/api/transactions?limit=5', {
+      credentials: 'include',
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setTransactions(data.transactions || []);
+      })
+      .catch((err) => console.error('Failed to fetch recent transactions:', err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="text-center py-4">
+        <div className="animate-spin h-4 w-4 border-2 border-foreground border-t-transparent rounded-full mx-auto" />
+      </div>
+    );
+  }
+
+  if (transactions.length === 0) {
+    return (
+      <p className="text-muted-foreground text-center py-8 text-sm">
+        No recent transactions
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {transactions.map((tx) => (
+        <div
+          key={tx.id}
+          className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+          onClick={() => router.push(`/transactions/${tx.id}`)}
+        >
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-medium text-sm">
+                {tx.donor.firstName} {tx.donor.lastName}
+              </span>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                tx.status === 'P' ? 'bg-green-100 text-green-800' :
+                tx.status === 'N' ? 'bg-red-100 text-red-800' :
+                'bg-gray-100 text-gray-800'
+              }`}>
+                {tx.status === 'P' ? 'Success' : tx.status === 'N' ? 'Failed' : 'Pending'}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {formatDate(tx.createdAt)} • {tx.source === 'CC' ? 'Card' : 'ACH'}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="font-semibold text-sm">
+              {formatCurrency(Number(tx.totalAmount))}
+            </p>
+          </div>
+        </div>
+      ))}
+      <Button
+        variant="outline"
+        className="w-full mt-2"
+        onClick={() => router.push('/transactions')}
+      >
+        View All Transactions
+      </Button>
     </div>
   );
 }
