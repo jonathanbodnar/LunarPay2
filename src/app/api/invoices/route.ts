@@ -171,7 +171,9 @@ export async function POST(request: Request) {
     let emailSent = false;
     if (validatedData.sendNow && invoice.donor.email) {
       const customerName = `${invoice.donor.firstName || ''} ${invoice.donor.lastName || ''}`.trim() || 'Customer';
-      const invoiceUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/invoice/${invoice.hash}`;
+      // Use APP_URL (runtime) or NEXT_PUBLIC_APP_URL, with production fallback
+      const baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com';
+      const invoiceUrl = `${baseUrl}/invoice/${invoice.hash}`;
       
       console.log('[Invoice Create] Sending invoice email to:', invoice.donor.email);
       

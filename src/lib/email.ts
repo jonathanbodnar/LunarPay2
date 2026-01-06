@@ -465,7 +465,7 @@ export async function sendMerchantPaymentNotification(data: MerchantPaymentNotif
       </div>
       
       <div style="text-align: center;">
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/transactions" class="button">View in Dashboard</a>
+        <a href="${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/transactions" class="button">View in Dashboard</a>
       </div>
     </div>
   `);
@@ -495,7 +495,7 @@ export async function sendWelcomeEmail(
       <p>Your account has been created successfully. You're all set to start accepting payments.</p>
       
       <div style="text-align: center;">
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/dashboard" class="button">Go to Dashboard</a>
+        <a href="${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/dashboard" class="button">Go to Dashboard</a>
       </div>
       
       <h3>Getting Started</h3>
