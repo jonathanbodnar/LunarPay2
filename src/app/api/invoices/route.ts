@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateHash } from '@/lib/auth';
+import { sendInvoiceEmail } from '@/lib/email';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { z } from 'zod';
 
 const createInvoiceSchema = z.object({
@@ -18,6 +20,7 @@ const createInvoiceSchema = z.object({
   footer: z.string().optional().nullable(),
   paymentOptions: z.enum(['cc', 'ach', 'both']).default('both'),
   coverFee: z.boolean().default(false),
+  sendNow: z.boolean().optional().default(false),
 });
 
 // GET /api/invoices - List all invoices
@@ -137,7 +140,7 @@ export async function POST(request: Request) {
       data: {
         organizationId: validatedData.organizationId,
         donorId: validatedData.donorId,
-        status: 'draft',
+        status: validatedData.sendNow ? 'sent' : 'draft',
         totalAmount,
         paidAmount: 0,
         dueDate: validatedData.dueDate ? new Date(validatedData.dueDate) : null,
@@ -146,6 +149,7 @@ export async function POST(request: Request) {
         paymentOptions: validatedData.paymentOptions,
         coverFee: validatedData.coverFee,
         hash,
+        sentAt: validatedData.sendNow ? new Date() : null,
         products: {
           create: validatedData.products.map((product) => ({
             productId: product.productId,
@@ -159,11 +163,47 @@ export async function POST(request: Request) {
       include: {
         products: true,
         donor: true,
+        organization: true,
       },
     });
 
+    // Send email if sendNow is true and donor has email
+    let emailSent = false;
+    if (validatedData.sendNow && invoice.donor.email) {
+      const customerName = `${invoice.donor.firstName || ''} ${invoice.donor.lastName || ''}`.trim() || 'Customer';
+      const invoiceUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/invoice/${invoice.hash}`;
+      
+      console.log('[Invoice Create] Sending invoice email to:', invoice.donor.email);
+      
+      emailSent = await sendInvoiceEmail({
+        customerName,
+        customerEmail: invoice.donor.email,
+        invoiceNumber: invoice.reference || `INV-${invoice.id}`,
+        totalAmount: formatCurrency(totalAmount),
+        dueDate: invoice.dueDate ? formatDate(invoice.dueDate.toISOString()) : undefined,
+        invoiceUrl,
+        organizationName: invoice.organization.name,
+        organizationEmail: invoice.organization.email || undefined,
+        organizationId: invoice.organizationId,
+        memo: invoice.memo || undefined,
+        brandColor: invoice.organization.primaryColor || undefined,
+      });
+      
+      if (!emailSent) {
+        console.error('[Invoice Create] Failed to send invoice email');
+        // Update status back to draft if email failed
+        await prisma.invoice.update({
+          where: { id: invoice.id },
+          data: { status: 'draft', sentAt: null },
+        });
+      }
+    }
+
     return NextResponse.json(
-      { invoice },
+      { 
+        invoice,
+        emailSent: validatedData.sendNow ? emailSent : undefined,
+      },
       { status: 201 }
     );
   } catch (error) {
