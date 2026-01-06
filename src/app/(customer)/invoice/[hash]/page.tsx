@@ -114,9 +114,11 @@ export default function PublicInvoicePage() {
     fetchInvoice();
   }, [hash]);
 
-  // Load Fortis Elements script
+  // Load Fortis Elements script based on environment
+  // Only load after we have the token and know the environment
   useEffect(() => {
-    if (!invoice) return;
+    // Don't load script until we have the token (which tells us the environment)
+    if (!invoice || !clientToken) return;
     
     // Check if already loaded
     if (window.Commerce?.elements) {
@@ -125,8 +127,16 @@ export default function PublicInvoicePage() {
       return;
     }
 
+    // Use environment-specific script URL
+    // Production uses js.fortis.tech, sandbox uses js.sandbox.fortis.tech
+    const scriptUrl = fortisEnvironment === 'production'
+      ? 'https://js.fortis.tech/commercejs-v1.0.0.min.js'
+      : 'https://js.sandbox.fortis.tech/commercejs-v1.0.0.min.js';
+    
+    console.log('[Fortis] Loading script for environment:', fortisEnvironment, scriptUrl);
+
     const script = document.createElement('script');
-    script.src = 'https://js.fortis.tech/commercejs-v1.0.0.min.js';
+    script.src = scriptUrl;
     script.async = true;
     script.onload = () => {
       console.log('[Fortis] Script loaded, Commerce available:', !!window.Commerce);
@@ -143,7 +153,7 @@ export default function PublicInvoicePage() {
         script.parentNode.removeChild(script);
       }
     };
-  }, [invoice]);
+  }, [invoice, clientToken, fortisEnvironment]);
 
   // Initialize Fortis payment form when token is available
   useEffect(() => {
