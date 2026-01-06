@@ -51,7 +51,7 @@ export function isValidAmount(amount: number | string): boolean {
 export function isValidTransactionId(id: string | number | bigint): boolean {
   try {
     const num = typeof id === 'string' ? BigInt(id) : BigInt(id);
-    return num > 0n;
+    return num > BigInt(0);
   } catch {
     return false;
   }

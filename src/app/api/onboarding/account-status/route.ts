@@ -37,7 +37,6 @@ export async function GET(request: Request) {
             id: true,
             appStatus: true,
             mpaLink: true,
-            stepCompleted: true,
           },
         },
       },
@@ -52,19 +51,10 @@ export async function GET(request: Request) {
 
     // Get onboarding status matching PHP getOnboardingStatus()
     if (organization.fortisOnboarding) {
-      // Update stepCompleted to 5 when status is checked (Step 5: Account Status)
-      if ((organization.fortisOnboarding.stepCompleted ?? 0) < 5) {
-        await prisma.fortisOnboarding.update({
-          where: { id: organization.fortisOnboarding.id },
-          data: { stepCompleted: 5 },
-        });
-      }
-
       return NextResponse.json({
         status: true,
         app_status: organization.fortisOnboarding.appStatus || null,
         mpa_link: organization.fortisOnboarding.mpaLink || null,
-        stepCompleted: 5,
       });
     } else {
       // No onboarding record found - return null values matching PHP behavior

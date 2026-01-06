@@ -295,26 +295,10 @@ export async function POST(request: Request) {
       });
     }
 
-    // Update Fortis onboarding stepCompleted to 4 (Brand Settings step)
-    const fortisOnboarding = await prisma.fortisOnboarding.findFirst({
-      where: {
-        organizationId: validatedData.organizationId,
-        userId: currentUser.userId,
-      },
-    });
-
-    if (fortisOnboarding && (fortisOnboarding.stepCompleted ?? 0) < 4) {
-      await prisma.fortisOnboarding.update({
-        where: { id: fortisOnboarding.id },
-        data: { stepCompleted: 4 },
-      });
-    }
-
     return NextResponse.json({
       status: true,
       message: 'Brand Settings Saved',
       data: { id: result.id },
-      stepCompleted: 4,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
