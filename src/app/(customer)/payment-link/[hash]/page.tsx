@@ -225,6 +225,7 @@ export default function PaymentLinkPage() {
         showValidationAnimation: true,
         hideTotal: true,
         hideAgreementCheckbox: true,
+        hideTitle: true, // Hide "Payment Info" heading
         appearance: {
           // Only use Fortis-supported appearance options
           colorButtonSelectedBackground: primaryColor,

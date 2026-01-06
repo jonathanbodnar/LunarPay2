@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { calculateFee } from '@/lib/utils';
+import { calculateFee, formatCurrency, formatDate } from '@/lib/utils';
 import { logPaymentEvent } from '@/lib/payment-logger';
+import { sendPaymentConfirmation, sendMerchantPaymentNotification } from '@/lib/email';
 
 /**
  * PUBLIC API - No authentication required
@@ -292,6 +293,49 @@ export async function POST(request: Request) {
         fee,
       },
     });
+
+    // Send payment confirmation emails
+    if (customerEmail && (isSuccessful || isGenericSuccess)) {
+      try {
+        // Send to customer
+        await sendPaymentConfirmation({
+          customerName: `${customerFirstName || ''} ${customerLastName || ''}`.trim() || 'Customer',
+          customerEmail,
+          amount: formatCurrency(amountInDollars),
+          lastFour: last_four || '****',
+          paymentMethod: payment_method === 'ach' ? 'bank' : 'card',
+          transactionId: fortisTransactionId || transaction.id.toString(),
+          date: formatDate(new Date().toISOString()),
+          organizationName: organization.name,
+          organizationEmail: organization.email || undefined,
+          organizationId: organization.id,
+          brandColor: organization.primaryColor || undefined,
+        });
+        console.log('[Process Payment] Sent payment confirmation to customer:', customerEmail);
+
+        // Send to merchant
+        if (organization.email) {
+          await sendMerchantPaymentNotification({
+            merchantEmail: organization.email,
+            customerName: `${customerFirstName || ''} ${customerLastName || ''}`.trim() || 'Customer',
+            customerEmail,
+            amount: formatCurrency(amountInDollars),
+            netAmount: formatCurrency(netAmount),
+            fee: formatCurrency(fee),
+            paymentMethod: payment_method === 'ach' ? 'bank' : 'card',
+            lastFour: last_four || '****',
+            transactionId: fortisTransactionId || transaction.id.toString(),
+            date: formatDate(new Date().toISOString()),
+            organizationName: organization.name,
+            source: type,
+          });
+          console.log('[Process Payment] Sent payment notification to merchant:', organization.email);
+        }
+      } catch (emailError) {
+        console.error('[Process Payment] Failed to send emails:', emailError);
+        // Don't fail the payment if emails fail
+      }
+    }
 
     return NextResponse.json({
       success: true,

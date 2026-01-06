@@ -64,6 +64,8 @@ export async function GET(
       id: invoice.id,
       reference: invoice.reference,
       totalAmount: Number(invoice.totalAmount),
+      paidAmount: Number(invoice.paidAmount || 0),
+      status: invoice.status,
       fee: Number(invoice.fee || 0),
       dueDate: invoice.dueDate?.toISOString() || null,
       memo: invoice.memo,
