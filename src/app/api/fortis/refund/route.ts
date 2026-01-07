@@ -51,10 +51,18 @@ export async function POST(request: Request) {
     }
 
     // Get organization with Fortis credentials
+    // Using select to avoid fetching non-existent columns like primary_color
     const organization = await prisma.organization.findFirst({
       where: { id: transaction.organizationId },
-      include: {
-        fortisOnboarding: true,
+      select: {
+        id: true,
+        fortisOnboarding: {
+          select: {
+            id: true,
+            authUserId: true,
+            authUserApiKey: true,
+          },
+        },
       },
     });
 
@@ -149,7 +157,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       status: true,
-      refundTransactionId: refundTransaction.id,
+      refundTransactionId: refundTransaction.id.toString(), // Convert BigInt to string for JSON
       message: 'Refund processed successfully',
     });
   } catch (error) {

@@ -130,8 +130,15 @@ export async function POST(request: Request) {
     });
 
     // Get organization
+    // Using select to avoid fetching non-existent columns like primary_color
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
+      select: {
+        id: true,
+        userId: true,
+        name: true,
+        email: true,
+      },
     });
 
     if (!organization) {
@@ -309,7 +316,7 @@ export async function POST(request: Request) {
           organizationName: organization.name,
           organizationEmail: organization.email || undefined,
           organizationId: organization.id,
-          brandColor: organization.primaryColor || undefined,
+          brandColor: undefined, // primaryColor column doesn't exist in database
         });
         console.log('[Process Payment] Sent payment confirmation to customer:', customerEmail);
 
@@ -339,7 +346,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      transactionId: transaction.id,
+      transactionId: transaction.id.toString(), // Convert BigInt to string for JSON
       status: isPending ? 'pending' : 'succeeded',
       message: isPending 
         ? 'Payment initiated. Bank transfer is being processed.' 

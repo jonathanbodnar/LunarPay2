@@ -11,13 +11,23 @@ export async function POST(request: Request) {
     const { organizationId, amount, action = 'sale' } = body;
 
     // Verify user owns this organization
+    // Using select to avoid fetching non-existent columns like primary_color
     const organization = await prisma.organization.findFirst({
       where: {
         id: organizationId,
         userId: currentUser.userId,
       },
-      include: {
-        fortisOnboarding: true,
+      select: {
+        id: true,
+        fortisOnboarding: {
+          select: {
+            id: true,
+            appStatus: true,
+            authUserId: true,
+            authUserApiKey: true,
+            locationId: true,
+          },
+        },
       },
     });
 

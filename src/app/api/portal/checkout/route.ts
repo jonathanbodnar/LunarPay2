@@ -182,18 +182,17 @@ export async function POST(request: Request) {
     const amountInCents = dollarsToCents(amount);
     const transactionC1 = `PORTAL-${transaction.id}-${Date.now()}`;
 
+    // Note: client_customer_id is not allowed by Fortis API, removed from request
     const result = paymentMethod.sourceType === 'ach'
       ? await fortisClient.processACHDebit({
           transaction_amount: amountInCents,
           token_id: paymentMethod.fortisWalletId,
-          client_customer_id: session.customerId.toString(),
           transaction_c1: transactionC1,
           transaction_c2: transaction.id.toString(),
         })
       : await fortisClient.processCreditCardSale({
           transaction_amount: amountInCents,
           token_id: paymentMethod.fortisWalletId,
-          client_customer_id: session.customerId.toString(),
           transaction_c1: transactionC1,
           transaction_c2: transaction.id.toString(),
         });

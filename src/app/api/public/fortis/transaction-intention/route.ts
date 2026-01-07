@@ -32,10 +32,20 @@ export async function POST(request: Request) {
     }
 
     // Get organization with Fortis credentials
+    // Using select to avoid fetching non-existent columns like primary_color
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
-      include: {
-        fortisOnboarding: true,
+      select: {
+        id: true,
+        fortisOnboarding: {
+          select: {
+            id: true,
+            appStatus: true,
+            authUserId: true,
+            authUserApiKey: true,
+            locationId: true,
+          },
+        },
       },
     });
 
