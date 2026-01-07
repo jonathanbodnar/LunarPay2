@@ -50,7 +50,10 @@ export async function POST(request: Request) {
 
     // Extract Fortis transaction data - handle both camelCase and snake_case
     const fortisTransactionId = txData.id || txData.transaction_id || fortisResponse.id;
-    const transaction_amount = txData.transaction_amount || txData.transactionAmount || txData.amount || 0;
+    // Try to get amount from body first (if passed from invoice/payment-link route), then from Fortis response
+    // Amount from body is in dollars, Fortis response is in cents
+    const bodyAmount = body.amount ? Math.round(Number(body.amount) * 100) : null;
+    const transaction_amount = txData.transaction_amount || txData.transactionAmount || txData.amount || bodyAmount || 0;
     const status_code = txData.status_code || txData.statusCode || txData.status_id || txData.statusId;
     const reason_code_id = txData.reason_code_id || txData.reasonCodeId || txData.reason_code || txData.reasonCode;
     const account_holder_name = txData.account_holder_name || txData.accountHolderName || txData.cardholder_name || '';
@@ -181,36 +184,55 @@ export async function POST(request: Request) {
       });
     }
 
+    // Truncate fields to match database constraints
+    const truncateString = (str: string | null | undefined, maxLength: number): string => {
+      if (!str) return '';
+      return str.length > maxLength ? str.substring(0, maxLength) : str;
+    };
+
     // Create transaction record
     const transaction = await prisma.transaction.create({
       data: {
         userId: organization.userId,
         organizationId,
         donorId: donor?.id || 0, // Default to 0 if no donor (guest checkout)
-        firstName: customerFirstName || account_holder_name?.split(' ')[0] || 'Guest',
-        lastName: customerLastName || account_holder_name?.split(' ').slice(1).join(' ') || '',
-        email: customerEmail || '',
+        firstName: truncateString(customerFirstName || account_holder_name?.split(' ')[0] || 'Guest', 100),
+        lastName: truncateString(customerLastName || account_holder_name?.split(' ').slice(1).join(' ') || '', 100),
+        email: truncateString(customerEmail || '', 254),
         totalAmount: amountInDollars,
         subTotalAmount: netAmount,
         fee,
-        source: payment_method === 'ach' ? 'ACH' : 'CC',
-        status: isPending ? 'pending' : 'succeeded',
-        statusAch: isPending ? 'pending' : null,
-        transactionType: 'Payment',
-        givingSource: type === 'invoice' ? 'invoice' : 'payment_link',
-        fortisTransactionId,
-        requestResponse: JSON.stringify(fortisResponse),
-        template: 'lunarpayfr', // Default template
+        source: payment_method === 'ach' ? 'BNK' : 'CC', // 'BNK' for bank, 'CC' for credit card (matches PHP)
+        status: isPending ? 'U' : 'P', // 'P' = Paid/Processed, 'U' = Unpaid/Unprocessed, 'N' = Rejected
+        statusAch: payment_method === 'ach' ? (isPending ? 'W' : 'P') : null, // 'W' = Waiting, 'P' = Processed, 'N' = Rejected
+        transactionType: 'DO', // 'DO' = Donation/Payment (matches PHP)
+        givingSource: type === 'invoice' ? 'invoice' : 'payment_link', // Max 50 chars
+        invoiceId: type === 'invoice' ? referenceId : null,
+        paymentLinkId: type === 'payment_link' ? referenceId : null,
+        fortisTransactionId: truncateString(fortisTransactionId, 50), // Database has VARCHAR(50)
+        requestResponse: JSON.stringify(fortisResponse), // TEXT/LONGTEXT, should handle large strings
+        template: 'lunarpayfr', // Max 50 chars, this is 10
       },
     });
 
     // Update reference (invoice or payment link)
     if (type === 'invoice' && referenceId) {
       const invoice = await prisma.invoice.findUnique({ 
-        where: { id: referenceId } 
+        where: { id: referenceId },
+        include: {
+          products: true,
+        },
       });
       
       if (invoice) {
+        // Validate invoice is not already paid (matching PHP check)
+        if (invoice.status === 'paid') {
+          return NextResponse.json(
+            { error: 'Invoice already paid' },
+            { status: 400 }
+          );
+        }
+
         const newPaidAmount = Number(invoice.paidAmount) + amountInDollars;
         const isPaid = newPaidAmount >= Number(invoice.totalAmount);
         
@@ -222,7 +244,54 @@ export async function POST(request: Request) {
           },
         });
 
-        // Invoice products are already linked via invoiceId
+        // Create transaction product records (matching PHP behavior)
+        // Link invoice products to this transaction
+        for (const invoiceProduct of invoice.products) {
+          // Note: If TransactionProduct table exists, create records here
+          // For now, products are linked via invoiceId in InvoiceProduct
+        }
+      }
+    }
+
+    // Handle payment link product tracking
+    if (type === 'payment_link' && referenceId && body.products) {
+      const products = body.products as Array<{
+        id: number;
+        productId: number;
+        productPrice: number;
+        qtyReq: number;
+        subtotal: number;
+      }>;
+
+      // Create PaymentLinkProductPaid records (matching PHP payment_link_product_paid)
+      for (const product of products) {
+        // Find the payment link product
+        const paymentLinkProduct = await prisma.paymentLinkProduct.findFirst({
+          where: {
+            paymentLinkId: referenceId,
+            productId: product.productId,
+          },
+        });
+
+        if (paymentLinkProduct) {
+          // Get product name
+          const productRecord = await prisma.product.findUnique({
+            where: { id: product.productId },
+            select: { name: true },
+          });
+
+          await prisma.paymentLinkProductPaid.create({
+            data: {
+              paymentLinkProductId: paymentLinkProduct.id,
+              paymentLinkId: referenceId,
+              productId: product.productId,
+              productName: productRecord?.name || 'Product',
+              productPrice: product.productPrice,
+              qtyReq: product.qtyReq,
+              transactionId: transaction.id,
+            },
+          });
+        }
       }
     }
 
