@@ -23,13 +23,24 @@ export async function POST(request: Request) {
     } = body;
 
     // Verify organization access
+    // Using select to avoid fetching non-existent columns like primary_color
     const organization = await prisma.organization.findFirst({
       where: {
         id: organizationId,
         userId: currentUser.userId,
       },
-      include: {
-        fortisOnboarding: true,
+      select: {
+        id: true,
+        fortisTemplate: true,
+        fortisOnboarding: {
+          select: {
+            id: true,
+            appStatus: true,
+            authUserId: true,
+            authUserApiKey: true,
+            locationId: true,
+          },
+        },
       },
     });
 
@@ -144,18 +155,17 @@ export async function POST(request: Request) {
     );
 
     // Process payment based on source type
+    // Note: client_customer_id is not allowed by Fortis API, removed from request
     const result = source.sourceType === 'card'
       ? await fortisClient.processCreditCardSale({
           transaction_amount: amountInCents,
           token_id: source.fortisWalletId,
-          client_customer_id: donorId.toString(),
           transaction_c1: transactionC1,
           transaction_c2: transactionC2,
         })
       : await fortisClient.processACHDebit({
           transaction_amount: amountInCents,
           token_id: source.fortisWalletId,
-          client_customer_id: donorId.toString(),
           transaction_c1: transactionC1,
           transaction_c2: transactionC2,
         });
@@ -215,7 +225,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         status: true,
-        transactionId: transaction.id,
+        transactionId: transaction.id.toString(), // Convert BigInt to string for JSON
         fortisTransactionId: result.transaction?.id,
         message: 'Payment processed successfully',
       });
@@ -233,7 +243,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           status: false,
-          transactionId: transaction.id,
+          transactionId: transaction.id.toString(), // Convert BigInt to string for JSON
           message: result.message || 'Payment failed',
         },
         { status: 400 }

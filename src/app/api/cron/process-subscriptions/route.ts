@@ -132,18 +132,17 @@ export async function POST(request: Request) {
         const systemLetterId = 'L';
         const transactionC1 = `${systemLetterId}-${transaction.id}-${Date.now()}`;
 
+        // Note: client_customer_id is not allowed by Fortis API, removed from request
         const result = subscription.source === 'CC'
           ? await fortisClient.processCreditCardSale({
               transaction_amount: amountInCents,
               token_id: source.fortisWalletId,
-              client_customer_id: subscription.donorId.toString(),
               transaction_c1: transactionC1,
               transaction_c2: transaction.id.toString(),
             })
           : await fortisClient.processACHDebit({
               transaction_amount: amountInCents,
               token_id: source.fortisWalletId,
-              client_customer_id: subscription.donorId.toString(),
               transaction_c1: transactionC1,
               transaction_c2: transaction.id.toString(),
             });

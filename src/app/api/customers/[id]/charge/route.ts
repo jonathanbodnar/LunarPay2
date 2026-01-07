@@ -155,18 +155,17 @@ export async function POST(
       sourceType: source.sourceType,
     });
 
+    // Note: client_customer_id is not allowed by Fortis API, removed from request
     const result = source.sourceType === 'ach'
       ? await fortisClient.processACHDebit({
           transaction_amount: amountInCents,
           token_id: source.fortisWalletId,
-          client_customer_id: customerId.toString(),
           transaction_c1: transactionC1,
           transaction_c2: transaction.id.toString(),
         })
       : await fortisClient.processCreditCardSale({
           transaction_amount: amountInCents,
           token_id: source.fortisWalletId,
-          client_customer_id: customerId.toString(),
           transaction_c1: transactionC1,
           transaction_c2: transaction.id.toString(),
         });
