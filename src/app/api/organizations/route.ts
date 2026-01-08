@@ -76,11 +76,10 @@ export async function GET() {
         token: string;
         slug: string | null;
         logo: string | null;
-        primary_color: string | null;
       }>>`
         SELECT ch_id, client_id, church_name, legal_name, phone_no, website, 
                email, street_address, city, state, country, postal, token, 
-               slug, logo, primary_color
+               slug, logo
         FROM church_detail 
         WHERE client_id = ${currentUser.userId}
         ORDER BY ch_id ASC
@@ -102,7 +101,6 @@ export async function GET() {
         token: org.token,
         slug: org.slug,
         logo: org.logo,
-        primaryColor: org.primary_color,
         fortisOnboarding: null,
         _count: { invoices: 0, donors: 0, funds: 0 },
       }));

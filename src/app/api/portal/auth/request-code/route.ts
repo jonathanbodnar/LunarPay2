@@ -29,7 +29,7 @@ export async function POST(request: Request) {
         id: true,
         name: true,
         portalSlug: true,
-        primaryColor: true,
+        // primaryColor: true, // Column doesn't exist in database
       },
     });
 
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       email.toLowerCase(),
       code,
       organization.name,
-      organization.primaryColor || undefined
+      undefined // primaryColor column doesn't exist in database
     );
 
     if (emailSent) {

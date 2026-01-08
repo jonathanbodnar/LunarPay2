@@ -31,9 +31,9 @@ export async function GET() {
             id: true,
             name: true,
             logo: true,
-            primaryColor: true,
-            backgroundColor: true,
-            buttonTextColor: true,
+            // primaryColor: true, // Column doesn't exist in database
+            // backgroundColor: true, // Column doesn't exist in database
+            // buttonTextColor: true, // Column doesn't exist in database
             portalTitle: true,
             portalDescription: true,
           },
