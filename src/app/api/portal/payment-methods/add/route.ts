@@ -73,9 +73,9 @@ export async function POST() {
     }
 
     // Create transaction intention for tokenization (store action)
+    // Note: For 'store' action, amount should not be sent per Fortis docs
     const result = await fortisClient.createTransactionIntention({
       action: 'store', // Tokenization only, no payment
-      amount: 0, // No charge for tokenization
       location_id: locationId,
       save_account: true,
     });
