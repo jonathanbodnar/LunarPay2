@@ -167,7 +167,7 @@ export default function CustomerDetailPage() {
       return;
     }
     
-    // Using saved payment method
+    // Using saved payment method - use the existing charge API
     if (paymentForm.selectedPaymentMethod && !paymentForm.useNewCard) {
       setProcessing(true);
       try {
@@ -177,7 +177,7 @@ export default function CustomerDetailPage() {
           credentials: 'include',
           body: JSON.stringify({
             amount: Number(paymentForm.amount),
-            paymentMethodId: Number(paymentForm.selectedPaymentMethod),
+            sourceId: Number(paymentForm.selectedPaymentMethod), // API expects sourceId not paymentMethodId
           }),
         });
 
