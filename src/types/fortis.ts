@@ -102,6 +102,7 @@ export interface TransactionIntentionData {
   product_transaction_id?: string;
   action: 'sale' | 'avsonly' | 'authonly' | 'store' | 'tokenization';
   amount?: number; // in cents, required for 'sale'
+  save_account?: boolean; // Whether to save the payment method for future use
 }
 
 export interface TransactionIntentionResponse {
