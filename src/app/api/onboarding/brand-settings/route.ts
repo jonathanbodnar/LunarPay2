@@ -60,6 +60,10 @@ export async function GET(request: Request) {
         id: organizationId,
         userId: currentUser.userId,
       },
+      select: {
+        id: true,
+        // Note: primaryColor, backgroundColor, buttonTextColor columns don't exist in database
+      },
     });
 
     if (!organization) {
@@ -145,6 +149,10 @@ export async function POST(request: Request) {
       where: {
         id: validatedData.organizationId,
         userId: currentUser.userId,
+      },
+      select: {
+        id: true,
+        // Note: primaryColor, backgroundColor, buttonTextColor columns don't exist in database
       },
     });
 

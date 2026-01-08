@@ -68,7 +68,7 @@ export async function GET(
             .filter(Boolean)
             .join(', ') : null,
         logo: invoice.organization?.logo || null,
-        primaryColor: invoice.organization?.primaryColor || null,
+        primaryColor: null, // Column doesn't exist in database
       },
       products: invoice.products.map(p => ({
         productName: p.productName,

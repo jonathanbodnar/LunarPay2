@@ -31,6 +31,10 @@ export async function GET(
         id: organizationId,
         userId: currentUser.userId,
       },
+      select: {
+        id: true,
+        // Note: primaryColor, backgroundColor, buttonTextColor columns don't exist in database
+      },
     });
     
     if (!organization) {
@@ -97,6 +101,10 @@ export async function PUT(
         id: organizationId,
         userId: currentUser.userId,
       },
+      select: {
+        id: true,
+        // Note: primaryColor, backgroundColor, buttonTextColor columns don't exist in database
+      },
     });
     
     if (!organization) {
@@ -154,6 +162,10 @@ export async function DELETE(
       where: {
         id: organizationId,
         userId: currentUser.userId,
+      },
+      select: {
+        id: true,
+        // Note: primaryColor, backgroundColor, buttonTextColor columns don't exist in database
       },
     });
     

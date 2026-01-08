@@ -90,12 +90,41 @@ export async function POST(request: Request) {
         id: validatedData.organizationId,
         userId: currentUser.userId,
       },
+      select: {
+        id: true,
+        // Note: primaryColor, backgroundColor, buttonTextColor columns don't exist in database
+      },
     });
 
     if (!organization) {
       return NextResponse.json(
         { error: 'Organization not found' },
         { status: 404 }
+      );
+    }
+
+    // Validate products exist and belong to the organization
+    const productIds = validatedData.products.map(p => p.productId);
+    const products = await prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+        organizationId: validatedData.organizationId,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    if (products.length !== productIds.length) {
+      const foundIds = products.map(p => p.id);
+      const missingIds = productIds.filter(id => !foundIds.includes(id));
+      return NextResponse.json(
+        { 
+          error: 'One or more products not found or do not belong to this organization',
+          details: `Product IDs not found: ${missingIds.join(', ')}`,
+        },
+        { status: 400 }
       );
     }
 

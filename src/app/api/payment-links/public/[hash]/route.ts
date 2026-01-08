@@ -20,9 +20,10 @@ export async function GET(
             phoneNumber: true,
             email: true,
             website: true,
-            primaryColor: true,
-            backgroundColor: true,
-            buttonTextColor: true,
+            // Note: primaryColor, backgroundColor, buttonTextColor columns don't exist in database yet
+            // primaryColor: true,
+            // backgroundColor: true,
+            // buttonTextColor: true,
           },
         },
         products: {

@@ -76,6 +76,11 @@ export async function PUT(
         id: organizationId,
         userId: currentUser.userId,
       },
+      select: {
+        id: true,
+        logo: true,
+        // Note: primaryColor, backgroundColor, buttonTextColor columns don't exist in database
+      },
     });
 
     if (!organization) {
