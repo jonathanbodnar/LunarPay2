@@ -1,16 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Script from 'next/script';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
   ArrowLeft, Mail, Phone, MapPin, CreditCard, Plus, 
   ChevronDown, DollarSign, RefreshCw, FileText, X,
-  Building2, Landmark
+  Building2, Landmark, Loader2, CheckCircle
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import '@/types/global';
 
 interface PaymentMethod {
   id: number;
@@ -81,6 +83,17 @@ export default function CustomerDetailPage() {
   });
   
   const [processing, setProcessing] = useState(false);
+  
+  // Fortis Elements state
+  const [showFortisModal, setShowFortisModal] = useState(false);
+  const [fortisClientToken, setFortisClientToken] = useState<string | null>(null);
+  const [fortisEnvironment, setFortisEnvironment] = useState<'sandbox' | 'production'>('production');
+  const [fortisLoaded, setFortisLoaded] = useState(false);
+  const [fortisReady, setFortisReady] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [payFormInstance, setPayFormInstance] = useState<any>(null);
+  const [fortisMode, setFortisMode] = useState<'charge' | 'store'>('charge'); // 'charge' = payment, 'store' = save card only
 
   useEffect(() => {
     if (params.id) {
@@ -155,22 +168,252 @@ export default function CustomerDetailPage() {
       return;
     }
     
-    if (!paymentForm.selectedPaymentMethod && !paymentForm.useNewCard) {
-      alert('Please select a payment method or enter new card details');
+    // Using saved payment method - use the existing charge API
+    if (paymentForm.selectedPaymentMethod && !paymentForm.useNewCard) {
+      setProcessing(true);
+      try {
+        const response = await fetch(`/api/customers/${params.id}/charge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            amount: Number(paymentForm.amount),
+            sourceId: Number(paymentForm.selectedPaymentMethod), // API expects sourceId not paymentMethodId
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.error || 'Payment failed');
+          return;
+        }
+
+        alert('Payment successful!');
+        setShowPaymentModal(false);
+        resetPaymentForm();
+        fetchCustomer();
+      } catch (error) {
+        alert('Payment failed: ' + (error as Error).message);
+      } finally {
+        setProcessing(false);
+      }
       return;
     }
     
+    // Using new card - initialize Fortis Elements
+    if (paymentForm.useNewCard || paymentMethods.length === 0) {
+      await initializeFortisPayment();
+    }
+  };
+
+  const initializeFortisPayment = async () => {
     setProcessing(true);
+    setPaymentError(null);
+    setFortisMode('charge');
+
     try {
-      // TODO: Integrate with payment processor
-      alert('Payment processing will be integrated with Fortis');
+      const response = await fetch(`/api/customers/${params.id}/charge-intention`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          amount: Number(paymentForm.amount),
+          savePaymentMethod: paymentForm.savePaymentMethod,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setPaymentError(data.error || 'Failed to initialize payment');
+        setProcessing(false);
+        return;
+      }
+
+      setFortisClientToken(data.clientToken);
+      setFortisEnvironment(data.environment || 'production');
       setShowPaymentModal(false);
-      resetPaymentForm();
+      setShowFortisModal(true);
     } catch (error) {
-      alert('Payment failed: ' + (error as Error).message);
+      setPaymentError('Failed to initialize payment');
     } finally {
       setProcessing(false);
     }
+  };
+
+  // Initialize Fortis Elements for storing card only (no charge)
+  const initializeFortisStore = async () => {
+    setProcessing(true);
+    setPaymentError(null);
+    setFortisMode('store');
+
+    try {
+      const response = await fetch(`/api/customers/${params.id}/payment-methods`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'get-token' }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setPaymentError(data.error || 'Failed to initialize');
+        setProcessing(false);
+        return;
+      }
+
+      setFortisClientToken(data.clientToken);
+      setFortisEnvironment(data.environment || 'production');
+      setShowFortisModal(true);
+    } catch (error) {
+      setPaymentError('Failed to initialize payment form');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Initialize Fortis Elements when token is ready
+  useEffect(() => {
+    if (!fortisClientToken || !fortisLoaded || !window.Commerce?.elements) {
+      return;
+    }
+
+    try {
+      const elements = new window.Commerce.elements(fortisClientToken);
+
+      elements.eventBus.on('ready', () => {
+        console.log('[Fortis] Payment form ready');
+        setFortisReady(true);
+      });
+
+      elements.eventBus.on('error', (err: any) => {
+        console.error('[Fortis] Form error:', err);
+        setPaymentError(err?.message || 'Payment form error');
+      });
+
+      elements.eventBus.on('done', async (response: any) => {
+        console.log('[Fortis] Done:', response, 'Mode:', fortisMode);
+        if (fortisMode === 'store') {
+          await saveStoredCard(response);
+        } else {
+          await processPayment(response);
+        }
+      });
+
+      elements.create({
+        container: '#fortis-payment-container',
+        theme: 'default',
+        hideTotal: true,
+        showReceipt: false,
+        showSubmitButton: false,
+        environment: fortisEnvironment,
+        appearance: {
+          colorButtonSelectedBackground: '#3b82f6',
+          colorButtonSelectedText: '#ffffff',
+          colorButtonText: '#4a5568',
+          colorButtonBackground: '#f7fafc',
+          colorBackground: '#ffffff',
+          colorText: '#1a202c',
+          fontFamily: 'Roboto',
+          fontSize: '16px',
+          borderRadius: '8px',
+        },
+      });
+
+      setPayFormInstance(elements);
+    } catch (err) {
+      console.error('[Fortis] Init error:', err);
+      setPaymentError('Failed to initialize payment form');
+    }
+  }, [fortisClientToken, fortisLoaded, fortisEnvironment, fortisMode]);
+
+  // Save stored card (no charge)
+  const saveStoredCard = async (fortisResponse: any) => {
+    setProcessing(true);
+    
+    try {
+      const response = await fetch(`/api/customers/${params.id}/payment-methods`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          fortisResponse,
+          isDefault: paymentMethods.length === 0, // Default if first card
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setPaymentError(data.error || 'Failed to save payment method');
+        return;
+      }
+
+      setPaymentSuccess(true);
+      setTimeout(() => {
+        closeFortisModal();
+        fetchPaymentMethods();
+      }, 2000);
+    } catch (error) {
+      setPaymentError('Failed to save payment method');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const processPayment = async (fortisResponse: any) => {
+    setProcessing(true);
+
+    try {
+      const response = await fetch(`/api/customers/${params.id}/process-charge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          fortisResponse,
+          savePaymentMethod: paymentForm.savePaymentMethod,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setPaymentError(data.error || 'Payment failed');
+        return;
+      }
+
+      setPaymentSuccess(true);
+      setTimeout(() => {
+        setShowFortisModal(false);
+        setPaymentSuccess(false);
+        resetPaymentForm();
+        setFortisClientToken(null);
+        setFortisReady(false);
+        fetchCustomer();
+        fetchPaymentMethods();
+      }, 2000);
+    } catch (error) {
+      setPaymentError('Failed to process payment');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleFortisSubmit = () => {
+    if (payFormInstance) {
+      setProcessing(true);
+      payFormInstance.submit();
+    }
+  };
+
+  const closeFortisModal = () => {
+    setShowFortisModal(false);
+    setFortisClientToken(null);
+    setFortisReady(false);
+    setPaymentError(null);
+    setPaymentSuccess(false);
   };
 
   const handleAddSubscription = async () => {
@@ -425,10 +668,7 @@ export default function CustomerDetailPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Payment Methods</CardTitle>
-            <Button variant="outline" size="sm" onClick={() => {
-              setPaymentForm(prev => ({ ...prev, useNewCard: true }));
-              setShowPaymentModal(true);
-            }}>
+            <Button variant="outline" size="sm" onClick={initializeFortisStore} disabled={processing}>
               <CreditCard className="mr-2 h-4 w-4" />
               Add Payment Method
             </Button>
@@ -883,6 +1123,119 @@ export default function CustomerDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Fortis Payment Modal */}
+      {showFortisModal && (
+        <>
+          {/* Load Fortis Script */}
+          <Script
+            src={fortisEnvironment === 'production' 
+              ? 'https://js.fortis.tech/commercejs-v1.0.0.min.js'
+              : 'https://js.sandbox.fortis.tech/commercejs-v1.0.0.min.js'
+            }
+            strategy="afterInteractive"
+            onLoad={() => setFortisLoaded(true)}
+            onError={() => setPaymentError('Failed to load payment form')}
+          />
+
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-background rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h2 className="text-lg font-semibold">
+                {fortisMode === 'store' ? 'Add Payment Method' : 'Complete Payment'}
+              </h2>
+                <button onClick={closeFortisModal}>
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-4">
+                {paymentSuccess ? (
+                  <div className="text-center py-8">
+                    <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-green-700">
+                      {fortisMode === 'store' ? 'Card Saved!' : 'Payment Successful!'}
+                    </h3>
+                    <p className="text-muted-foreground mt-2">
+                      {fortisMode === 'store' 
+                        ? 'Payment method saved successfully'
+                        : `Charged ${formatCurrency(Number(paymentForm.amount))} to customer`
+                      }
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="bg-muted p-4 rounded-lg mb-4">
+                      <div className="flex justify-between mb-2">
+                        <span className="text-muted-foreground">Customer</span>
+                        <span className="font-medium">{customer?.firstName} {customer?.lastName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Amount</span>
+                        <span className="font-bold text-lg">{formatCurrency(Number(paymentForm.amount))}</span>
+                      </div>
+                    </div>
+
+                    {paymentError && (
+                      <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4">
+                        {paymentError}
+                      </div>
+                    )}
+
+                    {!fortisLoaded || !fortisReady ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-muted-foreground">Loading payment form...</span>
+                      </div>
+                    ) : null}
+
+                    <div 
+                      id="fortis-payment-container" 
+                      className="min-h-[200px]"
+                      style={{ display: fortisReady ? 'block' : 'none' }}
+                    />
+
+                    {paymentForm.savePaymentMethod && fortisReady && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        ✓ Payment method will be saved for future use
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {!paymentSuccess && (
+                <div className="p-4 border-t flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1" 
+                    onClick={closeFortisModal}
+                    disabled={processing}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    className="flex-1" 
+                    onClick={handleFortisSubmit}
+                    disabled={processing || !fortisReady}
+                  >
+                    {processing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        {fortisMode === 'store' ? 'Saving...' : 'Processing...'}
+                      </>
+                    ) : fortisMode === 'store' ? (
+                      'Save Card'
+                    ) : (
+                      `Pay ${formatCurrency(Number(paymentForm.amount))}`
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

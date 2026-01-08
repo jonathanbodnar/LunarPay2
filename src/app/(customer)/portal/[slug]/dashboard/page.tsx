@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Script from 'next/script';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -23,6 +24,7 @@ import {
   ArrowDownLeft
 } from 'lucide-react';
 import { formatCurrency, formatDate, getSubscriptionFrequencyText } from '@/lib/utils';
+import '@/types/global';
 
 interface Customer {
   id: number;
@@ -107,6 +109,17 @@ export default function PortalDashboard() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
+  
+  // Add Payment Method modal state
+  const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
+  const [addPaymentClientToken, setAddPaymentClientToken] = useState<string | null>(null);
+  const [addPaymentEnvironment, setAddPaymentEnvironment] = useState<'sandbox' | 'production'>('production');
+  const [addPaymentLoaded, setAddPaymentLoaded] = useState(false);
+  const [addPaymentReady, setAddPaymentReady] = useState(false);
+  const [addPaymentSuccess, setAddPaymentSuccess] = useState(false);
+  const [addPaymentError, setAddPaymentError] = useState<string | null>(null);
+  const [addPaymentInstance, setAddPaymentInstance] = useState<any>(null);
+  const [addPaymentProcessing, setAddPaymentProcessing] = useState(false);
 
   // Branding
   const primaryColor = customer?.organization?.primaryColor || '#000000';
@@ -290,6 +303,142 @@ export default function PortalDashboard() {
       setCheckoutError((error as Error).message);
     } finally {
       setCheckoutLoading(false);
+    }
+  };
+
+  // Add Payment Method handlers
+  const handleOpenAddPayment = async () => {
+    setAddPaymentError(null);
+    setAddPaymentSuccess(false);
+    setAddPaymentProcessing(true);
+
+    try {
+      const response = await fetch('/api/portal/payment-methods/add', {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setAddPaymentError(data.error || 'Failed to initialize');
+        setAddPaymentProcessing(false);
+        return;
+      }
+
+      setAddPaymentClientToken(data.clientToken);
+      setAddPaymentEnvironment(data.environment || 'production');
+      setShowAddPaymentModal(true);
+    } catch (error) {
+      setAddPaymentError('Failed to initialize payment form');
+    } finally {
+      setAddPaymentProcessing(false);
+    }
+  };
+
+  const handleCloseAddPayment = () => {
+    setShowAddPaymentModal(false);
+    setAddPaymentClientToken(null);
+    setAddPaymentReady(false);
+    setAddPaymentError(null);
+    setAddPaymentSuccess(false);
+  };
+
+  // Initialize Fortis Elements for Add Payment
+  useEffect(() => {
+    if (!addPaymentClientToken || !addPaymentLoaded || !window.Commerce?.elements || !showAddPaymentModal) {
+      return;
+    }
+
+    try {
+      const elements = new window.Commerce.elements(addPaymentClientToken);
+
+      elements.eventBus.on('ready', () => {
+        console.log('[Portal Fortis] Payment form ready');
+        setAddPaymentReady(true);
+      });
+
+      elements.eventBus.on('error', (err: any) => {
+        console.error('[Portal Fortis] Form error:', err);
+        setAddPaymentError(err?.message || 'Payment form error');
+      });
+
+      elements.eventBus.on('done', async (response: any) => {
+        console.log('[Portal Fortis] Tokenization done:', response);
+        await savePaymentMethod(response);
+      });
+
+      elements.create({
+        container: '#add-payment-container',
+        theme: 'default',
+        hideTotal: true,
+        showReceipt: false,
+        showSubmitButton: false,
+        environment: addPaymentEnvironment,
+        appearance: {
+          colorButtonSelectedBackground: primaryColor,
+          colorButtonSelectedText: buttonTextColor,
+          colorButtonText: '#4a5568',
+          colorButtonBackground: '#f7fafc',
+          colorBackground: '#ffffff',
+          colorText: '#1a202c',
+          fontFamily: 'Roboto',
+          fontSize: '16px',
+          borderRadius: '8px',
+        },
+      });
+
+      setAddPaymentInstance(elements);
+    } catch (err) {
+      console.error('[Portal Fortis] Init error:', err);
+      setAddPaymentError('Failed to initialize payment form');
+    }
+  }, [addPaymentClientToken, addPaymentLoaded, showAddPaymentModal, addPaymentEnvironment, primaryColor, buttonTextColor]);
+
+  const savePaymentMethod = async (fortisResponse: any) => {
+    setAddPaymentProcessing(true);
+
+    try {
+      const response = await fetch('/api/portal/payment-methods/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fortisResponse,
+          setAsDefault: paymentMethods.length === 0, // Default if first
+        }),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setAddPaymentError(data.error || 'Failed to save payment method');
+        return;
+      }
+
+      setAddPaymentSuccess(true);
+      
+      // Refresh payment methods
+      const pmRes = await fetch('/api/portal/payment-methods', { credentials: 'include' });
+      if (pmRes.ok) {
+        const pmData = await pmRes.json();
+        setPaymentMethods(pmData.paymentMethods || []);
+      }
+
+      setTimeout(() => {
+        handleCloseAddPayment();
+      }, 2000);
+    } catch (error) {
+      setAddPaymentError('Failed to save payment method');
+    } finally {
+      setAddPaymentProcessing(false);
+    }
+  };
+
+  const handleAddPaymentSubmit = () => {
+    if (addPaymentInstance) {
+      setAddPaymentProcessing(true);
+      addPaymentInstance.submit();
     }
   };
 
@@ -566,8 +715,16 @@ export default function PortalDashboard() {
                 <h2 className="text-2xl font-semibold">Payment Methods</h2>
                 <p className="text-muted-foreground text-sm mt-1">Manage your saved cards and bank accounts</p>
               </div>
-              <Button style={{ backgroundColor: primaryColor, color: buttonTextColor }}>
-                <Plus className="h-4 w-4 mr-2" />
+              <Button 
+                onClick={handleOpenAddPayment}
+                disabled={addPaymentProcessing}
+                style={{ backgroundColor: primaryColor, color: buttonTextColor }}
+              >
+                {addPaymentProcessing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-2" />
+                )}
                 Add New
               </Button>
             </div>
@@ -585,8 +742,16 @@ export default function PortalDashboard() {
                   <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">
                     Add a card or bank account to make purchases and manage subscriptions.
                   </p>
-                  <Button style={{ backgroundColor: primaryColor, color: buttonTextColor }}>
-                    <Plus className="h-4 w-4 mr-2" />
+                  <Button 
+                    onClick={handleOpenAddPayment}
+                    disabled={addPaymentProcessing}
+                    style={{ backgroundColor: primaryColor, color: buttonTextColor }}
+                  >
+                    {addPaymentProcessing ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4 mr-2" />
+                    )}
                     Add Payment Method
                   </Button>
                 </CardContent>
@@ -1033,6 +1198,102 @@ export default function PortalDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Add Payment Method Modal */}
+      {showAddPaymentModal && (
+        <>
+          {/* Load Fortis Script */}
+          <Script
+            src={addPaymentEnvironment === 'production' 
+              ? 'https://js.fortis.tech/commercejs-v1.0.0.min.js'
+              : 'https://js.sandbox.fortis.tech/commercejs-v1.0.0.min.js'
+            }
+            strategy="afterInteractive"
+            onLoad={() => setAddPaymentLoaded(true)}
+            onError={() => setAddPaymentError('Failed to load payment form')}
+          />
+
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="text-lg font-semibold">Add Payment Method</h3>
+                <button
+                  onClick={handleCloseAddPayment}
+                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-4">
+                {addPaymentSuccess ? (
+                  <div className="text-center py-8">
+                    <CheckCircle className="h-16 w-16 mx-auto mb-4" style={{ color: primaryColor }} />
+                    <h4 className="text-xl font-semibold mb-2">Payment Method Added!</h4>
+                    <p className="text-muted-foreground">
+                      Your new payment method has been saved successfully.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Add a credit card or bank account to use for purchases and subscriptions.
+                    </p>
+
+                    {addPaymentError && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm mb-4">
+                        {addPaymentError}
+                      </div>
+                    )}
+
+                    {(!addPaymentLoaded || !addPaymentReady) && !addPaymentError && (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-muted-foreground">Loading payment form...</span>
+                      </div>
+                    )}
+
+                    <div 
+                      id="add-payment-container" 
+                      className="min-h-[200px]"
+                      style={{ display: addPaymentReady ? 'block' : 'none' }}
+                    />
+                  </>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              {!addPaymentSuccess && (
+                <div className="p-4 border-t space-y-3">
+                  <Button
+                    className="w-full"
+                    style={{ backgroundColor: primaryColor, color: buttonTextColor }}
+                    disabled={!addPaymentReady || addPaymentProcessing}
+                    onClick={handleAddPaymentSubmit}
+                  >
+                    {addPaymentProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Payment Method'
+                    )}
+                  </Button>
+                  <button
+                    onClick={handleCloseAddPayment}
+                    className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

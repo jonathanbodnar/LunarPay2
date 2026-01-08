@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { FileText, Download, CreditCard, Landmark, Lock, CheckCircle } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import '@/types/global';
 import Image from 'next/image';
 
 interface Invoice {
@@ -47,17 +48,6 @@ interface Invoice {
   }>;
 }
 
-declare global {
-  interface Window {
-    Commerce?: {
-      elements: new (token: string) => {
-        create: (config: any) => void;
-        on: (event: string, callback: (data?: any) => void) => void;
-        submit: () => void;
-      };
-    };
-  }
-}
 
 // Helper to format subscription frequency
 const formatFrequency = (interval: string | null, count: number | null): string => {

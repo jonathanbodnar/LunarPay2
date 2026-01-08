@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { ArrowLeft, Download, RefreshCw, CreditCard, Building2, User, Calendar, DollarSign, FileText, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, CreditCard, Building2, User, Calendar, DollarSign, FileText, AlertCircle, CheckCircle, XCircle, Undo2, Loader2, X } from 'lucide-react';
 
 interface Transaction {
   id: string;
@@ -82,12 +83,61 @@ export default function TransactionDetailPage() {
   
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Refund state
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundType, setRefundType] = useState<'full' | 'partial'>('full');
+  const [refundProcessing, setRefundProcessing] = useState(false);
+  const [refundError, setRefundError] = useState<string | null>(null);
 
   useEffect(() => {
     if (transactionId) {
       fetchTransaction();
     }
   }, [transactionId]);
+
+  const canRefund = transaction && 
+    (transaction.status === 'P' || transaction.status === 'succeeded') && 
+    !transaction.refundTransaction;
+
+  const handleRefund = async () => {
+    if (!transaction) return;
+    
+    setRefundProcessing(true);
+    setRefundError(null);
+
+    try {
+      const body: { amount?: number } = {};
+      if (refundType === 'partial' && refundAmount) {
+        body.amount = parseFloat(refundAmount);
+      }
+
+      const response = await fetch(`/api/transactions/${transaction.id}/refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setRefundError(data.error || 'Failed to process refund');
+        return;
+      }
+
+      // Success - refresh transaction
+      setShowRefundModal(false);
+      setRefundAmount('');
+      setRefundType('full');
+      fetchTransaction();
+    } catch (error) {
+      setRefundError('An error occurred while processing the refund');
+    } finally {
+      setRefundProcessing(false);
+    }
+  };
 
   const fetchTransaction = async () => {
     try {
@@ -165,12 +215,141 @@ export default function TransactionDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {canRefund && (
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setRefundAmount(String(Number(transaction.totalAmount)));
+                setShowRefundModal(true);
+              }}
+              className="text-red-600 border-red-200 hover:bg-red-50"
+            >
+              <Undo2 className="h-4 w-4 mr-2" />
+              Refund
+            </Button>
+          )}
           <Button variant="outline">
             <Download className="h-4 w-4 mr-2" />
             Download Receipt
           </Button>
         </div>
       </div>
+
+      {/* Refund Modal */}
+      {showRefundModal && transaction && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Refund Transaction</h2>
+              <button onClick={() => setShowRefundModal(false)}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between mb-2">
+                  <span className="text-gray-600">Original Amount</span>
+                  <span className="font-semibold">{formatCurrency(Number(transaction.totalAmount))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Customer</span>
+                  <span className="font-medium">{transaction.firstName} {transaction.lastName}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Refund Type</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="refundType"
+                      checked={refundType === 'full'}
+                      onChange={() => {
+                        setRefundType('full');
+                        setRefundAmount(String(Number(transaction.totalAmount)));
+                      }}
+                      className="w-4 h-4"
+                    />
+                    <span>Full Refund</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="refundType"
+                      checked={refundType === 'partial'}
+                      onChange={() => setRefundType('partial')}
+                      className="w-4 h-4"
+                    />
+                    <span>Partial Refund</span>
+                  </label>
+                </div>
+              </div>
+
+              {refundType === 'partial' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Refund Amount</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={Number(transaction.totalAmount)}
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                      className="pl-7"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Max: {formatCurrency(Number(transaction.totalAmount))}
+                  </p>
+                </div>
+              )}
+
+              {refundError && (
+                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">
+                  {refundError}
+                </div>
+              )}
+
+              <div className="bg-yellow-50 p-3 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  <strong>Warning:</strong> This action cannot be undone. The refund will be processed through the payment processor.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 p-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowRefundModal(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRefund}
+                disabled={refundProcessing || (refundType === 'partial' && (!refundAmount || parseFloat(refundAmount) <= 0))}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              >
+                {refundProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    Refund {refundType === 'full' ? formatCurrency(Number(transaction.totalAmount)) : formatCurrency(parseFloat(refundAmount) || 0)}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Transaction Info */}
