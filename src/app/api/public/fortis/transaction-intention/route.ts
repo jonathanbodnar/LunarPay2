@@ -22,6 +22,7 @@ export async function POST(request: Request) {
       type = 'invoice', // 'invoice', 'payment_link', 'portal'
       referenceId, // invoiceId, paymentLinkId, etc.
       savePaymentMethod = false,
+      hasRecurring = false, // If true, use ticket intention for card saving
     } = body;
 
     if (!organizationId) {
@@ -122,6 +123,49 @@ export async function POST(request: Request) {
       );
     }
 
+    // Debug: Log exactly what we're sending to Fortis
+    const baseUrl = env === 'production' 
+      ? 'https://api.fortis.tech/v1/' 
+      : 'https://api.sandbox.fortis.tech/v1/';
+
+    // TICKET INTENTION FLOW: For recurring/subscription products
+    // This allows us to collect card info, then call processTicketSale with save_account: true
+    if (hasRecurring) {
+      console.log('[PUBLIC Fortis Intention] Using TICKET intention for recurring:', {
+        organizationId,
+        locationId,
+        type,
+        referenceId,
+        hasRecurring,
+        amount,
+        environment: env,
+      });
+
+      const ticketResult = await fortisClient.createTicketIntention({
+        location_id: locationId,
+      });
+
+      if (!ticketResult.status || !ticketResult.clientToken) {
+        console.error('[PUBLIC Fortis Intention] Ticket intention failed:', ticketResult.message);
+        return NextResponse.json(
+          { error: ticketResult.message || 'Failed to initialize payment form' },
+          { status: 400 }
+        );
+      }
+
+      console.log('[PUBLIC Fortis Intention] Ticket intention success');
+
+      return NextResponse.json({
+        success: true,
+        clientToken: ticketResult.clientToken,
+        locationId,
+        environment: env,
+        intentionType: 'ticket', // Frontend uses this to know which flow to follow
+        amount: amount ? Math.round(amount * 100) : 0, // Return amount in cents for ticket processing
+      });
+    }
+
+    // TRANSACTION INTENTION FLOW: For one-time payments
     // Determine the action for Fortis
     // Valid actions: sale, auth-only, avs-only, refund, tokenization, null
     // If saving payment method without charging, use 'tokenization'
@@ -139,17 +183,8 @@ export async function POST(request: Request) {
     if (fortisAction === 'sale' && amount) {
       intentionData.amount = Math.round(amount * 100); // Convert dollars to cents
     }
-
-    // Note: save_account is NOT valid on transaction intention per Fortis docs
-    // The token_id is returned automatically for 'sale' actions when card is tokenized
-    // If we need to explicitly save cards, use ticket intention flow instead
-
-    // Debug: Log exactly what we're sending to Fortis
-    const baseUrl = env === 'production' 
-      ? 'https://api.fortis.tech/v1/' 
-      : 'https://api.sandbox.fortis.tech/v1/';
     
-    console.log('[PUBLIC Fortis Intention] Creating intention:', {
+    console.log('[PUBLIC Fortis Intention] Using TRANSACTION intention:', {
       organizationId,
       action: fortisAction,
       amount: intentionData.amount,
@@ -157,10 +192,6 @@ export async function POST(request: Request) {
       type,
       referenceId,
       environment: env,
-      fortisEnv: process.env.fortis_environment,
-      apiBaseUrl: baseUrl,
-      merchantUserId: merchantUserId?.slice(0, 8) + '...',
-      merchantApiKey: merchantApiKey?.slice(0, 8) + '...',
     });
 
     // Create transaction intention
@@ -174,13 +205,14 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log('[PUBLIC Fortis Intention] Success - Token generated');
+    console.log('[PUBLIC Fortis Intention] Transaction intention success');
 
     return NextResponse.json({
       success: true,
       clientToken: result.clientToken,
       locationId,
       environment: env,
+      intentionType: 'transaction', // Frontend uses this to know which flow to follow
     });
   } catch (error) {
     console.error('[PUBLIC Fortis Intention] Error:', error);

@@ -140,6 +140,16 @@ export interface TransactionResponse {
     transaction_batch_id?: string;
     created_ts: number;
     reason_code?: string;
+    // Token fields (returned when save_account: true)
+    token_id?: string;
+    account_vault_id?: string;
+    // Card details
+    last_four?: string;
+    account_holder_name?: string;
+    account_type?: string;
+    payment_method?: string;
+    exp_date?: string;
+    first_six?: string;
   };
 }
 

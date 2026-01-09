@@ -241,6 +241,115 @@ export class FortisClient {
   }
 
   /**
+   * 2B. TICKET INTENTION (Elements)
+   * POST /v1/elements/ticket/intention
+   * 
+   * Generates a client token for Fortis Elements to collect card data
+   * WITHOUT processing a payment. Used for recurring/subscription flows.
+   * After Elements returns ticket_id, call processTicketSale to charge.
+   */
+  async createTicketIntention(
+    data: { location_id: string }
+  ): Promise<{
+    status: boolean;
+    clientToken?: string;
+    message?: string;
+  }> {
+    try {
+      const response = await this.client.post<TransactionIntentionResponse>(
+        'elements/ticket/intention',
+        data
+      );
+
+      if (response.data.data?.client_token) {
+        return {
+          status: true,
+          clientToken: response.data.data.client_token,
+        };
+      }
+
+      return {
+        status: false,
+        message: 'Failed to create ticket intention',
+      };
+    } catch (error) {
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
+   * 2C. PROCESS TICKET SALE
+   * POST /v1/transactions/cc/sale/ticket
+   * 
+   * Process a credit card payment using a ticket_id from Elements.
+   * Can optionally save the card for future use with save_account: true
+   */
+  async processTicketSale(data: {
+    ticket_id: string;
+    transaction_amount: number;
+    save_account?: boolean;
+    location_id?: string;
+    transaction_c1?: string;
+    transaction_c2?: string;
+  }): Promise<{
+    status: boolean;
+    transaction?: any;
+    tokenId?: string;
+    message?: string;
+    reasonCode?: string;
+  }> {
+    try {
+      console.log('[Fortis Ticket Sale] Processing:', data);
+      
+      const response = await this.client.post<TransactionResponse>(
+        'transactions/cc/sale/ticket',
+        data
+      );
+
+      const txData = response.data.data;
+      
+      console.log('[Fortis Ticket Sale] Response:', {
+        id: txData.id,
+        status_code: txData.status_code,
+        reason_code_id: txData.reason_code_id,
+        token_id: txData.token_id,
+        transaction_amount: txData.transaction_amount,
+      });
+
+      // Check if transaction was approved
+      const isApproved = txData.status_code === 101 && txData.reason_code_id === 1000;
+      const isPending = txData.status_code === 102 && txData.reason_code_id === 1000;
+      const hasTransactionId = !!txData.id;
+      
+      if (isApproved || isPending || (hasTransactionId && txData.reason_code_id === 1000)) {
+        return {
+          status: true,
+          transaction: txData,
+          tokenId: txData.token_id || undefined, // This is the saved card token
+        };
+      }
+
+      const reasonMessage = FORTIS_REASON_CODES[txData.reason_code_id?.toString()] || 'Unknown error';
+
+      return {
+        status: false,
+        transaction: txData,
+        message: `Payment declined: ${reasonMessage}`,
+        reasonCode: txData.reason_code_id?.toString(),
+      };
+    } catch (error) {
+      console.error('[Fortis Ticket Sale] Error:', error);
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
    * 3. CREDIT CARD SALE WITH TOKEN
    * POST /v1/transactions/cc/sale/token
    * 

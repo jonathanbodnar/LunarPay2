@@ -80,6 +80,8 @@ export default function PaymentLinkPage() {
   const [payForm, setPayForm] = useState<any>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [fortisEnvironment, setFortisEnvironment] = useState<'sandbox' | 'production'>('production');
+  const [intentionType, setIntentionType] = useState<'transaction' | 'ticket'>('transaction');
+  const [ticketAmount, setTicketAmount] = useState<number>(0); // Amount in cents for ticket flow
   
   // Demo form state (for screenshot/preview when Fortis not configured)
   const [demoCardNumber, setDemoCardNumber] = useState('');
@@ -289,7 +291,8 @@ export default function PaymentLinkPage() {
           action: 'sale',
           type: 'payment_link',
           referenceId: linkId,
-          savePaymentMethod: shouldSaveCard, // Force save for subscriptions
+          savePaymentMethod: shouldSaveCard,
+          hasRecurring: hasSubscription, // Use ticket intention for subscriptions
         }),
       });
 
@@ -298,8 +301,14 @@ export default function PaymentLinkPage() {
       if (data.success && data.clientToken) {
         setClientToken(data.clientToken);
         setFortisEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
+        setIntentionType(data.intentionType || 'transaction');
+        setTicketAmount(data.amount || Math.round(amount * 100)); // Store amount in cents for ticket flow
         setDemoMode(false);
-        console.log('[PaymentLink] Got Fortis token, environment:', data.environment);
+        console.log('[PaymentLink] Got Fortis token:', {
+          environment: data.environment,
+          intentionType: data.intentionType,
+          hasSubscription,
+        });
       } else {
         // Enable demo mode for screenshots/preview when Fortis not configured
         console.log('[PaymentLink] Enabling demo mode - Fortis not configured');
@@ -373,10 +382,57 @@ export default function PaymentLinkPage() {
           subscriptionIntervalCount: item.product.subscriptionIntervalCount,
         }));
 
-      // Check if any product is a subscription - force save card
+      // Check if any product is a subscription
       const hasSubscriptionProduct = productsToProcess.some(p => p.isSubscription);
       const shouldSavePaymentMethod = hasSubscriptionProduct || savePaymentMethod;
 
+      console.log('[PaymentLink] Processing payment:', {
+        intentionType,
+        hasSubscriptionProduct,
+        fortisResponse: fortisResponse ? 'present' : 'missing',
+      });
+
+      // TICKET FLOW: For recurring products
+      // Fortis Elements returns a ticket_id, we process it server-side with save_account: true
+      if (intentionType === 'ticket') {
+        const ticketId = fortisResponse?.ticket_id || fortisResponse?.ticketId || 
+          fortisResponse?.data?.ticket_id || fortisResponse?.data?.ticketId;
+        
+        console.log('[PaymentLink] Ticket flow - ticketId:', ticketId);
+
+        if (!ticketId) {
+          setPaymentError('Card tokenization failed. Please try again.');
+          setProcessing(false);
+          return;
+        }
+
+        const response = await fetch('/api/public/fortis/process-ticket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'payment_link',
+            referenceId: paymentLink.id,
+            organizationId: paymentLink.organizationId,
+            ticketId,
+            amount: ticketAmount, // Amount in cents
+            customerEmail: email,
+            products: productsToProcess,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setPaymentSuccess(true);
+          setProcessing(false);
+        } else {
+          setPaymentError(data.error || 'Payment failed');
+          setProcessing(false);
+        }
+        return;
+      }
+
+      // TRANSACTION FLOW: For one-time payments
       const response = await fetch('/api/public/fortis/process-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -386,8 +442,8 @@ export default function PaymentLinkPage() {
           organizationId: paymentLink.organizationId,
           customerEmail: email,
           fortisResponse,
-          savePaymentMethod: shouldSavePaymentMethod, // Force save for subscriptions
-          products: productsToProcess, // Include full product data with subscription info
+          savePaymentMethod: shouldSavePaymentMethod,
+          products: productsToProcess,
         }),
       });
 
