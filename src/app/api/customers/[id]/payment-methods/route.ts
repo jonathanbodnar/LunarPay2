@@ -173,18 +173,32 @@ export async function POST(
 
     // If we have a Fortis response, save the tokenized payment method
     if (fortisResponse) {
-      const {
-        token_id,
-        last_four,
-        account_holder_name,
-        account_type, // 'visa', 'mc', 'amex', 'checking', 'savings'
-        payment_method, // 'cc' or 'ach'
-        exp_date,
-      } = fortisResponse;
+      console.log('[Payment Methods] Received fortisResponse:', JSON.stringify(fortisResponse, null, 2));
+      
+      // Parse Fortis Elements response - handle multiple nested structures
+      let txData = fortisResponse;
+      if (fortisResponse.data?.data) {
+        txData = fortisResponse.data.data;
+      } else if (fortisResponse.data) {
+        txData = fortisResponse.data;
+      } else if (fortisResponse.transaction) {
+        txData = fortisResponse.transaction;
+      }
+      
+      // Extract fields from parsed data (try both camelCase and snake_case)
+      const token_id = txData.token_id || txData.tokenId || txData.account_vault_id || txData.id || null;
+      const last_four = txData.last_four || txData.lastFour || txData.last4 || '';
+      const account_holder_name = txData.account_holder_name || txData.accountHolderName || txData.cardholder_name || '';
+      const account_type = txData.account_type || txData.accountType || txData.card_type || ''; // 'visa', 'mc', 'amex', 'checking', 'savings'
+      const payment_method = txData.payment_method || txData.paymentMethod || 
+        (account_type?.toLowerCase()?.includes('check') || account_type?.toLowerCase()?.includes('saving') ? 'ach' : 'cc');
+      const exp_date = txData.exp_date || txData.expDate || '';
+
+      console.log('[Payment Methods] Parsed:', { token_id, last_four, account_type, payment_method });
 
       if (!token_id) {
         return NextResponse.json(
-          { error: 'Token ID is required' },
+          { error: 'Token ID is required. Payment may not have been tokenized correctly.' },
           { status: 400 }
         );
       }

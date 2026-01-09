@@ -63,6 +63,7 @@ export default function CustomerDetailPage() {
     accountName: '',
     accountType: 'checking',
     savePaymentMethod: true,
+    sendReceipt: true, // Send receipt to customer after payment
   });
   
   // Subscription form state
@@ -375,6 +376,7 @@ export default function CustomerDetailPage() {
         body: JSON.stringify({
           fortisResponse,
           savePaymentMethod: paymentForm.savePaymentMethod,
+          sendReceipt: paymentForm.sendReceipt,
         }),
       });
 
@@ -413,8 +415,10 @@ export default function CustomerDetailPage() {
     setShowFortisModal(false);
     setFortisClientToken(null);
     setFortisReady(false);
+    setFortisLoaded(false); // Reset so script reloads on next modal open
     setPaymentError(null);
     setPaymentSuccess(false);
+    setPayFormInstance(null);
   };
 
   const handleAddSubscription = async () => {
@@ -461,6 +465,7 @@ export default function CustomerDetailPage() {
       accountName: '',
       accountType: 'checking',
       savePaymentMethod: true,
+      sendReceipt: true,
     });
   };
 
@@ -779,6 +784,15 @@ export default function CustomerDetailPage() {
                     <span className="text-sm">Save payment method for future use</span>
                   </label>
 
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={paymentForm.sendReceipt}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, sendReceipt: e.target.checked })}
+                    />
+                    <span className="text-sm">Send receipt to customer</span>
+                  </label>
+
                   {paymentMethods.length > 0 && (
                     <button
                       type="button"
@@ -1075,10 +1089,17 @@ export default function CustomerDetailPage() {
                         <span className="text-muted-foreground">Customer</span>
                         <span className="font-medium">{customer?.firstName} {customer?.lastName}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Amount</span>
-                        <span className="font-bold text-lg">{formatCurrency(Number(paymentForm.amount))}</span>
-                      </div>
+                      {fortisMode === 'charge' && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Amount</span>
+                          <span className="font-bold text-lg">{formatCurrency(Number(paymentForm.amount))}</span>
+                        </div>
+                      )}
+                      {fortisMode === 'store' && (
+                        <p className="text-sm text-muted-foreground text-center mt-2">
+                          Add a new card or bank account to save for future payments.
+                        </p>
+                      )}
                     </div>
 
                     {paymentError && (
