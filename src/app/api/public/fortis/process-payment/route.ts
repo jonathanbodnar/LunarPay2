@@ -253,7 +253,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Handle payment link product tracking
+    // Handle payment link product tracking and subscriptions
     if (type === 'payment_link' && referenceId && body.products) {
       const products = body.products as Array<{
         id: number;
@@ -261,6 +261,9 @@ export async function POST(request: Request) {
         productPrice: number;
         qtyReq: number;
         subtotal: number;
+        isSubscription?: boolean;
+        subscriptionInterval?: string;
+        subscriptionIntervalCount?: number;
       }>;
 
       // Create PaymentLinkProductPaid records (matching PHP payment_link_product_paid)
@@ -274,10 +277,15 @@ export async function POST(request: Request) {
         });
 
         if (paymentLinkProduct) {
-          // Get product name
+          // Get full product details
           const productRecord = await prisma.product.findUnique({
             where: { id: product.productId },
-            select: { name: true },
+            select: { 
+              name: true, 
+              isSubscription: true,
+              subscriptionInterval: true,
+              subscriptionIntervalCount: true,
+            },
           });
 
           await prisma.paymentLinkProductPaid.create({
@@ -291,6 +299,89 @@ export async function POST(request: Request) {
               transactionId: transaction.id,
             },
           });
+
+          // Create subscription if product is a subscription
+          if (productRecord?.isSubscription && donor && token_id) {
+            // Calculate next billing date based on interval
+            const nextBillingDate = new Date();
+            const interval = productRecord.subscriptionInterval?.toLowerCase() || 'monthly';
+            const intervalCount = productRecord.subscriptionIntervalCount || 1;
+            
+            if (interval === 'daily') {
+              nextBillingDate.setDate(nextBillingDate.getDate() + intervalCount);
+            } else if (interval === 'weekly') {
+              nextBillingDate.setDate(nextBillingDate.getDate() + (7 * intervalCount));
+            } else if (interval === 'monthly') {
+              nextBillingDate.setMonth(nextBillingDate.getMonth() + intervalCount);
+            } else if (interval === 'yearly') {
+              nextBillingDate.setFullYear(nextBillingDate.getFullYear() + intervalCount);
+            }
+
+            // Find or create the saved source for this subscription
+            let sourceId: number | null = null;
+            const existingSource = await prisma.source.findFirst({
+              where: { fortisWalletId: token_id, donorId: donor.id },
+            });
+            
+            if (existingSource) {
+              sourceId = existingSource.id;
+            } else {
+              // Force save the card for subscription (not optional)
+              let expMonth: string | null = null;
+              let expYear: string | null = null;
+              if (exp_date && exp_date.length === 4) {
+                expMonth = exp_date.substring(0, 2);
+                expYear = '20' + exp_date.substring(2, 4);
+              }
+
+              const newSource = await prisma.source.create({
+                data: {
+                  donorId: donor.id,
+                  organizationId,
+                  sourceType: payment_method === 'ach' ? 'ach' : 'cc',
+                  bankType: account_type || null,
+                  lastDigits: last_four || '',
+                  nameHolder: account_holder_name || '',
+                  expMonth,
+                  expYear,
+                  isDefault: true,
+                  isActive: true,
+                  isSaved: true,
+                  fortisWalletId: token_id,
+                  fortisCustomerId: donor.id.toString(),
+                },
+              });
+              sourceId = newSource.id;
+              
+              console.log('[Process Payment] Saved card for subscription:', { sourceId, donorId: donor.id });
+            }
+
+            // Create subscription record
+            await prisma.subscription.create({
+              data: {
+                organizationId,
+                donorId: donor.id,
+                sourceId: sourceId || 0,
+                amount: product.productPrice,
+                frequency: interval.charAt(0).toUpperCase(), // 'M' for monthly, 'W' for weekly, etc.
+                status: 'A', // Active
+                firstName: customerFirstName || account_holder_name?.split(' ')[0] || 'Customer',
+                lastName: customerLastName || account_holder_name?.split(' ').slice(1).join(' ') || '',
+                email: customerEmail || '',
+                givingSource: 'payment_link',
+                source: payment_method === 'ach' ? 'BNK' : 'CC',
+                startOn: new Date(),
+                nextPaymentOn: nextBillingDate,
+              },
+            });
+
+            console.log('[Process Payment] Created subscription:', {
+              productId: product.productId,
+              donorId: donor.id,
+              amount: product.productPrice,
+              nextBillingDate,
+            });
+          }
         }
       }
     }

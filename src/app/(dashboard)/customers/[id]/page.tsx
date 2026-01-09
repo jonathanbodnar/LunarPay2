@@ -760,116 +760,15 @@ export default function CustomerDetailPage() {
                 </div>
               )}
 
-              {/* New Payment Method Form */}
+              {/* New Payment Method - Fortis Elements */}
               {(paymentMethods.length === 0 || paymentForm.useNewCard) && (
                 <>
-                  {/* Payment Type Tabs */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Payment Type</label>
-                    <div className="flex border rounded-lg overflow-hidden">
-                      <button
-                        type="button"
-                        className={`flex-1 py-2 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
-                          paymentForm.paymentType === 'card' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                        }`}
-                        onClick={() => setPaymentForm({ ...paymentForm, paymentType: 'card' })}
-                      >
-                        <CreditCard className="h-4 w-4" />
-                        Card
-                      </button>
-                      <button
-                        type="button"
-                        className={`flex-1 py-2 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
-                          paymentForm.paymentType === 'bank' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                        }`}
-                        onClick={() => setPaymentForm({ ...paymentForm, paymentType: 'bank' })}
-                      >
-                        <Landmark className="h-4 w-4" />
-                        Bank
-                      </button>
-                    </div>
+                  <div className="p-4 bg-muted rounded-lg text-center">
+                    <CreditCard className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Click &quot;Continue to Payment&quot; to securely enter card or bank details
+                    </p>
                   </div>
-
-                  {paymentForm.paymentType === 'card' ? (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Card Number</label>
-                        <Input
-                          value={paymentForm.cardNumber}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, cardNumber: formatCardNumber(e.target.value) })}
-                          placeholder="1234 5678 9012 3456"
-                          maxLength={19}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Expiry</label>
-                          <Input
-                            value={paymentForm.expiry}
-                            onChange={(e) => setPaymentForm({ ...paymentForm, expiry: formatExpiry(e.target.value) })}
-                            placeholder="MM/YY"
-                            maxLength={5}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">CVV</label>
-                          <Input
-                            value={paymentForm.cvv}
-                            onChange={(e) => setPaymentForm({ ...paymentForm, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                            placeholder="123"
-                            maxLength={4}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Name on Card</label>
-                        <Input
-                          value={paymentForm.cardName}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, cardName: e.target.value })}
-                          placeholder="John Smith"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Routing Number</label>
-                        <Input
-                          value={paymentForm.routingNumber}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, routingNumber: e.target.value.replace(/\D/g, '').slice(0, 9) })}
-                          placeholder="123456789"
-                          maxLength={9}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Account Number</label>
-                        <Input
-                          value={paymentForm.accountNumber}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, accountNumber: e.target.value.replace(/\D/g, '') })}
-                          placeholder="1234567890"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Account Holder Name</label>
-                        <Input
-                          value={paymentForm.accountName}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, accountName: e.target.value })}
-                          placeholder="John Smith"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Account Type</label>
-                        <select
-                          className="w-full h-10 px-3 rounded-lg border border-border bg-background"
-                          value={paymentForm.accountType}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, accountType: e.target.value })}
-                        >
-                          <option value="checking">Checking</option>
-                          <option value="savings">Savings</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
 
                   <label className="flex items-center gap-2">
                     <input
@@ -897,8 +796,12 @@ export default function CustomerDetailPage() {
               <Button variant="outline" className="flex-1" onClick={() => { setShowPaymentModal(false); resetPaymentForm(); }}>
                 Cancel
               </Button>
-              <Button className="flex-1" onClick={handleAddPayment} disabled={processing}>
-                {processing ? 'Processing...' : `Charge ${paymentForm.amount ? formatCurrency(Number(paymentForm.amount)) : '$0.00'}`}
+              <Button className="flex-1" onClick={handleAddPayment} disabled={processing || !paymentForm.amount}>
+                {processing ? 'Processing...' : 
+                  (paymentForm.useNewCard || paymentMethods.length === 0) 
+                    ? 'Continue to Payment' 
+                    : `Charge ${paymentForm.amount ? formatCurrency(Number(paymentForm.amount)) : '$0.00'}`
+                }
               </Button>
             </div>
           </div>

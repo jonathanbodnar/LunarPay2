@@ -17,7 +17,13 @@ export interface FortisElementsConfig {
   hideTotal?: boolean;
   showReceipt?: boolean;
   showSubmitButton?: boolean;
+  hideAgreementCheckbox?: boolean;
   environment?: 'sandbox' | 'production';
+  view?: string;
+  language?: string;
+  defaultCountry?: string;
+  floatingLabels?: boolean;
+  showValidationAnimation?: boolean;
   appearance?: {
     colorButtonSelectedBackground?: string;
     colorButtonSelectedText?: string;

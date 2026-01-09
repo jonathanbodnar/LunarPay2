@@ -352,6 +352,24 @@ export default function PaymentLinkPage() {
     if (!paymentLink) return;
 
     try {
+      // Build products array with full subscription info
+      const productsToProcess = paymentLink.products
+        .filter(item => cart[item.id] > 0)
+        .map(item => ({
+          id: item.id,
+          productId: item.productId,
+          productPrice: Number(item.product.price),
+          qtyReq: cart[item.id],
+          subtotal: Number(item.product.price) * cart[item.id],
+          isSubscription: item.product.isSubscription,
+          subscriptionInterval: item.product.subscriptionInterval,
+          subscriptionIntervalCount: item.product.subscriptionIntervalCount,
+        }));
+
+      // Check if any product is a subscription - force save card
+      const hasSubscriptionProduct = productsToProcess.some(p => p.isSubscription);
+      const shouldSavePaymentMethod = hasSubscriptionProduct || savePaymentMethod;
+
       const response = await fetch('/api/public/fortis/process-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -361,8 +379,8 @@ export default function PaymentLinkPage() {
           organizationId: paymentLink.organizationId,
           customerEmail: email,
           fortisResponse,
-          savePaymentMethod,
-          cart, // Include cart for product tracking
+          savePaymentMethod: shouldSavePaymentMethod, // Force save for subscriptions
+          products: productsToProcess, // Include full product data with subscription info
         }),
       });
 
@@ -829,11 +847,16 @@ export default function PaymentLinkPage() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={savePaymentMethod}
-                    onChange={(e) => setSavePaymentMethod(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                    checked={hasSubscription || savePaymentMethod}
+                    onChange={(e) => !hasSubscription && setSavePaymentMethod(e.target.checked)}
+                    disabled={hasSubscription}
+                    className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black disabled:opacity-70"
                   />
-                  <span className="text-sm text-gray-600">Save payment method for future use</span>
+                  <span className="text-sm text-gray-600">
+                    {hasSubscription 
+                      ? 'Payment method will be saved for recurring billing' 
+                      : 'Save payment method for future use'}
+                  </span>
                 </label>
 
                 {/* Submit Button */}
