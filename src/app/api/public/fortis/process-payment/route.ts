@@ -56,12 +56,16 @@ export async function POST(request: Request) {
     const transaction_amount = txData.transaction_amount || txData.transactionAmount || txData.amount || bodyAmount || 0;
     const status_code = txData.status_code || txData.statusCode || txData.status_id || txData.statusId;
     const reason_code_id = txData.reason_code_id || txData.reasonCodeId || txData.reason_code || txData.reasonCode;
-    const account_holder_name = txData.account_holder_name || txData.accountHolderName || txData.cardholder_name || '';
+    const account_holder_name = txData.account_holder_name || txData.accountHolderName || txData.cardholder_name || 
+      txData.cardholderName || body.customerName || '';
     const last_four = txData.last_four || txData.lastFour || txData.last4 || '';
     const account_type = txData.account_type || txData.accountType || txData.card_type || txData.cardType || '';
     const payment_method = txData.payment_method || txData.paymentMethod || (account_type?.toLowerCase()?.includes('check') ? 'ach' : 'cc');
-    const token_id = txData.token_id || txData.tokenId || txData.token || null;
-    const exp_date = txData.exp_date || txData.expDate || '';
+    // Token ID can come from multiple places - check all possible fields
+    // account_vault_id is the stored token for future charges
+    const token_id = txData.token_id || txData.tokenId || txData.token || 
+      txData.account_vault_id || txData.accountVaultId || txData.vault_id || txData.vaultId || null;
+    const exp_date = txData.exp_date || txData.expDate || txData.exp || '';
 
     console.log('[Process Payment] Parsed values:', {
       fortisTransactionId,
@@ -70,6 +74,13 @@ export async function POST(request: Request) {
       reason_code_id,
       payment_method,
       last_four,
+      account_holder_name,
+      token_id,
+      exp_date,
+      savePaymentMethod,
+      customerEmail,
+      customerFirstName,
+      customerLastName,
     });
 
     // Validate transaction was successful
@@ -402,16 +413,30 @@ export async function POST(request: Request) {
       }
     }
 
-    // Update donor totals
-    if (donor && isSuccessful) {
-      await prisma.donor.update({
-        where: { id: donor.id },
-        data: {
-          amountAcum: { increment: amountInDollars },
-          feeAcum: { increment: fee },
-          netAcum: { increment: netAmount },
-        },
-      });
+    // Update donor totals - for both CC approved and generic success (has transaction ID)
+    // Only skip for ACH pending since funds haven't cleared yet
+    if (donor && (isSuccessful || isGenericSuccess) && !isPending) {
+      try {
+        // Fetch current totals first in case they're null
+        const currentDonor = await prisma.donor.findUnique({
+          where: { id: donor.id },
+          select: { amountAcum: true, feeAcum: true, netAcum: true, firstDate: true },
+        });
+        
+        await prisma.donor.update({
+          where: { id: donor.id },
+          data: {
+            amountAcum: Number(currentDonor?.amountAcum || 0) + amountInDollars,
+            feeAcum: Number(currentDonor?.feeAcum || 0) + fee,
+            netAcum: Number(currentDonor?.netAcum || 0) + netAmount,
+            firstDate: currentDonor?.firstDate || new Date(), // Set first payment date if not set
+          },
+        });
+        console.log('[Process Payment] Updated donor totals for donor:', donor.id, { amountInDollars, fee, netAmount });
+      } catch (donorUpdateErr) {
+        console.error('[Process Payment] Failed to update donor totals:', donorUpdateErr);
+        // Continue anyway since payment succeeded
+      }
     }
 
     // Save payment method if requested
