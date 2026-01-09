@@ -97,6 +97,7 @@ export async function PUT(
       },
       select: {
         id: true,
+        portalCustomDomain: true,
         // Note: primaryColor, backgroundColor, buttonTextColor columns don't exist in database
       },
     });

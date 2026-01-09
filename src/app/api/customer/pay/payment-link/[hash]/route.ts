@@ -127,7 +127,7 @@ export async function POST(
           unlimitedQty: p.unlimitedQty,
           product: {
             id: p.product.id,
-            price: p.product.price,
+            price: Number(p.product.price), // Convert Decimal to number
             isSubscription: p.product.isSubscription || false,
             subscriptionInterval: p.product.subscriptionInterval,
             subscriptionIntervalCount: p.product.subscriptionIntervalCount,
@@ -154,7 +154,7 @@ export async function POST(
           unlimitedQty: p.unlimitedQty,
           product: {
             id: p.product.id,
-            price: p.product.price,
+            price: Number(p.product.price), // Convert Decimal to number
             isSubscription: p.product.isSubscription || false,
             subscriptionInterval: p.product.subscriptionInterval,
             subscriptionIntervalCount: p.product.subscriptionIntervalCount,

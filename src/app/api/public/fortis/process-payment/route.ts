@@ -199,7 +199,7 @@ export async function POST(request: Request) {
       data: {
         userId: organization.userId,
         organizationId,
-        donorId: donor?.id || null, // Use null for anonymous payments (matches PHP behavior)
+        donorId: donor?.id ?? 0, // Use 0 for anonymous payments (matches PHP behavior)
         firstName: truncateString(customerFirstName || account_holder_name?.split(' ')[0] || 'Guest', 100),
         lastName: truncateString(customerLastName || account_holder_name?.split(' ').slice(1).join(' ') || '', 100),
         email: truncateString(customerEmail || '', 254),
