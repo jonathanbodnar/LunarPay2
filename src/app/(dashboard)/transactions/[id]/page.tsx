@@ -590,7 +590,7 @@ export default function TransactionDetailPage() {
                 <p className="text-sm text-gray-500 mb-2">Customer Totals</p>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span>Total Given</span>
+                    <span>Total Paid</span>
                     <span className="font-medium">{formatCurrency(Number(transaction.donor.amountAcum))}</span>
                   </div>
                   <div className="flex justify-between">

@@ -73,10 +73,14 @@ export async function GET(request: Request) {
       take: limit,
     });
 
-    // Serialize transactions: convert BigInt IDs to strings for JSON
+    // Serialize transactions: convert BigInt IDs to strings and map fields for frontend
     const serializedTransactions = transactions.map((tx: any) => ({
       ...tx,
       id: tx.id.toString(), // Convert BigInt to string
+      // Map database fields to frontend expected fields
+      amount: Number(tx.totalAmount) || 0, // Convert Decimal to number
+      fee: Number(tx.fee) || 0,
+      paymentMethod: tx.source === 'CC' ? 'card' : tx.source === 'BNK' ? 'ach' : 'card', // Map source to paymentMethod
       donor: tx.donor ? {
         ...tx.donor,
         id: tx.donor.id, // Donor ID is Int, not BigInt
