@@ -139,11 +139,9 @@ export async function POST(request: Request) {
       intentionData.amount = Math.round(amount * 100); // Convert dollars to cents
     }
 
-    // Add save_account flag to save card with transaction (for subscriptions, etc.)
-    // Per Fortis docs: save_account: true returns token_id on approved transactions
-    if (savePaymentMethod && fortisAction === 'sale') {
-      intentionData.save_account = true;
-    }
+    // Note: save_account is NOT valid on transaction intention per Fortis docs
+    // The token_id is returned automatically for 'sale' actions when card is tokenized
+    // If we need to explicitly save cards, use ticket intention flow instead
 
     // Debug: Log exactly what we're sending to Fortis
     const baseUrl = env === 'production' 

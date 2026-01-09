@@ -427,17 +427,39 @@ export default function CustomerDetailPage() {
       return;
     }
     
-    if (!subscriptionForm.selectedPaymentMethod && !subscriptionForm.useNewCard) {
-      alert('Please select a payment method or enter new card details');
+    if (!subscriptionForm.selectedPaymentMethod) {
+      alert('Please select a payment method');
       return;
     }
     
     setProcessing(true);
     try {
-      // TODO: Integrate with payment processor for subscription
-      alert('Subscription creation will be integrated with Fortis');
+      const response = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          donorId: customer.id,
+          organizationId: customer.organizationId,
+          sourceId: parseInt(subscriptionForm.selectedPaymentMethod),
+          amount: Number(selectedSubscriptionProduct?.price || 0),
+          frequency: selectedSubscriptionProduct?.subscriptionInterval || 'monthly',
+          startDate: new Date().toISOString(),
+          fundId: 1, // Default fund - TODO: allow selection
+          isFeeCovered: false,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create subscription');
+      }
+
       setShowSubscriptionModal(false);
       resetSubscriptionForm();
+      fetchCustomer(); // Refresh customer data
+      alert('Subscription created successfully!');
     } catch (error) {
       alert('Subscription failed: ' + (error as Error).message);
     } finally {
@@ -895,124 +917,25 @@ export default function CustomerDetailPage() {
                 </div>
               )}
 
-              {/* New Payment Method Form */}
+              {/* New Payment Method - Use Fortis Elements */}
               {(paymentMethods.length === 0 || subscriptionForm.useNewCard) && (
                 <>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Payment Type</label>
-                    <div className="flex border rounded-lg overflow-hidden">
-                      <button
-                        type="button"
-                        className={`flex-1 py-2 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
-                          subscriptionForm.paymentType === 'card' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                        }`}
-                        onClick={() => setSubscriptionForm({ ...subscriptionForm, paymentType: 'card' })}
-                      >
-                        <CreditCard className="h-4 w-4" />
-                        Card
-                      </button>
-                      <button
-                        type="button"
-                        className={`flex-1 py-2 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
-                          subscriptionForm.paymentType === 'bank' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                        }`}
-                        onClick={() => setSubscriptionForm({ ...subscriptionForm, paymentType: 'bank' })}
-                      >
-                        <Landmark className="h-4 w-4" />
-                        Bank
-                      </button>
-                    </div>
+                  <div className="p-4 bg-muted rounded-lg text-center">
+                    <CreditCard className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground mb-3">
+                      First, add a payment method to use for this subscription
+                    </p>
+                    <Button 
+                      onClick={() => {
+                        setShowSubscriptionModal(false);
+                        initializeFortisStore();
+                      }}
+                      className="w-full"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Payment Method
+                    </Button>
                   </div>
-
-                  {subscriptionForm.paymentType === 'card' ? (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Card Number</label>
-                        <Input
-                          value={subscriptionForm.cardNumber}
-                          onChange={(e) => setSubscriptionForm({ ...subscriptionForm, cardNumber: formatCardNumber(e.target.value) })}
-                          placeholder="1234 5678 9012 3456"
-                          maxLength={19}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Expiry</label>
-                          <Input
-                            value={subscriptionForm.expiry}
-                            onChange={(e) => setSubscriptionForm({ ...subscriptionForm, expiry: formatExpiry(e.target.value) })}
-                            placeholder="MM/YY"
-                            maxLength={5}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">CVV</label>
-                          <Input
-                            value={subscriptionForm.cvv}
-                            onChange={(e) => setSubscriptionForm({ ...subscriptionForm, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                            placeholder="123"
-                            maxLength={4}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Name on Card</label>
-                        <Input
-                          value={subscriptionForm.cardName}
-                          onChange={(e) => setSubscriptionForm({ ...subscriptionForm, cardName: e.target.value })}
-                          placeholder="John Smith"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Routing Number</label>
-                        <Input
-                          value={subscriptionForm.routingNumber}
-                          onChange={(e) => setSubscriptionForm({ ...subscriptionForm, routingNumber: e.target.value.replace(/\D/g, '').slice(0, 9) })}
-                          placeholder="123456789"
-                          maxLength={9}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Account Number</label>
-                        <Input
-                          value={subscriptionForm.accountNumber}
-                          onChange={(e) => setSubscriptionForm({ ...subscriptionForm, accountNumber: e.target.value.replace(/\D/g, '') })}
-                          placeholder="1234567890"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Account Holder Name</label>
-                        <Input
-                          value={subscriptionForm.accountName}
-                          onChange={(e) => setSubscriptionForm({ ...subscriptionForm, accountName: e.target.value })}
-                          placeholder="John Smith"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Account Type</label>
-                        <select
-                          className="w-full h-10 px-3 rounded-lg border border-border bg-background"
-                          value={subscriptionForm.accountType}
-                          onChange={(e) => setSubscriptionForm({ ...subscriptionForm, accountType: e.target.value })}
-                        >
-                          <option value="checking">Checking</option>
-                          <option value="savings">Savings</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={subscriptionForm.savePaymentMethod}
-                      onChange={(e) => setSubscriptionForm({ ...subscriptionForm, savePaymentMethod: e.target.checked })}
-                    />
-                    <span className="text-sm">Save payment method for future use</span>
-                  </label>
 
                   {paymentMethods.length > 0 && (
                     <button
@@ -1034,7 +957,7 @@ export default function CustomerDetailPage() {
               <Button 
                 className="flex-1" 
                 onClick={handleAddSubscription} 
-                disabled={processing || !subscriptionForm.productId}
+                disabled={processing || !subscriptionForm.productId || !subscriptionForm.selectedPaymentMethod}
               >
                 {processing ? 'Processing...' : 'Start Subscription'}
               </Button>
