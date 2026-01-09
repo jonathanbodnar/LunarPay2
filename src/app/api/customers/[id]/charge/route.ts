@@ -206,43 +206,74 @@ export async function POST(
           transaction_c2: transaction.id.toString(),
         });
 
+    console.log('[Charge Customer] Fortis result:', {
+      status: result.status,
+      hasTransaction: !!result.transaction,
+      transactionId: result.transaction?.id,
+      message: result.message,
+      reasonCode: result.reasonCode,
+    });
+
     if (result.status) {
       // Success - update transaction
       const isPending = source.sourceType === 'ach';
       
-      await prisma.transaction.update({
-        where: { id: transaction.id },
-        data: {
-          status: isPending ? 'pending' : 'succeeded',
-          statusAch: isPending ? 'pending' : null,
-          fortisTransactionId: result.transaction?.id,
-          requestResponse: JSON.stringify(result),
-        },
-      });
+      try {
+        await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: isPending ? 'pending' : 'succeeded',
+            statusAch: isPending ? 'pending' : null,
+            fortisTransactionId: result.transaction?.id || null,
+            requestResponse: JSON.stringify(result),
+          },
+        });
+        console.log('[Charge Customer] Transaction updated successfully');
+      } catch (txUpdateErr) {
+        console.error('[Charge Customer] Failed to update transaction:', txUpdateErr);
+        // Continue anyway since payment succeeded on Fortis
+      }
 
       // Update donor totals (for CC, or for ACH when confirmed via webhook)
       if (!isPending) {
-        await prisma.donor.update({
-          where: { id: customerId },
-          data: {
-            amountAcum: { increment: amount },
-            feeAcum: { increment: fee },
-            netAcum: { increment: netAmount },
-          },
-        });
+        try {
+          // Use set instead of increment in case current values are null
+          const currentDonor = await prisma.donor.findUnique({
+            where: { id: customerId },
+            select: { amountAcum: true, feeAcum: true, netAcum: true },
+          });
+          
+          await prisma.donor.update({
+            where: { id: customerId },
+            data: {
+              amountAcum: Number(currentDonor?.amountAcum || 0) + amount,
+              feeAcum: Number(currentDonor?.feeAcum || 0) + fee,
+              netAcum: Number(currentDonor?.netAcum || 0) + netAmount,
+            },
+          });
+          console.log('[Charge Customer] Donor totals updated');
+        } catch (donorUpdateErr) {
+          console.error('[Charge Customer] Failed to update donor totals:', donorUpdateErr);
+          // Continue anyway since payment succeeded
+        }
       }
 
-      await logPaymentEvent({
-        eventType: isPending ? 'ach.pending' : 'payment.succeeded',
-        organizationId: customer.organizationId,
-        transactionId: transaction.id,
-        amount,
-        fortisTransactionId: result.transaction?.id,
-        metadata: {
-          customerId,
-          sourceId,
-        },
-      });
+      try {
+        await logPaymentEvent({
+          eventType: isPending ? 'ach.pending' : 'payment.succeeded',
+          organizationId: customer.organizationId,
+          transactionId: transaction.id,
+          amount,
+          fortisTransactionId: result.transaction?.id,
+          metadata: {
+            customerId,
+            sourceId,
+          },
+        });
+      } catch (logErr) {
+        console.error('[Charge Customer] Failed to log payment event:', logErr);
+        // Continue anyway
+      }
 
       return NextResponse.json({
         success: true,

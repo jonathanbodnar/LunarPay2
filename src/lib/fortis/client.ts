@@ -259,9 +259,22 @@ export class FortisClient {
       );
 
       const txData = response.data.data;
+      
+      console.log('[Fortis CC Sale] Response:', {
+        id: txData.id,
+        status_code: txData.status_code,
+        reason_code_id: txData.reason_code_id,
+        transaction_amount: txData.transaction_amount,
+      });
 
-      // Check if transaction was approved (status_code 101, reason_code 1000)
-      if (txData.status_code === 101 && txData.reason_code_id === 1000) {
+      // Check if transaction was approved
+      // status_code 101 = approved, 102 = pending
+      // reason_code_id 1000 = approved
+      const isApproved = txData.status_code === 101 && txData.reason_code_id === 1000;
+      const isPending = txData.status_code === 102 && txData.reason_code_id === 1000;
+      const hasTransactionId = !!txData.id;
+      
+      if (isApproved || isPending || (hasTransactionId && txData.reason_code_id === 1000)) {
         return {
           status: true,
           transaction: txData,
@@ -269,15 +282,16 @@ export class FortisClient {
       }
 
       // Transaction declined or failed
-      const reasonMessage = FORTIS_REASON_CODES[txData.reason_code_id.toString()] || 'Unknown error';
+      const reasonMessage = FORTIS_REASON_CODES[txData.reason_code_id?.toString()] || 'Unknown error';
 
       return {
         status: false,
         transaction: txData,
         message: `Payment declined: ${reasonMessage}`,
-        reasonCode: txData.reason_code_id.toString(),
+        reasonCode: txData.reason_code_id?.toString(),
       };
     } catch (error) {
+      console.error('[Fortis CC Sale] Error:', error);
       return {
         status: false,
         message: this.formatError(error),
@@ -304,10 +318,19 @@ export class FortisClient {
       );
 
       const txData = response.data.data;
+      
+      console.log('[Fortis ACH Debit] Response:', {
+        id: txData.id,
+        status_code: txData.status_code,
+        reason_code_id: txData.reason_code_id,
+        transaction_amount: txData.transaction_amount,
+      });
 
       // ACH transactions are accepted initially (reason_code 1000)
       // Final status comes via webhook after bank processing
-      if (txData.reason_code_id === 1000) {
+      const hasTransactionId = !!txData.id;
+      
+      if (txData.reason_code_id === 1000 || (hasTransactionId && !txData.reason_code_id)) {
         return {
           status: true,
           transaction: txData,
@@ -315,15 +338,16 @@ export class FortisClient {
         };
       }
 
-      const reasonMessage = FORTIS_REASON_CODES[txData.reason_code_id.toString()] || 'Unknown error';
+      const reasonMessage = FORTIS_REASON_CODES[txData.reason_code_id?.toString()] || 'Unknown error';
 
       return {
         status: false,
         transaction: txData,
         message: `ACH transaction failed: ${reasonMessage}`,
-        reasonCode: txData.reason_code_id.toString(),
+        reasonCode: txData.reason_code_id?.toString(),
       };
     } catch (error) {
+      console.error('[Fortis ACH Debit] Error:', error);
       return {
         status: false,
         message: this.formatError(error),
