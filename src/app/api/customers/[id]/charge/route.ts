@@ -97,6 +97,38 @@ export async function POST(
       );
     }
 
+    // Get location ID - required for token transactions
+    let locationId = fortisOnboarding.locationId;
+    
+    // If no location ID stored, try to fetch it from Fortis
+    if (!locationId) {
+      const fortisEnv = process.env.fortis_environment || 'dev';
+      const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
+      const tempClient = createFortisClient(
+        env as 'sandbox' | 'production',
+        fortisOnboarding.authUserId,
+        fortisOnboarding.authUserApiKey
+      );
+      
+      const locationsResult = await tempClient.getLocations();
+      if (locationsResult.status && locationsResult.locations && locationsResult.locations.length > 0) {
+        locationId = locationsResult.locations[0].id;
+        
+        // Save for future use
+        await prisma.fortisOnboarding.update({
+          where: { id: fortisOnboarding.id },
+          data: { locationId },
+        });
+      }
+    }
+
+    if (!locationId) {
+      return NextResponse.json(
+        { error: 'Payment location not configured' },
+        { status: 400 }
+      );
+    }
+
     // Calculate fee
     const fee = calculateFee(amount, 0.023, 0.30);
     const netAmount = amount - fee;
@@ -153,19 +185,23 @@ export async function POST(
       amount,
       amountInCents,
       sourceType: source.sourceType,
+      tokenId: source.fortisWalletId,
+      locationId,
     });
 
-    // Note: client_customer_id is not allowed by Fortis API, removed from request
+    // Include location_id in the transaction request
     const result = source.sourceType === 'ach'
       ? await fortisClient.processACHDebit({
           transaction_amount: amountInCents,
           token_id: source.fortisWalletId,
+          location_id: locationId,
           transaction_c1: transactionC1,
           transaction_c2: transaction.id.toString(),
         })
       : await fortisClient.processCreditCardSale({
           transaction_amount: amountInCents,
           token_id: source.fortisWalletId,
+          location_id: locationId,
           transaction_c1: transactionC1,
           transaction_c2: transaction.id.toString(),
         });
@@ -259,8 +295,19 @@ export async function POST(
     }
 
     console.error('Charge customer error:', error);
+    console.error('Full error details:', {
+      name: (error as Error).name,
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+    });
+    
+    // Return more detailed error in development/staging
+    const errorMessage = process.env.NODE_ENV !== 'production' 
+      ? (error as Error).message 
+      : 'Failed to process payment';
+      
     return NextResponse.json(
-      { error: 'Failed to process payment' },
+      { error: errorMessage, details: (error as Error).message },
       { status: 500 }
     );
   }
