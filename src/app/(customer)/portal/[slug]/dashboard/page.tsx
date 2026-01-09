@@ -374,6 +374,7 @@ export default function PortalDashboard() {
         hideTotal: true,
         showReceipt: false,
         showSubmitButton: false,
+        hideAgreementCheckbox: true,
         environment: addPaymentEnvironment,
         appearance: {
           colorButtonSelectedBackground: primaryColor,

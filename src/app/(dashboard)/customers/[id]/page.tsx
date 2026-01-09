@@ -308,6 +308,7 @@ export default function CustomerDetailPage() {
         hideTotal: true,
         showReceipt: false,
         showSubmitButton: false,
+        hideAgreementCheckbox: true,
         environment: fortisEnvironment,
         appearance: {
           colorButtonSelectedBackground: '#3b82f6',
