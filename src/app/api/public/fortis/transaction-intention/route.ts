@@ -123,10 +123,11 @@ export async function POST(request: Request) {
     }
 
     // Determine the action for Fortis
-    // If saving payment method without charging, use 'store'
+    // Valid actions: sale, auth-only, avs-only, refund, tokenization, null
+    // If saving payment method without charging, use 'tokenization'
     // Otherwise use 'sale' for direct payment
-    const fortisAction: 'sale' | 'store' | 'tokenization' | 'avsonly' | 'authonly' = 
-      savePaymentMethod && !amount ? 'store' : (action as 'sale' | 'avsonly' | 'authonly' || 'sale');
+    const fortisAction: 'sale' | 'tokenization' | 'avsonly' | 'authonly' = 
+      savePaymentMethod && !amount ? 'tokenization' : (action as 'sale' | 'avsonly' | 'authonly' || 'sale');
 
     // Build transaction intention data
     const intentionData: TransactionIntentionData = {

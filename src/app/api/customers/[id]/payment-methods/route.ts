@@ -175,11 +175,11 @@ export async function POST(
         );
       }
 
-      console.log('[Payment Methods] Creating intention with:', { locationId, action: 'store', env });
+      console.log('[Payment Methods] Creating intention with:', { locationId, action: 'tokenization', env });
 
       const result = await fortisClient.createTransactionIntention({
         location_id: locationId,
-        action: 'store', // Store card/bank without charging
+        action: 'tokenization', // Tokenize card/bank without charging
       });
 
       console.log('[Payment Methods] Fortis result:', { status: result.status, hasToken: !!result.clientToken, message: result.message });

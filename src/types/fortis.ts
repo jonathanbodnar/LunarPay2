@@ -100,7 +100,7 @@ export interface TransactionIntentionData {
   location_id: string;
   contact_id?: string;
   product_transaction_id?: string;
-  action: 'sale' | 'avsonly' | 'authonly' | 'store' | 'tokenization';
+  action: 'sale' | 'avsonly' | 'authonly' | 'tokenization' | 'refund' | null;
   amount?: number; // in cents, required for 'sale'
   save_account?: boolean; // Whether to save the payment method for future use
 }

@@ -72,11 +72,10 @@ export async function POST() {
       );
     }
 
-    // Create transaction intention for tokenization (store action)
-    // Note: For 'store' action, amount and save_account should not be sent per Fortis docs
-    // The 'store' action automatically tokenizes the card
+    // Create transaction intention for tokenization
+    // Valid actions: sale, auth-only, avs-only, refund, tokenization, null
     const result = await fortisClient.createTransactionIntention({
-      action: 'store', // Tokenization only, no payment
+      action: 'tokenization', // Tokenization only, no payment
       location_id: locationId,
     });
 
