@@ -112,12 +112,43 @@ export async function GET(
       });
     }
 
+    // Serialize transaction: convert BigInt IDs to strings for JSON
+    const serializeTransaction = (tx: any): any => {
+      if (!tx) return null;
+      return {
+        ...tx,
+        id: tx.id.toString(), // Convert BigInt to string
+        trxRetId: tx.trxRetId ? tx.trxRetId.toString() : null,
+        trxRetOriginId: tx.trxRetOriginId ? tx.trxRetOriginId.toString() : null,
+        donor: tx.donor ? {
+          ...tx.donor,
+          id: tx.donor.id, // Donor ID is Int, not BigInt
+        } : null,
+        organization: tx.organization ? {
+          ...tx.organization,
+          id: tx.organization.id, // Organization ID is Int, not BigInt
+        } : null,
+        invoice: tx.invoice ? {
+          ...tx.invoice,
+          id: tx.invoice.id, // Invoice ID is Int, not BigInt
+        } : null,
+        transactionFunds: tx.transactionFunds ? tx.transactionFunds.map((tf: any) => ({
+          ...tf,
+          transactionId: tf.transactionId ? tf.transactionId.toString() : null,
+          fund: tf.fund ? {
+            ...tf.fund,
+            id: tf.fund.id, // Fund ID is Int, not BigInt
+          } : null,
+        })) : [],
+      };
+    };
+
     return NextResponse.json({
-      transaction: {
+      transaction: serializeTransaction({
         ...transaction,
-        refundTransaction,
-        originalTransaction,
-      },
+        refundTransaction: refundTransaction ? serializeTransaction(refundTransaction) : null,
+        originalTransaction: originalTransaction ? serializeTransaction(originalTransaction) : null,
+      }),
     });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {

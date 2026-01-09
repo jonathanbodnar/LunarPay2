@@ -73,7 +73,21 @@ export async function GET(request: Request) {
       take: limit,
     });
 
-    return NextResponse.json({ transactions });
+    // Serialize transactions: convert BigInt IDs to strings for JSON
+    const serializedTransactions = transactions.map((tx: any) => ({
+      ...tx,
+      id: tx.id.toString(), // Convert BigInt to string
+      donor: tx.donor ? {
+        ...tx.donor,
+        id: tx.donor.id, // Donor ID is Int, not BigInt
+      } : null,
+      organization: tx.organization ? {
+        ...tx.organization,
+        id: tx.organization.id, // Organization ID is Int, not BigInt
+      } : null,
+    }));
+
+    return NextResponse.json({ transactions: serializedTransactions });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
       return NextResponse.json(
