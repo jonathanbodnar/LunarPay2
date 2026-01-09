@@ -24,9 +24,10 @@ export async function GET(
             city: true,
             state: true,
             postal: true,
-            primaryColor: true,
-            backgroundColor: true,
-            buttonTextColor: true,
+            // Note: primaryColor, backgroundColor, buttonTextColor columns don't exist in database yet
+            // primaryColor: true,
+            // backgroundColor: true,
+            // buttonTextColor: true,
           },
         },
         donor: {

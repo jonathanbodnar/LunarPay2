@@ -59,7 +59,7 @@ export async function POST(
       organizationName: invoice.organization.name,
       organizationEmail: invoice.organization.email || undefined,
       memo: invoice.memo || undefined,
-      brandColor: invoice.organization.primaryColor || undefined,
+      brandColor: undefined, // primaryColor column doesn't exist in database
     });
 
     if (!emailSent) {

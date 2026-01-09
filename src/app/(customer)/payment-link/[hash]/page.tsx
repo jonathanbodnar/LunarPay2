@@ -205,7 +205,7 @@ export default function PaymentLinkPage() {
       elements.create({
         container: '#payment-form-container',
         theme: 'default',
-        environment: 'production', // Explicitly set production like ShoutOutUS
+        environment: fortisEnvironment, // Use the environment from the API response
         view: 'default',
         language: 'en-us',
         defaultCountry: 'US',

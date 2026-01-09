@@ -78,10 +78,9 @@ model Organization {
   token                 String    @unique @db.VarChar(255)
   slug                  String?   @unique @db.VarChar(255)
   logo                  String?   @db.VarChar(500)
-  // Note: These columns don't exist in the database yet
-  // primaryColor          String?   @default("#000000") @map("primary_color") @db.VarChar(20)
-  // backgroundColor       String?   @default("#ffffff") @map("background_color") @db.VarChar(20)
-  // buttonTextColor       String?   @default("#ffffff") @map("button_text_color") @db.VarChar(20)
+  primaryColor          String?   @default("#000000") @map("primary_color") @db.VarChar(20)
+  backgroundColor       String?   @default("#ffffff") @map("background_color") @db.VarChar(20)
+  buttonTextColor       String?   @default("#ffffff") @map("button_text_color") @db.VarChar(20)
   fortisTemplate        String?   @map("fortis_template") @db.VarChar(50)
   
   // Customer Portal Settings

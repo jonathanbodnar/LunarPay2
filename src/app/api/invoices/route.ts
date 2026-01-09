@@ -99,6 +99,10 @@ export async function POST(request: Request) {
         id: validatedData.organizationId,
         userId: currentUser.userId,
       },
+      select: {
+        id: true,
+        // Note: primaryColor, backgroundColor, buttonTextColor columns don't exist in database
+      },
     });
 
     if (!organization) {
@@ -188,7 +192,7 @@ export async function POST(request: Request) {
         organizationEmail: invoice.organization.email || undefined,
         organizationId: invoice.organizationId,
         memo: invoice.memo || undefined,
-        brandColor: invoice.organization.primaryColor || undefined,
+        brandColor: undefined, // primaryColor column doesn't exist in database
       });
       
       if (!emailSent) {

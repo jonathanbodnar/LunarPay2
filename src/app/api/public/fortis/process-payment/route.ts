@@ -157,6 +157,8 @@ export async function POST(request: Request) {
     const netAmount = amountInDollars - fee;
 
     // Find or create donor
+    // PHP uses null for anonymous payments, but we need a donor record for the foreign key
+    // So we create a donor if we have any customer info (email, name, etc.)
     let donor = null;
     if (customerId) {
       donor = await prisma.donor.findUnique({ where: { id: customerId } });
@@ -169,14 +171,16 @@ export async function POST(request: Request) {
       });
     }
 
-    if (!donor && customerEmail) {
+    // Create donor if we have customer info (email or name) - matches PHP behavior
+    // PHP creates donor records even for anonymous payments if email is provided
+    if (!donor && (customerEmail || customerFirstName || customerLastName || account_holder_name)) {
       donor = await prisma.donor.create({
         data: {
           userId: organization.userId,
           organizationId,
           firstName: customerFirstName || account_holder_name?.split(' ')[0] || 'Guest',
           lastName: customerLastName || account_holder_name?.split(' ').slice(1).join(' ') || '',
-          email: customerEmail,
+          email: customerEmail || null, // Allow null email for truly anonymous payments
           amountAcum: 0,
           feeAcum: 0,
           netAcum: 0,
@@ -195,7 +199,7 @@ export async function POST(request: Request) {
       data: {
         userId: organization.userId,
         organizationId,
-        donorId: donor?.id || 0, // Default to 0 if no donor (guest checkout)
+        donorId: donor?.id || null, // Use null for anonymous payments (matches PHP behavior)
         firstName: truncateString(customerFirstName || account_holder_name?.split(' ')[0] || 'Guest', 100),
         lastName: truncateString(customerLastName || account_holder_name?.split(' ').slice(1).join(' ') || '', 100),
         email: truncateString(customerEmail || '', 254),
