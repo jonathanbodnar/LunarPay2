@@ -160,18 +160,28 @@ export async function POST(request: Request) {
     // PHP uses null for anonymous payments, but we need a donor record for the foreign key
     // So we create a donor if we have any customer info (email, name, etc.)
     let donor = null;
+    
+    // First try to find by customerId if provided
     if (customerId) {
       donor = await prisma.donor.findUnique({ where: { id: customerId } });
-    } else if (customerEmail) {
+    }
+    
+    // If not found by ID but we have email, look up by email + organization
+    // This prevents creating duplicate customers with same email
+    if (!donor && customerEmail) {
       donor = await prisma.donor.findFirst({
         where: {
-          email: customerEmail,
+          email: { equals: customerEmail, mode: 'insensitive' }, // Case-insensitive email match
           organizationId,
         },
       });
+      
+      if (donor) {
+        console.log('[Process Payment] Found existing customer by email:', customerEmail, 'donorId:', donor.id);
+      }
     }
 
-    // Create donor if we have customer info (email or name) - matches PHP behavior
+    // Create donor if we have customer info (email or name) and not found - matches PHP behavior
     // PHP creates donor records even for anonymous payments if email is provided
     if (!donor && (customerEmail || customerFirstName || customerLastName || account_holder_name)) {
       donor = await prisma.donor.create({
@@ -186,6 +196,8 @@ export async function POST(request: Request) {
           netAcum: 0,
         },
       });
+      
+      console.log('[Process Payment] Created new customer:', customerEmail, 'donorId:', donor.id);
     }
 
     // Truncate fields to match database constraints

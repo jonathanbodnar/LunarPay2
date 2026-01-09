@@ -272,6 +272,13 @@ export default function PaymentLinkPage() {
   const getPaymentToken = async (orgId: number, amount: number, linkId: number) => {
     if (amount <= 0) return;
     
+    // Check if any product in cart is a subscription - need to save card for recurring
+    // Cart uses PaymentLinkProduct id (plp.id), not product id
+    const hasSubscription = paymentLink?.products.some(plp => 
+      cart[plp.id] && cart[plp.id] > 0 && plp.product.isSubscription
+    );
+    const shouldSaveCard = hasSubscription || savePaymentMethod;
+    
     try {
       const response = await fetch('/api/public/fortis/transaction-intention', {
         method: 'POST',
@@ -282,7 +289,7 @@ export default function PaymentLinkPage() {
           action: 'sale',
           type: 'payment_link',
           referenceId: linkId,
-          savePaymentMethod,
+          savePaymentMethod: shouldSaveCard, // Force save for subscriptions
         }),
       });
 

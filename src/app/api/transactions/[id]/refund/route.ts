@@ -108,7 +108,13 @@ export async function POST(
       refundAmountCents
     );
 
-    if (!result.status) {
+    console.log('[Refund] Fortis result:', JSON.stringify(result, null, 2));
+
+    // Fortis refund is successful if we got a refund object back or status is true
+    // Sometimes Fortis returns successfully but the structure is different
+    const refundSucceeded = result.status || result.refund?.id || result.refund;
+
+    if (!refundSucceeded) {
       console.error('[Refund] Fortis refund failed:', result.message);
       
       await logPaymentEvent({

@@ -26,16 +26,29 @@ export async function POST(request: Request) {
       );
     }
 
-    // Extract token data from Fortis response
-    const txData = fortisResponse.transaction || fortisResponse.data || fortisResponse;
+    // Extract token data from Fortis response - handle nested structures
+    let txData = fortisResponse;
+    if (fortisResponse.data?.data) {
+      txData = fortisResponse.data.data;
+    } else if (fortisResponse.data) {
+      txData = fortisResponse.data;
+    } else if (fortisResponse.transaction) {
+      txData = fortisResponse.transaction;
+    }
     
-    const token_id = txData.id || txData.token_id || txData.tokenId;
+    console.log('[Portal Save Payment] Parsed txData:', JSON.stringify(txData, null, 2));
+    
+    // token_id is the wallet/vault ID for stored cards - NOT the transaction ID
+    // For tokenization actions, Fortis returns the token in 'id' field
+    const token_id = txData.token_id || txData.tokenId || txData.account_vault_id || txData.id || null;
     const last_four = txData.last_four || txData.lastFour || txData.last4 || '';
-    const account_holder_name = txData.account_holder_name || txData.accountHolderName || '';
+    const account_holder_name = txData.account_holder_name || txData.accountHolderName || txData.cardholder_name || '';
     const account_type = txData.account_type || txData.accountType || txData.card_type || '';
     const payment_method = txData.payment_method || txData.paymentMethod || 
-      (account_type?.toLowerCase()?.includes('check') ? 'ach' : 'cc');
+      (account_type?.toLowerCase()?.includes('check') || account_type?.toLowerCase()?.includes('saving') ? 'ach' : 'cc');
     const exp_date = txData.exp_date || txData.expDate || '';
+    
+    console.log('[Portal Save Payment] Extracted:', { token_id, last_four, account_type, payment_method });
 
     if (!token_id) {
       console.error('[Portal Save Payment] No token ID in response');

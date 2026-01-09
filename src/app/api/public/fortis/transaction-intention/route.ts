@@ -139,6 +139,12 @@ export async function POST(request: Request) {
       intentionData.amount = Math.round(amount * 100); // Convert dollars to cents
     }
 
+    // Add save_account flag to save card with transaction (for subscriptions, etc.)
+    // Per Fortis docs: save_account: true returns token_id on approved transactions
+    if (savePaymentMethod && fortisAction === 'sale') {
+      intentionData.save_account = true;
+    }
+
     // Debug: Log exactly what we're sending to Fortis
     const baseUrl = env === 'production' 
       ? 'https://api.fortis.tech/v1/' 

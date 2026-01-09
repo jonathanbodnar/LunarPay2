@@ -19,11 +19,16 @@ export async function GET() {
   try {
     const currentUser = await requireAuth();
 
+    // Get all organizations owned by this user
+    const organizations = await prisma.organization.findMany({
+      where: { userId: currentUser.userId },
+      select: { id: true },
+    });
+    const orgIds = organizations.map(o => o.id);
+
     const subscriptions = await prisma.subscription.findMany({
       where: {
-        donor: {
-          userId: currentUser.userId,
-        },
+        organizationId: { in: orgIds },
       },
       include: {
         donor: {
@@ -34,12 +39,43 @@ export async function GET() {
             email: true,
           },
         },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
 
-    return NextResponse.json({ subscriptions });
+    // Map to frontend expected format
+    const mappedSubscriptions = subscriptions.map(sub => ({
+      id: sub.id,
+      amount: Number(sub.amount),
+      interval: sub.frequency || 'monthly',
+      status: sub.status === 'A' ? 'active' : sub.status === 'D' ? 'canceled' : sub.status,
+      startDate: sub.startOn?.toISOString() || sub.createdAt.toISOString(),
+      nextBillingDate: sub.nextPaymentOn?.toISOString() || null,
+      lastPaymentDate: sub.lastPaymentOn?.toISOString() || null,
+      createdAt: sub.createdAt.toISOString(),
+      donor: sub.donor ? {
+        firstName: sub.donor.firstName,
+        lastName: sub.donor.lastName,
+        email: sub.donor.email,
+      } : {
+        firstName: sub.firstName,
+        lastName: sub.lastName,
+        email: sub.email,
+      },
+      organization: sub.organization ? {
+        name: sub.organization.name,
+      } : null,
+      product: null, // TODO: Include product info if productId is stored
+    }));
+
+    return NextResponse.json({ subscriptions: mappedSubscriptions });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
       return NextResponse.json(
