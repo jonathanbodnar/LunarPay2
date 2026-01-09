@@ -126,24 +126,24 @@ export async function POST(
     if (action === 'get-token') {
       const fortisOnboarding = customer.organization.fortisOnboarding;
       
+      console.log('[Payment Methods] get-token - Fortis onboarding:', {
+        hasOnboarding: !!fortisOnboarding,
+        hasAuthUserId: !!fortisOnboarding?.authUserId,
+        hasAuthUserApiKey: !!fortisOnboarding?.authUserApiKey,
+        locationId: fortisOnboarding?.locationId,
+        appStatus: fortisOnboarding?.appStatus,
+      });
+      
       if (!fortisOnboarding?.authUserId || !fortisOnboarding?.authUserApiKey) {
         return NextResponse.json(
-          { error: 'Merchant payment processing is not configured' },
+          { error: 'Merchant payment processing is not configured. Please complete payment setup.' },
           { status: 400 }
         );
       }
 
-      const locationId = fortisOnboarding.locationId || 
-        process.env.fortis_location_id_sandbox || 
-        process.env.FORTIS_LOCATION_ID_SANDBOX;
-
-      if (!locationId) {
-        return NextResponse.json(
-          { error: 'Payment location not configured' },
-          { status: 400 }
-        );
-      }
-
+      // Get location ID - try stored value first, then fetch from Fortis if needed
+      let locationId = fortisOnboarding.locationId;
+      
       const fortisEnv = process.env.fortis_environment || 'dev';
       const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
       const fortisClient = createFortisClient(
@@ -152,14 +152,41 @@ export async function POST(
         fortisOnboarding.authUserApiKey
       );
 
+      // If no location ID, try to fetch it
+      if (!locationId) {
+        console.log('[Payment Methods] Location ID missing, fetching from Fortis...');
+        const locationsResult = await fortisClient.getLocations();
+        if (locationsResult.status && locationsResult.locations && locationsResult.locations.length > 0) {
+          locationId = locationsResult.locations[0].id;
+          console.log('[Payment Methods] Fetched location ID:', locationId);
+          
+          // Save for future use
+          await prisma.fortisOnboarding.update({
+            where: { id: fortisOnboarding.id },
+            data: { locationId },
+          });
+        }
+      }
+
+      if (!locationId) {
+        return NextResponse.json(
+          { error: 'Payment location not configured. Please contact support.' },
+          { status: 400 }
+        );
+      }
+
+      console.log('[Payment Methods] Creating intention with:', { locationId, action: 'store', env });
+
       const result = await fortisClient.createTransactionIntention({
         location_id: locationId,
         action: 'store', // Store card/bank without charging
       });
 
+      console.log('[Payment Methods] Fortis result:', { status: result.status, hasToken: !!result.clientToken, message: result.message });
+
       if (!result.status || !result.clientToken) {
         return NextResponse.json(
-          { error: result.message || 'Failed to get payment form token' },
+          { error: result.message || 'Failed to get payment form token from Fortis' },
           { status: 400 }
         );
       }

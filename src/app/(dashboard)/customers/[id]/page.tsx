@@ -260,7 +260,10 @@ export default function CustomerDetailPage() {
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        setPaymentError(data.error || 'Failed to initialize');
+        const errorMsg = data.error || 'Failed to initialize payment form';
+        console.error('[Customer] Add Payment Method failed:', errorMsg);
+        alert(errorMsg); // Show error since modal won't open
+        setPaymentError(errorMsg);
         setProcessing(false);
         return;
       }
@@ -269,7 +272,10 @@ export default function CustomerDetailPage() {
       setFortisEnvironment(data.environment || 'production');
       setShowFortisModal(true);
     } catch (error) {
-      setPaymentError('Failed to initialize payment form');
+      const errorMsg = 'Failed to initialize payment form';
+      console.error('[Customer] Add Payment Method error:', error);
+      alert(errorMsg);
+      setPaymentError(errorMsg);
     } finally {
       setProcessing(false);
     }
