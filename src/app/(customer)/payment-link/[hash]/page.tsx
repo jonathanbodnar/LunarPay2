@@ -273,12 +273,14 @@ export default function PaymentLinkPage() {
         const product = data.paymentLink.products[0];
         const isAvailable = product.unlimited || (product.available !== null && product.available > 0);
         if (isAvailable) {
-          setCart({ [product.id]: 1 });
-          // Get token for this amount
+          const initialCart = { [product.id]: 1 };
+          setCart(initialCart);
+          // Get token for this amount - pass cart explicitly since state update is async
           await getPaymentToken(
             data.paymentLink.organizationId, 
             Number(product.product.price),
-            data.paymentLink.id
+            data.paymentLink.id,
+            initialCart // Pass cart explicitly
           );
         }
       }
@@ -289,15 +291,32 @@ export default function PaymentLinkPage() {
     }
   };
 
-  const getPaymentToken = async (orgId: number, amount: number, linkId: number) => {
+  const getPaymentToken = async (orgId: number, amount: number, linkId: number, currentCart?: Record<number, number>) => {
     if (amount <= 0) return;
     
     // Check if any product in cart is a subscription - need to save card for recurring
-    // Cart uses PaymentLinkProduct id (plp.id), not product id
-    const hasSubscription = paymentLink?.products.some(plp => 
-      cart[plp.id] && cart[plp.id] > 0 && plp.product.isSubscription
+    // Use passed cart if available (for initial load when state hasn't updated yet)
+    const cartToCheck = currentCart || cart;
+    
+    // Check both: products in cart AND any subscription product on this link
+    // This ensures we use ticket intention if ANY product is a subscription
+    const hasSubscriptionInCart = paymentLink?.products.some(plp => 
+      cartToCheck[plp.id] && cartToCheck[plp.id] > 0 && plp.product.isSubscription
     );
+    
+    // Also check if any product on this link is a subscription (for single-product links)
+    const hasAnySubscriptionProduct = paymentLink?.products.some(plp => plp.product.isSubscription);
+    
+    const hasSubscription = hasSubscriptionInCart || hasAnySubscriptionProduct;
     const shouldSaveCard = hasSubscription || savePaymentMethod;
+    
+    console.log('[PaymentLink] getPaymentToken:', {
+      amount,
+      hasSubscriptionInCart,
+      hasAnySubscriptionProduct,
+      hasSubscription,
+      cartToCheck,
+    });
     
     try {
       const response = await fetch('/api/public/fortis/transaction-intention', {
