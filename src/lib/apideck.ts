@@ -29,7 +29,7 @@ export const APIDECK_CONNECTORS_FALLBACK = [
 ];
 
 /**
- * Get available connectors from ApiDeck (only those enabled in your ApiDeck app)
+ * Get available connectors from ApiDeck (uses connections endpoint which includes all configured integrations)
  * Returns fallback list if ApiDeck is not configured
  */
 export async function getAvailableConnectors(consumerId: string): Promise<{
@@ -38,55 +38,48 @@ export async function getAvailableConnectors(consumerId: string): Promise<{
     name: string;
     icon: string;
     category: string;
+    state: string;
+    serviceId: string;
   }>;
   configured: boolean;
 }> {
   try {
     const config = getConfig(consumerId);
     
-    console.log('[APIDECK] Fetching connectors for consumer:', consumerId);
-    console.log('[APIDECK] App ID:', config.appId);
-    
-    // Get connectors configured for accounting API
-    const response = await fetch(`${APIDECK_BASE_URL}/vault/connectors?api=accounting`, {
+    // Use connections endpoint - it returns all configured integrations (connected or not)
+    const response = await fetch(`${APIDECK_BASE_URL}/vault/connections?api=accounting`, {
       headers: getHeaders(config),
     });
 
-    console.log('[APIDECK] Response status:', response.status);
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[APIDECK] Failed to get connectors:', response.status, errorText);
-      return { connectors: APIDECK_CONNECTORS_FALLBACK, configured: false };
+      console.error('[APIDECK] Failed to get connections:', response.status, errorText);
+      return { connectors: APIDECK_CONNECTORS_FALLBACK.map(c => ({ ...c, state: 'available', serviceId: c.id })), configured: false };
     }
 
     const data = await response.json();
-    console.log('[APIDECK] Raw response:', JSON.stringify(data, null, 2));
+    const rawConnections = data.data || [];
 
-    // ApiDeck returns connectors in data array
-    const rawConnectors = data.data || [];
-    console.log('[APIDECK] Found', rawConnectors.length, 'connectors');
-
-    // Map to our format - show all connectors that are available
-    const connectors = rawConnectors.map((c: any) => ({
-      id: c.id || c.service_id,
+    // Map to our format - show all configured integrations
+    const connectors = rawConnections.map((c: any) => ({
+      id: c.id,
+      serviceId: c.service_id,
       name: c.name,
-      icon: c.icon_url || c.icon || `/integrations/${c.id || c.service_id}.svg`,
+      icon: c.icon || `/integrations/${c.service_id}.svg`,
       category: 'accounting',
+      state: c.state, // 'available', 'callable', etc.
     }));
 
     // If no connectors configured, return fallback
     if (connectors.length === 0) {
-      console.log('[APIDECK] No connectors returned, using fallback list');
-      return { connectors: APIDECK_CONNECTORS_FALLBACK, configured: false };
+      console.log('[APIDECK] No connectors configured, using fallback list');
+      return { connectors: APIDECK_CONNECTORS_FALLBACK.map(c => ({ ...c, state: 'available', serviceId: c.id })), configured: false };
     }
 
-    console.log('[APIDECK] Returning', connectors.length, 'connectors');
     return { connectors, configured: true };
   } catch (error) {
     console.error('[APIDECK] Get connectors error:', error);
-    // Return fallback list if ApiDeck is not configured
-    return { connectors: APIDECK_CONNECTORS_FALLBACK, configured: false };
+    return { connectors: APIDECK_CONNECTORS_FALLBACK.map(c => ({ ...c, state: 'available', serviceId: c.id })), configured: false };
   }
 }
 

@@ -3,7 +3,6 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { 
   createVaultSession, 
-  getConnections, 
   deleteConnection,
   getAvailableConnectors 
 } from '@/lib/apideck';
@@ -26,48 +25,47 @@ export async function GET() {
       );
     }
 
-    // Get active connections from Apideck
+    // Get available connectors from Apideck (this now uses the connections endpoint)
     const consumerId = `org_${organization.id}`;
-    let connections: Array<{
-      id: string;
-      service_id: string;
-      name: string;
-      state: string;
-      enabled: boolean;
-      icon?: string;
-    }> = [];
-    let availableConnectors: Array<{
+    let apideckConfigured = false;
+    let allConnectors: Array<{
       id: string;
       name: string;
       icon: string;
       category: string;
+      state: string;
+      serviceId: string;
     }> = [];
-    let apideckConfigured = false;
 
     try {
-      // Get both connections and available connectors in parallel
-      const [connectionsResult, connectorsResult] = await Promise.all([
-        getConnections(consumerId),
-        getAvailableConnectors(consumerId),
-      ]);
-      connections = connectionsResult;
-      availableConnectors = connectorsResult.connectors;
+      const connectorsResult = await getAvailableConnectors(consumerId);
+      allConnectors = connectorsResult.connectors;
       apideckConfigured = connectorsResult.configured;
     } catch (error) {
-      console.error('[APIDECK] Failed to get connections/connectors:', error);
+      console.error('[APIDECK] Failed to get connectors:', error);
       // Use fallback connectors
       const { APIDECK_CONNECTORS_FALLBACK } = await import('@/lib/apideck');
-      availableConnectors = APIDECK_CONNECTORS_FALLBACK;
+      allConnectors = APIDECK_CONNECTORS_FALLBACK.map(c => ({ ...c, state: 'available', serviceId: c.id }));
     }
 
-    // Map connections to connector info
-    const activeConnections = connections
-      .filter(conn => conn.state === 'callable' && conn.enabled)
+    // Separate connected vs available connectors
+    const activeConnections = allConnectors
+      .filter(conn => conn.state === 'callable')
       .map(conn => ({
         id: conn.id,
-        serviceId: conn.service_id,
+        serviceId: conn.serviceId,
         name: conn.name,
         icon: conn.icon,
+      }));
+
+    // Available connectors are ones not yet connected (state !== 'callable')
+    const availableConnectors = allConnectors
+      .filter(conn => conn.state !== 'callable')
+      .map(conn => ({
+        id: conn.serviceId,
+        name: conn.name,
+        icon: conn.icon,
+        category: conn.category,
       }));
 
     return NextResponse.json({
