@@ -40,10 +40,23 @@ export async function GET(request: Request) {
             name: true,
           },
         },
+        sources: {
+          where: { isActive: true },
+          orderBy: { isDefault: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            sourceType: true,
+            lastDigits: true,
+            bankType: true,
+            isDefault: true,
+          },
+        },
         _count: {
           select: {
             transactions: true,
             sources: true,
+            subscriptions: true,
           },
         },
       },
@@ -51,7 +64,13 @@ export async function GET(request: Request) {
       take: 100,
     });
 
-    return NextResponse.json({ customers });
+    // Format customers with default payment method info
+    const formattedCustomers = customers.map(customer => ({
+      ...customer,
+      defaultPaymentMethod: customer.sources[0] || null,
+    }));
+
+    return NextResponse.json({ customers: formattedCustomers });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
       return NextResponse.json(
