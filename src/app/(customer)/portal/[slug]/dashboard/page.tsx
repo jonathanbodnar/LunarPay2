@@ -109,6 +109,16 @@ export default function PortalDashboard() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
+  const [useNewCard, setUseNewCard] = useState(false);
+  
+  // New card checkout modal state
+  const [showNewCardCheckout, setShowNewCardCheckout] = useState(false);
+  const [newCardClientToken, setNewCardClientToken] = useState<string | null>(null);
+  const [newCardEnvironment, setNewCardEnvironment] = useState<'sandbox' | 'production'>('production');
+  const [newCardLoaded, setNewCardLoaded] = useState(false);
+  const [newCardReady, setNewCardReady] = useState(false);
+  const [newCardInstance, setNewCardInstance] = useState<any>(null);
+  const [newCardProcessing, setNewCardProcessing] = useState(false);
   
   // Add Payment Method modal state
   const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
@@ -257,11 +267,137 @@ export default function PortalDashboard() {
     setSelectedPaymentMethod(null);
     setCheckoutError(null);
     setCheckoutSuccess(false);
+    setUseNewCard(false);
+  };
+
+  // Initialize new card checkout
+  const initializeNewCardCheckout = async () => {
+    if (!checkoutProduct) return;
+    
+    setCheckoutLoading(true);
+    setCheckoutError(null);
+
+    try {
+      const response = await fetch('/api/portal/checkout/new-card', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: checkoutProduct.id,
+        }),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setCheckoutError(data.error || 'Failed to initialize');
+        setCheckoutLoading(false);
+        return;
+      }
+
+      setNewCardClientToken(data.clientToken);
+      setNewCardEnvironment(data.environment || 'production');
+      // Keep checkoutProduct for the new card modal
+      setShowNewCardCheckout(true);
+    } catch (error) {
+      setCheckoutError('Failed to initialize payment form');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  // Process new card checkout
+  const processNewCardCheckout = async (fortisResponse: any) => {
+    if (!checkoutProduct) return;
+    
+    setNewCardProcessing(true);
+
+    console.log('[Portal] New card checkout - response:', JSON.stringify(fortisResponse, null, 2));
+
+    // Extract ticket_id from Fortis response
+    const ticketId =
+      fortisResponse?.data?.id ||
+      fortisResponse?.ticket?.id ||
+      fortisResponse?.ticket_id ||
+      fortisResponse?.ticketId ||
+      fortisResponse?.id;
+
+    console.log('[Portal] Extracted ticketId:', ticketId);
+
+    if (!ticketId) {
+      setCheckoutError('Card tokenization failed. Please try again.');
+      setNewCardProcessing(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/portal/checkout/process-ticket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticketId,
+          productId: checkoutProduct.id,
+          saveCard: true,
+        }),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setCheckoutError(data.error || 'Payment failed');
+        setNewCardProcessing(false);
+        return;
+      }
+
+      setCheckoutSuccess(true);
+      
+      // Refresh data
+      const [pmRes, subRes] = await Promise.all([
+        fetch('/api/portal/payment-methods', { credentials: 'include' }),
+        fetch('/api/portal/subscriptions', { credentials: 'include' }),
+      ]);
+
+      if (pmRes.ok) {
+        const pmData = await pmRes.json();
+        setPaymentMethods(pmData.paymentMethods || []);
+      }
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        setSubscriptions(subData.subscriptions || []);
+      }
+
+      setTimeout(() => {
+        handleCloseNewCardCheckout();
+      }, 2000);
+    } catch (error) {
+      setCheckoutError('Failed to process payment');
+    } finally {
+      setNewCardProcessing(false);
+    }
+  };
+
+  // Close new card checkout modal
+  const handleCloseNewCardCheckout = () => {
+    setShowNewCardCheckout(false);
+    setNewCardClientToken(null);
+    setNewCardReady(false);
+    setCheckoutError(null);
+    setCheckoutSuccess(false);
+    setCheckoutProduct(null);
   };
 
   // Process checkout/purchase
   const handleCheckout = async () => {
-    if (!checkoutProduct || !selectedPaymentMethod) return;
+    if (!checkoutProduct) return;
+    
+    // If using new card, initialize ticket flow
+    if (useNewCard || !selectedPaymentMethod) {
+      await initializeNewCardCheckout();
+      return;
+    }
+    
+    if (!selectedPaymentMethod) return;
     
     setCheckoutLoading(true);
     setCheckoutError(null);
@@ -395,6 +531,58 @@ export default function PortalDashboard() {
       setAddPaymentError('Failed to initialize payment form');
     }
   }, [addPaymentClientToken, addPaymentLoaded, showAddPaymentModal, addPaymentEnvironment, primaryColor, buttonTextColor]);
+
+  // Initialize Fortis Elements for New Card Checkout
+  useEffect(() => {
+    if (!newCardClientToken || !newCardLoaded || !window.Commerce?.elements || !showNewCardCheckout) {
+      return;
+    }
+
+    try {
+      const elements = new window.Commerce.elements(newCardClientToken);
+
+      elements.eventBus.on('ready', () => {
+        console.log('[Portal Fortis] New card checkout form ready');
+        setNewCardReady(true);
+      });
+
+      elements.eventBus.on('error', (err: any) => {
+        console.error('[Portal Fortis] New card form error:', err);
+        setCheckoutError(err?.message || 'Payment form error');
+      });
+
+      elements.eventBus.on('done', async (response: any) => {
+        console.log('[Portal Fortis] New card checkout done:', response);
+        await processNewCardCheckout(response);
+      });
+
+      elements.create({
+        container: '#new-card-checkout-container',
+        theme: 'default',
+        hideTotal: true,
+        showReceipt: false,
+        showSubmitButton: false,
+        hideAgreementCheckbox: true,
+        environment: newCardEnvironment,
+        appearance: {
+          colorButtonSelectedBackground: primaryColor,
+          colorButtonSelectedText: buttonTextColor,
+          colorButtonText: '#4a5568',
+          colorButtonBackground: '#f7fafc',
+          colorBackground: '#ffffff',
+          colorText: '#1a202c',
+          fontFamily: 'Roboto',
+          fontSize: '16px',
+          borderRadius: '8px',
+        },
+      });
+
+      setNewCardInstance(elements);
+    } catch (err) {
+      console.error('[Portal Fortis] New card init error:', err);
+      setCheckoutError('Failed to initialize payment form');
+    }
+  }, [newCardClientToken, newCardLoaded, showNewCardCheckout, newCardEnvironment, primaryColor, buttonTextColor]);
 
   const savePaymentMethod = async (fortisResponse: any) => {
     setAddPaymentProcessing(true);
@@ -1078,21 +1266,22 @@ export default function PortalDashboard() {
               {/* Payment Method Selection */}
               <div>
                 <label className="text-sm font-medium mb-2 block">Payment Method</label>
-                {paymentMethods.length === 0 ? (
+                {paymentMethods.length === 0 || useNewCard ? (
                   <div className="p-4 border rounded-lg text-center">
                     <CreditCard className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground mb-3">No payment methods saved</p>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => {
-                        handleCloseCheckout();
-                        setActiveTab('payment-methods');
-                      }}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Payment Method
-                    </Button>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {paymentMethods.length === 0 
+                        ? 'Click pay to enter your card details securely'
+                        : 'Enter new card details'}
+                    </p>
+                    {paymentMethods.length > 0 && (
+                      <button
+                        onClick={() => setUseNewCard(false)}
+                        className="text-sm text-muted-foreground hover:underline"
+                      >
+                        ← Use saved payment method
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1134,13 +1323,13 @@ export default function PortalDashboard() {
                     ))}
                     <button
                       onClick={() => {
-                        handleCloseCheckout();
-                        setActiveTab('payment-methods');
+                        setUseNewCard(true);
+                        setSelectedPaymentMethod(null);
                       }}
                       className="w-full p-3 border border-dashed rounded-lg text-sm text-muted-foreground hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
                     >
                       <Plus className="h-4 w-4" />
-                      Add New Payment Method
+                      Use a Different Card
                     </button>
                   </div>
                 )}
@@ -1167,7 +1356,7 @@ export default function PortalDashboard() {
               <Button
                 className="w-full"
                 style={{ backgroundColor: primaryColor, color: buttonTextColor }}
-                disabled={!selectedPaymentMethod || checkoutLoading || checkoutSuccess || paymentMethods.length === 0}
+                disabled={((!selectedPaymentMethod && !useNewCard) && paymentMethods.length > 0) || checkoutLoading || checkoutSuccess}
                 onClick={handleCheckout}
               >
                 {checkoutLoading ? (
@@ -1286,6 +1475,128 @@ export default function PortalDashboard() {
                   </Button>
                   <button
                     onClick={handleCloseAddPayment}
+                    className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* New Card Checkout Modal */}
+      {showNewCardCheckout && checkoutProduct && (
+        <>
+          {/* Load Fortis Script */}
+          <Script
+            src={newCardEnvironment === 'production' 
+              ? 'https://js.fortis.tech/commercejs-v1.0.0.min.js'
+              : 'https://js.sandbox.fortis.tech/commercejs-v1.0.0.min.js'
+            }
+            strategy="afterInteractive"
+            onLoad={() => setNewCardLoaded(true)}
+            onError={() => setCheckoutError('Failed to load payment form')}
+          />
+
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="text-lg font-semibold">
+                  {checkoutProduct.isSubscription ? 'Subscribe' : 'Complete Purchase'}
+                </h3>
+                <button
+                  onClick={handleCloseNewCardCheckout}
+                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-4 space-y-4">
+                {checkoutSuccess ? (
+                  <div className="text-center py-8">
+                    <CheckCircle className="h-16 w-16 mx-auto mb-4" style={{ color: primaryColor }} />
+                    <h4 className="text-xl font-semibold mb-2">
+                      {checkoutProduct.isSubscription ? 'Subscription Started!' : 'Payment Successful!'}
+                    </h4>
+                    <p className="text-muted-foreground">
+                      {checkoutProduct.isSubscription 
+                        ? `Your ${checkoutProduct.name} subscription is now active.`
+                        : `Payment of ${formatCurrency(Number(checkoutProduct.price))} completed.`
+                      }
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Product Summary */}
+                    <div className="p-4 bg-gray-50 rounded-lg">
+                      <h4 className="font-medium">{checkoutProduct.name}</h4>
+                      <div className="mt-2 flex items-baseline gap-2">
+                        <span className="text-xl font-bold" style={{ color: primaryColor }}>
+                          {formatCurrency(Number(checkoutProduct.price))}
+                        </span>
+                        {checkoutProduct.isSubscription && (
+                          <span className="text-sm text-muted-foreground">
+                            / {getSubscriptionFrequencyText(
+                              checkoutProduct.subscriptionInterval,
+                              checkoutProduct.subscriptionIntervalCount
+                            )}
+                          </span>
+                        )}
+                      </div>
+                      {checkoutProduct.isSubscription && (
+                        <p className="text-sm text-muted-foreground mt-2">
+                          Card will be saved for recurring payments.
+                        </p>
+                      )}
+                    </div>
+
+                    {checkoutError && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                        {checkoutError}
+                      </div>
+                    )}
+
+                    {(!newCardLoaded || !newCardReady) && !checkoutError && (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-muted-foreground">Loading payment form...</span>
+                      </div>
+                    )}
+
+                    <div 
+                      id="new-card-checkout-container" 
+                      className="min-h-[200px]"
+                      style={{ display: newCardReady ? 'block' : 'none' }}
+                    />
+                  </>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              {!checkoutSuccess && (
+                <div className="p-4 border-t space-y-3">
+                  <Button
+                    className="w-full"
+                    style={{ backgroundColor: primaryColor, color: buttonTextColor }}
+                    disabled={!newCardReady || newCardProcessing}
+                    onClick={() => newCardInstance?.submit()}
+                  >
+                    {newCardProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      `Pay ${formatCurrency(Number(checkoutProduct.price))}`
+                    )}
+                  </Button>
+                  <button
+                    onClick={handleCloseNewCardCheckout}
                     className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     Cancel

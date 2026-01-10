@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { dollarsToCents } from '@/lib/utils';
 
-// POST /api/customers/[id]/charge-intention - Create transaction intention for charging a customer
+// POST /api/customers/[id]/charge-intention - Create transaction/ticket intention for charging a customer
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -14,7 +14,7 @@ export async function POST(
     const currentUser = await requireAuth();
     const customerId = parseInt(id);
     const body = await request.json();
-    const { amount, savePaymentMethod = false } = body;
+    const { amount, savePaymentMethod = false, isSubscription = false, productId } = body;
 
     if (!amount || amount <= 0) {
       return NextResponse.json(
@@ -87,13 +87,35 @@ export async function POST(
       );
     }
 
-    // Create transaction intention
-    const result = await fortisClient.createTransactionIntention({
-      action: 'sale',
-      amount: dollarsToCents(amount),
-      location_id: locationId,
-      save_account: savePaymentMethod,
+    // For subscriptions, use ticket intention (tokenize card, then charge with save_account)
+    // For one-time payments, use transaction intention
+    const useTicketFlow = isSubscription || savePaymentMethod;
+
+    console.log('[Customer Charge] Creating intention:', {
+      useTicketFlow,
+      isSubscription,
+      savePaymentMethod,
+      amount,
     });
+
+    let result;
+    let intentionType: 'transaction' | 'ticket' = 'transaction';
+
+    if (useTicketFlow) {
+      // Ticket intention: tokenize card without charging, then process with save_account
+      intentionType = 'ticket';
+      result = await fortisClient.createTicketIntention({
+        location_id: locationId,
+      });
+    } else {
+      // Transaction intention: charge directly
+      result = await fortisClient.createTransactionIntention({
+        action: 'sale',
+        amount: dollarsToCents(amount),
+        location_id: locationId,
+        save_account: false,
+      });
+    }
 
     if (!result.status) {
       console.error('[Customer Charge] Failed to create intention:', result.message);
@@ -108,6 +130,10 @@ export async function POST(
       clientToken: result.clientToken,
       locationId,
       environment: env,
+      intentionType,
+      amount: dollarsToCents(amount),
+      isSubscription,
+      productId,
       customer: {
         id: customer.id,
         firstName: customer.firstName,

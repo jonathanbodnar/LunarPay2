@@ -94,7 +94,10 @@ export default function CustomerDetailPage() {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [payFormInstance, setPayFormInstance] = useState<any>(null);
-  const [fortisMode, setFortisMode] = useState<'charge' | 'store'>('charge'); // 'charge' = payment, 'store' = save card only
+  const [fortisMode, setFortisMode] = useState<'charge' | 'store' | 'subscription'>('charge');
+  const [intentionType, setIntentionType] = useState<'transaction' | 'ticket'>('transaction');
+  const [ticketAmount, setTicketAmount] = useState<number>(0);
+  const [subscriptionProductId, setSubscriptionProductId] = useState<number | null>(null);
 
   useEffect(() => {
     if (params.id) {
@@ -208,10 +211,11 @@ export default function CustomerDetailPage() {
     }
   };
 
-  const initializeFortisPayment = async () => {
+  const initializeFortisPayment = async (isSubscription = false, productId?: number) => {
     setProcessing(true);
     setPaymentError(null);
-    setFortisMode('charge');
+    setFortisMode(isSubscription ? 'subscription' : 'charge');
+    setSubscriptionProductId(productId || null);
 
     try {
       const response = await fetch(`/api/customers/${params.id}/charge-intention`, {
@@ -219,8 +223,10 @@ export default function CustomerDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          amount: Number(paymentForm.amount),
-          savePaymentMethod: paymentForm.savePaymentMethod,
+          amount: Number(paymentForm.amount || selectedSubscriptionProduct?.price || 0),
+          savePaymentMethod: paymentForm.savePaymentMethod || isSubscription,
+          isSubscription,
+          productId,
         }),
       });
 
@@ -234,8 +240,17 @@ export default function CustomerDetailPage() {
 
       setFortisClientToken(data.clientToken);
       setFortisEnvironment(data.environment || 'production');
+      setIntentionType(data.intentionType || 'transaction');
+      setTicketAmount(data.amount || 0);
       setShowPaymentModal(false);
+      setShowSubscriptionModal(false);
       setShowFortisModal(true);
+      
+      console.log('[Customer] Fortis initialized:', {
+        intentionType: data.intentionType,
+        isSubscription,
+        amount: data.amount,
+      });
     } catch (error) {
       setPaymentError('Failed to initialize payment');
     } finally {
@@ -374,7 +389,69 @@ export default function CustomerDetailPage() {
   const processPayment = async (fortisResponse: any) => {
     setProcessing(true);
 
+    console.log('[Customer] Processing payment:', {
+      intentionType,
+      fortisMode,
+      ticketAmount,
+      subscriptionProductId,
+    });
+
     try {
+      // TICKET FLOW: For subscriptions or save payment method
+      if (intentionType === 'ticket') {
+        console.log('[Customer] Ticket flow - full response:', JSON.stringify(fortisResponse, null, 2));
+
+        // Extract ticket_id from Fortis response
+        const ticketId =
+          fortisResponse?.data?.id ||
+          fortisResponse?.ticket?.id ||
+          fortisResponse?.ticket_id ||
+          fortisResponse?.ticketId ||
+          fortisResponse?.data?.ticket?.id ||
+          fortisResponse?.id;
+
+        console.log('[Customer] Ticket flow - extracted ticketId:', ticketId);
+
+        if (!ticketId) {
+          console.error('[Customer] Could not extract ticket_id from response');
+          setPaymentError('Card tokenization failed. Please try again.');
+          setProcessing(false);
+          return;
+        }
+
+        const response = await fetch(`/api/customers/${params.id}/process-ticket`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            ticketId,
+            amount: ticketAmount,
+            isSubscription: fortisMode === 'subscription',
+            productId: subscriptionProductId,
+            sendReceipt: paymentForm.sendReceipt,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          setPaymentError(data.error || 'Payment failed');
+          setProcessing(false);
+          return;
+        }
+
+        setPaymentSuccess(true);
+        setTimeout(() => {
+          closeFortisModal();
+          resetPaymentForm();
+          resetSubscriptionForm();
+          fetchCustomer();
+          fetchPaymentMethods();
+        }, 2000);
+        return;
+      }
+
+      // TRANSACTION FLOW: Direct payment (no card saving needed)
       const response = await fetch(`/api/customers/${params.id}/process-charge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -929,18 +1006,11 @@ export default function CustomerDetailPage() {
                   <div className="p-4 bg-muted rounded-lg text-center">
                     <CreditCard className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground mb-3">
-                      First, add a payment method to use for this subscription
+                      Click &quot;Start Subscription&quot; to securely enter card details
                     </p>
-                    <Button 
-                      onClick={() => {
-                        setShowSubscriptionModal(false);
-                        initializeFortisStore();
-                      }}
-                      className="w-full"
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Payment Method
-                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Card will be saved automatically for future payments
+                    </p>
                   </div>
 
                   {paymentMethods.length > 0 && (
@@ -962,10 +1032,19 @@ export default function CustomerDetailPage() {
               </Button>
               <Button 
                 className="flex-1" 
-                onClick={handleAddSubscription} 
-                disabled={processing || !subscriptionForm.productId || !subscriptionForm.selectedPaymentMethod}
+                onClick={() => {
+                  if (subscriptionForm.useNewCard || paymentMethods.length === 0) {
+                    // New card flow - initialize Fortis Elements for subscription
+                    setPaymentForm({ ...paymentForm, amount: String(selectedSubscriptionProduct?.price || 0) });
+                    initializeFortisPayment(true, selectedSubscriptionProduct?.id);
+                  } else {
+                    // Existing card flow
+                    handleAddSubscription();
+                  }
+                }} 
+                disabled={processing || !subscriptionForm.productId || (!subscriptionForm.selectedPaymentMethod && !subscriptionForm.useNewCard && paymentMethods.length > 0)}
               >
-                {processing ? 'Processing...' : 'Start Subscription'}
+                {processing ? 'Processing...' : (subscriptionForm.useNewCard || paymentMethods.length === 0) ? 'Continue to Payment' : 'Start Subscription'}
               </Button>
             </div>
           </div>
@@ -990,7 +1069,7 @@ export default function CustomerDetailPage() {
             <div className="bg-background rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between p-4 border-b">
                 <h2 className="text-lg font-semibold">
-                {fortisMode === 'store' ? 'Add Payment Method' : 'Complete Payment'}
+                {fortisMode === 'store' ? 'Add Payment Method' : fortisMode === 'subscription' ? 'Start Subscription' : 'Complete Payment'}
               </h2>
                 <button onClick={closeFortisModal}>
                   <X className="h-5 w-5" />
@@ -1002,12 +1081,14 @@ export default function CustomerDetailPage() {
                   <div className="text-center py-8">
                     <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-green-700">
-                      {fortisMode === 'store' ? 'Card Saved!' : 'Payment Successful!'}
+                      {fortisMode === 'store' ? 'Card Saved!' : fortisMode === 'subscription' ? 'Subscription Started!' : 'Payment Successful!'}
                     </h3>
                     <p className="text-muted-foreground mt-2">
                       {fortisMode === 'store' 
                         ? 'Payment method saved successfully'
-                        : `Charged ${formatCurrency(Number(paymentForm.amount))} to customer`
+                        : fortisMode === 'subscription'
+                          ? `Subscription for ${formatCurrency(ticketAmount / 100)} created`
+                          : `Charged ${formatCurrency(Number(paymentForm.amount))} to customer`
                       }
                     </p>
                   </div>
@@ -1018,15 +1099,27 @@ export default function CustomerDetailPage() {
                         <span className="text-muted-foreground">Customer</span>
                         <span className="font-medium">{customer?.firstName} {customer?.lastName}</span>
                       </div>
-                      {fortisMode === 'charge' && (
+                      {(fortisMode === 'charge' || fortisMode === 'subscription') && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Amount</span>
-                          <span className="font-bold text-lg">{formatCurrency(Number(paymentForm.amount))}</span>
+                          <span className="font-bold text-lg">
+                            {formatCurrency(fortisMode === 'subscription' ? ticketAmount / 100 : Number(paymentForm.amount))}
+                            {fortisMode === 'subscription' && selectedSubscriptionProduct && (
+                              <span className="text-sm font-normal text-muted-foreground ml-1">
+                                /{selectedSubscriptionProduct.subscriptionInterval}
+                              </span>
+                            )}
+                          </span>
                         </div>
                       )}
                       {fortisMode === 'store' && (
                         <p className="text-sm text-muted-foreground text-center mt-2">
                           Add a new card or bank account to save for future payments.
+                        </p>
+                      )}
+                      {fortisMode === 'subscription' && (
+                        <p className="text-sm text-muted-foreground text-center mt-2">
+                          Card will be saved for recurring charges.
                         </p>
                       )}
                     </div>
@@ -1081,6 +1174,8 @@ export default function CustomerDetailPage() {
                       </>
                     ) : fortisMode === 'store' ? (
                       'Save Card'
+                    ) : fortisMode === 'subscription' ? (
+                      `Start Subscription - ${formatCurrency(ticketAmount / 100)}`
                     ) : (
                       `Pay ${formatCurrency(Number(paymentForm.amount))}`
                     )}
