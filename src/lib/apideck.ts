@@ -21,24 +21,59 @@ interface ApideckResponse<T> {
   };
 }
 
-// Available accounting connectors in Apideck
-export const APIDECK_CONNECTORS = [
+// Fallback connector list (used if API call fails)
+export const APIDECK_CONNECTORS_FALLBACK = [
   { id: 'quickbooks', name: 'QuickBooks Online', icon: '/integrations/quickbooks.svg', category: 'accounting' },
   { id: 'xero', name: 'Xero', icon: '/integrations/xero.svg', category: 'accounting' },
   { id: 'freshbooks', name: 'FreshBooks', icon: '/integrations/freshbooks.svg', category: 'accounting' },
-  { id: 'sage-intacct', name: 'Sage Intacct', icon: '/integrations/sage.svg', category: 'accounting' },
-  { id: 'netsuite', name: 'NetSuite', icon: '/integrations/netsuite.svg', category: 'accounting' },
-  { id: 'myob', name: 'MYOB', icon: '/integrations/myob.svg', category: 'accounting' },
-  { id: 'exact-online', name: 'Exact Online', icon: '/integrations/exact.svg', category: 'accounting' },
-  { id: 'zoho-books', name: 'Zoho Books', icon: '/integrations/zoho.svg', category: 'accounting' },
-  { id: 'wave', name: 'Wave', icon: '/integrations/wave.svg', category: 'accounting' },
-  { id: 'kashflow', name: 'KashFlow', icon: '/integrations/kashflow.svg', category: 'accounting' },
-  { id: 'clear-books', name: 'Clear Books', icon: '/integrations/clearbooks.svg', category: 'accounting' },
-  { id: 'freeagent', name: 'FreeAgent', icon: '/integrations/freeagent.svg', category: 'accounting' },
-  { id: 'quickbooks-desktop', name: 'QuickBooks Desktop', icon: '/integrations/quickbooks.svg', category: 'accounting' },
-  { id: 'sage-business-cloud', name: 'Sage Business Cloud', icon: '/integrations/sage.svg', category: 'accounting' },
-  { id: 'microsoft-dynamics-365', name: 'Microsoft Dynamics 365', icon: '/integrations/dynamics.svg', category: 'accounting' },
 ];
+
+/**
+ * Get available connectors from ApiDeck (only those enabled in your ApiDeck app)
+ */
+export async function getAvailableConnectors(consumerId: string): Promise<Array<{
+  id: string;
+  name: string;
+  icon: string;
+  category: string;
+}>> {
+  try {
+    const config = getConfig(consumerId);
+    
+    // Get connectors configured for accounting API
+    const response = await fetch(`${APIDECK_BASE_URL}/vault/connectors?api=accounting&filter[status]=live`, {
+      headers: getHeaders(config),
+    });
+
+    if (!response.ok) {
+      console.error('[APIDECK] Failed to get connectors:', await response.text());
+      return [];
+    }
+
+    const data: ApideckResponse<Array<{
+      id: string;
+      name: string;
+      icon_url?: string;
+      status: string;
+      unified_api: string;
+    }>> = await response.json();
+
+    // Filter to only enabled connectors and map to our format
+    const connectors = (data.data || [])
+      .filter(c => c.status === 'live' || c.status === 'beta')
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        icon: c.icon_url || `/integrations/${c.id}.svg`,
+        category: 'accounting',
+      }));
+
+    return connectors;
+  } catch (error) {
+    console.error('[APIDECK] Get connectors error:', error);
+    return [];
+  }
+}
 
 function getConfig(consumerId: string): ApideckConfig {
   const apiKey = process.env.APIDECK_API_KEY;

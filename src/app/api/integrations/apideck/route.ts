@@ -5,7 +5,7 @@ import {
   createVaultSession, 
   getConnections, 
   deleteConnection,
-  APIDECK_CONNECTORS 
+  getAvailableConnectors 
 } from '@/lib/apideck';
 
 // GET /api/integrations/apideck - Get available connectors and active connections
@@ -36,12 +36,24 @@ export async function GET() {
       enabled: boolean;
       icon?: string;
     }> = [];
+    let availableConnectors: Array<{
+      id: string;
+      name: string;
+      icon: string;
+      category: string;
+    }> = [];
 
     try {
-      connections = await getConnections(consumerId);
+      // Get both connections and available connectors in parallel
+      const [connectionsResult, connectorsResult] = await Promise.all([
+        getConnections(consumerId),
+        getAvailableConnectors(consumerId),
+      ]);
+      connections = connectionsResult;
+      availableConnectors = connectorsResult;
     } catch (error) {
-      console.error('[APIDECK] Failed to get connections:', error);
-      // Continue without connections if Apideck is not configured
+      console.error('[APIDECK] Failed to get connections/connectors:', error);
+      // Continue without if Apideck is not configured
     }
 
     // Map connections to connector info
@@ -55,7 +67,7 @@ export async function GET() {
       }));
 
     return NextResponse.json({
-      connectors: APIDECK_CONNECTORS,
+      connectors: availableConnectors,
       connections: activeConnections,
     });
   } catch (error) {
