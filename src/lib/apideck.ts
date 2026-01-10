@@ -44,42 +44,44 @@ export async function getAvailableConnectors(consumerId: string): Promise<{
   try {
     const config = getConfig(consumerId);
     
+    console.log('[APIDECK] Fetching connectors for consumer:', consumerId);
+    console.log('[APIDECK] App ID:', config.appId);
+    
     // Get connectors configured for accounting API
     const response = await fetch(`${APIDECK_BASE_URL}/vault/connectors?api=accounting`, {
       headers: getHeaders(config),
     });
 
+    console.log('[APIDECK] Response status:', response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[APIDECK] Failed to get connectors:', errorText);
+      console.error('[APIDECK] Failed to get connectors:', response.status, errorText);
       return { connectors: APIDECK_CONNECTORS_FALLBACK, configured: false };
     }
 
-    const data: ApideckResponse<Array<{
-      id: string;
-      name: string;
-      icon_url?: string;
-      status: string;
-      unified_api: string;
-      enabled?: boolean;
-    }>> = await response.json();
+    const data = await response.json();
+    console.log('[APIDECK] Raw response:', JSON.stringify(data, null, 2));
 
-    // Filter to only enabled/configured connectors and map to our format
-    const connectors = (data.data || [])
-      .filter(c => c.enabled !== false) // Show all connectors that aren't explicitly disabled
-      .map(c => ({
-        id: c.id,
-        name: c.name,
-        icon: c.icon_url || `/integrations/${c.id}.svg`,
-        category: 'accounting',
-      }));
+    // ApiDeck returns connectors in data array
+    const rawConnectors = data.data || [];
+    console.log('[APIDECK] Found', rawConnectors.length, 'connectors');
+
+    // Map to our format - show all connectors that are available
+    const connectors = rawConnectors.map((c: any) => ({
+      id: c.id || c.service_id,
+      name: c.name,
+      icon: c.icon_url || c.icon || `/integrations/${c.id || c.service_id}.svg`,
+      category: 'accounting',
+    }));
 
     // If no connectors configured, return fallback
     if (connectors.length === 0) {
-      console.log('[APIDECK] No connectors configured, using fallback list');
+      console.log('[APIDECK] No connectors returned, using fallback list');
       return { connectors: APIDECK_CONNECTORS_FALLBACK, configured: false };
     }
 
+    console.log('[APIDECK] Returning', connectors.length, 'connectors');
     return { connectors, configured: true };
   } catch (error) {
     console.error('[APIDECK] Get connectors error:', error);
