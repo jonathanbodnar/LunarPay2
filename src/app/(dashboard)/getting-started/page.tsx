@@ -49,6 +49,13 @@ export default function GettingStartedPage() {
           path: '/organizations',
         },
         {
+          id: 'payment',
+          title: 'Configure Payment Processing',
+          description: 'Set up Fortis to accept credit cards and ACH payments',
+          completed: orgs.organizations?.[0]?.fortisOnboarding?.appStatus === 'ACTIVE',
+          path: '/settings/payment-setup',
+        },
+        {
           id: 'customer',
           title: 'Add Your First Customer',
           description: 'Create a customer to send invoices to',
@@ -75,13 +82,6 @@ export default function GettingStartedPage() {
           description: 'Add your logo and brand colors',
           completed: false, // TODO: Check if branding is set
           path: '/settings/branding',
-        },
-        {
-          id: 'payment',
-          title: 'Configure Payment Processing',
-          description: 'Set up Fortis to accept credit cards and ACH payments',
-          completed: orgs.organizations?.[0]?.fortisOnboarding?.appStatus === 'ACTIVE',
-          path: '/settings/payment-setup',
         },
       ]);
     } catch (error) {
