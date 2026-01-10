@@ -30,24 +30,29 @@ export const APIDECK_CONNECTORS_FALLBACK = [
 
 /**
  * Get available connectors from ApiDeck (only those enabled in your ApiDeck app)
+ * Returns fallback list if ApiDeck is not configured
  */
-export async function getAvailableConnectors(consumerId: string): Promise<Array<{
-  id: string;
-  name: string;
-  icon: string;
-  category: string;
-}>> {
+export async function getAvailableConnectors(consumerId: string): Promise<{
+  connectors: Array<{
+    id: string;
+    name: string;
+    icon: string;
+    category: string;
+  }>;
+  configured: boolean;
+}> {
   try {
     const config = getConfig(consumerId);
     
     // Get connectors configured for accounting API
-    const response = await fetch(`${APIDECK_BASE_URL}/vault/connectors?api=accounting&filter[status]=live`, {
+    const response = await fetch(`${APIDECK_BASE_URL}/vault/connectors?api=accounting`, {
       headers: getHeaders(config),
     });
 
     if (!response.ok) {
-      console.error('[APIDECK] Failed to get connectors:', await response.text());
-      return [];
+      const errorText = await response.text();
+      console.error('[APIDECK] Failed to get connectors:', errorText);
+      return { connectors: APIDECK_CONNECTORS_FALLBACK, configured: false };
     }
 
     const data: ApideckResponse<Array<{
@@ -56,11 +61,12 @@ export async function getAvailableConnectors(consumerId: string): Promise<Array<
       icon_url?: string;
       status: string;
       unified_api: string;
+      enabled?: boolean;
     }>> = await response.json();
 
-    // Filter to only enabled connectors and map to our format
+    // Filter to only enabled/configured connectors and map to our format
     const connectors = (data.data || [])
-      .filter(c => c.status === 'live' || c.status === 'beta')
+      .filter(c => c.enabled !== false) // Show all connectors that aren't explicitly disabled
       .map(c => ({
         id: c.id,
         name: c.name,
@@ -68,10 +74,17 @@ export async function getAvailableConnectors(consumerId: string): Promise<Array<
         category: 'accounting',
       }));
 
-    return connectors;
+    // If no connectors configured, return fallback
+    if (connectors.length === 0) {
+      console.log('[APIDECK] No connectors configured, using fallback list');
+      return { connectors: APIDECK_CONNECTORS_FALLBACK, configured: false };
+    }
+
+    return { connectors, configured: true };
   } catch (error) {
     console.error('[APIDECK] Get connectors error:', error);
-    return [];
+    // Return fallback list if ApiDeck is not configured
+    return { connectors: APIDECK_CONNECTORS_FALLBACK, configured: false };
   }
 }
 

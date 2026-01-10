@@ -42,6 +42,7 @@ export async function GET() {
       icon: string;
       category: string;
     }> = [];
+    let apideckConfigured = false;
 
     try {
       // Get both connections and available connectors in parallel
@@ -50,10 +51,13 @@ export async function GET() {
         getAvailableConnectors(consumerId),
       ]);
       connections = connectionsResult;
-      availableConnectors = connectorsResult;
+      availableConnectors = connectorsResult.connectors;
+      apideckConfigured = connectorsResult.configured;
     } catch (error) {
       console.error('[APIDECK] Failed to get connections/connectors:', error);
-      // Continue without if Apideck is not configured
+      // Use fallback connectors
+      const { APIDECK_CONNECTORS_FALLBACK } = await import('@/lib/apideck');
+      availableConnectors = APIDECK_CONNECTORS_FALLBACK;
     }
 
     // Map connections to connector info
@@ -69,6 +73,7 @@ export async function GET() {
     return NextResponse.json({
       connectors: availableConnectors,
       connections: activeConnections,
+      apideckConfigured,
     });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
