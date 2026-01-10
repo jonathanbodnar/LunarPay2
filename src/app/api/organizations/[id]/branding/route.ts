@@ -163,20 +163,22 @@ export async function PUT(
       }
     }
 
-    // Update organization (skip color fields as columns don't exist in database)
+    // Update organization with branding settings
     const updatedOrg = await prisma.organization.update({
       where: { id: organizationId },
       data: {
-        // primaryColor, backgroundColor, buttonTextColor columns don't exist in database
         logo: logoUrl,
+        primaryColor: primaryColor || '#000000',
+        backgroundColor: backgroundColor || '#ffffff',
+        buttonTextColor: buttonTextColor || '#ffffff',
       },
       select: {
         id: true,
         name: true,
         logo: true,
-        // primaryColor: true, // Column doesn't exist in database
-        // backgroundColor: true, // Column doesn't exist in database
-        // buttonTextColor: true, // Column doesn't exist in database
+        primaryColor: true,
+        backgroundColor: true,
+        buttonTextColor: true,
       },
     });
 
