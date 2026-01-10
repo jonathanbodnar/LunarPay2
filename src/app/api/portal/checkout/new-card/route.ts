@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
     const fortisClient = createFortisClient(
       env as 'sandbox' | 'production',
-      fortisOnboarding.authUserId,
+      fortisOnboarding.authUserId!,
       fortisOnboarding.authUserApiKey!
     );
 
