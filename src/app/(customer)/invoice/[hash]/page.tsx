@@ -337,9 +337,8 @@ export default function PublicInvoicePage() {
     });
 
     // Build products array with subscription info
-    const productsToProcess = invoice.products.map(product => ({
-      id: product.id,
-      productId: product.productId,
+    const productsToProcess = invoice.products.map((product, index) => ({
+      id: index, // Use index as fallback ID
       productName: product.productName,
       productPrice: Number(product.price),
       qtyReq: product.qty,
