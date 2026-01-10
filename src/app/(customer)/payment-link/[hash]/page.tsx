@@ -451,8 +451,10 @@ export default function PaymentLinkPage() {
         console.log('[PaymentLink] Ticket flow - full fortisResponse:', JSON.stringify(fortisResponse, null, 2));
         
         // Try multiple possible locations for ticket_id
-        // Fortis Elements may return: { ticket: { id: '...' } } or { ticket_id: '...' } or { data: { ticket_id: '...' } }
+        // Fortis Elements returns: { @type: "done", data: { @action: "ticket", id: "...", ... } }
+        // The ticket ID is in data.id when @action is "ticket"
         const ticketId = 
+          fortisResponse?.data?.id ||  // Most common: { data: { id: "ticket_id" } }
           fortisResponse?.ticket?.id ||
           fortisResponse?.ticket_id || 
           fortisResponse?.ticketId ||
