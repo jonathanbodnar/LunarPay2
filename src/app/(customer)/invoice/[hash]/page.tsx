@@ -87,6 +87,8 @@ export default function PublicInvoicePage() {
   const [payForm, setPayForm] = useState<any>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [fortisEnvironment, setFortisEnvironment] = useState<'sandbox' | 'production'>('production');
+  const [intentionType, setIntentionType] = useState<'transaction' | 'ticket'>('transaction');
+  const [ticketAmount, setTicketAmount] = useState<number>(0);
   
   // Demo form state (for screenshot/preview when Fortis not configured)
   const [demoCardNumber, setDemoCardNumber] = useState('');
@@ -251,8 +253,13 @@ export default function PublicInvoicePage() {
         setEmail(data.invoice.donor.email);
       }
 
-      // Get transaction intention token
-      await getPaymentToken(data.invoice.organizationId, data.invoice.totalAmount - data.invoice.paidAmount, data.invoice.id);
+      // Get transaction intention token - pass invoice data explicitly for subscription detection
+      await getPaymentToken(
+        data.invoice.organizationId, 
+        data.invoice.totalAmount - data.invoice.paidAmount, 
+        data.invoice.id,
+        data.invoice // Pass invoice data explicitly since state update is async
+      );
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -260,7 +267,20 @@ export default function PublicInvoicePage() {
     }
   };
 
-  const getPaymentToken = async (orgId: number, amount: number, invoiceId: number) => {
+  const getPaymentToken = async (orgId: number, amount: number, invoiceId: number, currentInvoice?: Invoice) => {
+    // Use passed invoice data if available (for initial load when state hasn't updated yet)
+    const invoiceData = currentInvoice || invoice;
+    
+    // Check if any product is a subscription - need ticket intention for card saving
+    const hasSubscription = invoiceData?.products.some(p => p.product?.isSubscription) || false;
+    const shouldSaveCard = hasSubscription || savePaymentMethod;
+    
+    console.log('[Invoice] getPaymentToken:', {
+      amount,
+      hasSubscription,
+      shouldSaveCard,
+    });
+    
     try {
       const response = await fetch('/api/public/fortis/transaction-intention', {
         method: 'POST',
@@ -271,7 +291,8 @@ export default function PublicInvoicePage() {
           action: 'sale',
           type: 'invoice',
           referenceId: invoiceId,
-          savePaymentMethod,
+          savePaymentMethod: shouldSaveCard,
+          hasRecurring: hasSubscription, // Use ticket intention for subscriptions
         }),
       });
 
@@ -280,8 +301,14 @@ export default function PublicInvoicePage() {
       if (data.success && data.clientToken) {
         setClientToken(data.clientToken);
         setFortisEnvironment(data.environment === 'production' ? 'production' : 'sandbox');
+        setIntentionType(data.intentionType || 'transaction');
+        setTicketAmount(data.amount || Math.round(amount * 100));
         setDemoMode(false);
-        console.log('[Invoice] Got Fortis token, environment:', data.environment);
+        console.log('[Invoice] Got Fortis token:', {
+          environment: data.environment,
+          intentionType: data.intentionType,
+          hasSubscription,
+        });
       } else {
         // Enable demo mode for screenshots/preview when Fortis not configured
         console.log('[Invoice] Enabling demo mode - Fortis not configured');
@@ -299,7 +326,79 @@ export default function PublicInvoicePage() {
   const processPayment = async (fortisResponse: any) => {
     if (!invoice) return;
 
+    // Check if any product is a subscription
+    const hasSubscriptionProduct = invoice.products.some(p => p.product?.isSubscription);
+    const shouldSavePaymentMethod = hasSubscriptionProduct || savePaymentMethod;
+
+    console.log('[Invoice] Processing payment:', {
+      intentionType,
+      hasSubscriptionProduct,
+      fortisResponse: fortisResponse ? 'present' : 'missing',
+    });
+
+    // Build products array with subscription info
+    const productsToProcess = invoice.products.map(product => ({
+      id: product.id,
+      productId: product.productId,
+      productName: product.productName,
+      productPrice: Number(product.price),
+      qtyReq: product.qty,
+      isSubscription: product.product?.isSubscription || false,
+      subscriptionInterval: product.product?.subscriptionInterval || null,
+      subscriptionIntervalCount: product.product?.subscriptionIntervalCount || null,
+    }));
+
     try {
+      // TICKET FLOW: For recurring products (subscriptions)
+      if (intentionType === 'ticket') {
+        console.log('[Invoice] Ticket flow - full fortisResponse:', JSON.stringify(fortisResponse, null, 2));
+        
+        // Extract ticket_id from Fortis response - data.id is where Fortis puts it
+        const ticketId = 
+          fortisResponse?.data?.id ||
+          fortisResponse?.ticket?.id ||
+          fortisResponse?.ticket_id || 
+          fortisResponse?.ticketId ||
+          fortisResponse?.data?.ticket?.id ||
+          fortisResponse?.data?.ticket_id || 
+          fortisResponse?.id;
+        
+        console.log('[Invoice] Ticket flow - extracted ticketId:', ticketId);
+
+        if (!ticketId) {
+          console.error('[Invoice] Could not extract ticket_id from response');
+          setPaymentError('Card tokenization failed. Please try again.');
+          setProcessing(false);
+          return;
+        }
+
+        const response = await fetch('/api/public/fortis/process-ticket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'invoice',
+            referenceId: invoice.id,
+            organizationId: invoice.organizationId,
+            ticketId,
+            amount: ticketAmount,
+            customerEmail: email,
+            customerId: invoice.donor?.id,
+            products: productsToProcess,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setPaymentSuccess(true);
+        } else {
+          setPaymentError(data.error || 'Payment failed');
+        }
+        setProcessing(false);
+        return;
+      }
+
+      // TRANSACTION FLOW: For one-time payments
       const response = await fetch('/api/public/fortis/process-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -310,7 +409,8 @@ export default function PublicInvoicePage() {
           customerId: invoice.donor?.id,
           customerEmail: email,
           fortisResponse,
-          savePaymentMethod,
+          savePaymentMethod: shouldSavePaymentMethod,
+          products: productsToProcess,
         }),
       });
 
@@ -372,7 +472,7 @@ export default function PublicInvoicePage() {
     setPayForm(null);
     if (invoice) {
       const amountDue = Number(invoice.totalAmount) - Number(invoice.paidAmount);
-      await getPaymentToken(invoice.organizationId, amountDue, invoice.id);
+      await getPaymentToken(invoice.organizationId, amountDue, invoice.id, invoice);
     }
   };
 
