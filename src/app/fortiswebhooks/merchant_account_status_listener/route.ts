@@ -24,8 +24,17 @@ export async function POST(request: Request) {
     });
 
     // Check if this is a merchant onboarding webhook
-    if ('client_app_id' in body && 'users' in body) {
-      return await handleMerchantOnboardingWebhook(body as FortisWebhookPayload);
+    // Fortis sends data in two possible formats:
+    // 1. Old format: { client_app_id, users, ... } directly
+    // 2. New format: { type: "Onboarding", data: { client_app_id, users, ... } }
+    const webhookData = body.data || body; // Extract nested data if present
+    
+    if ('client_app_id' in webhookData && 'users' in webhookData) {
+      // Merge with top-level fields (like stage) if data is nested
+      const mergedPayload = body.data 
+        ? { ...webhookData, stage: body.stage || webhookData.stage }
+        : webhookData;
+      return await handleMerchantOnboardingWebhook(mergedPayload as FortisWebhookPayload);
     }
 
     // Check if this is a transaction status webhook
