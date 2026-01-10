@@ -409,7 +409,8 @@ export default function PaymentLinkPage() {
       const timeout = setTimeout(() => {
         setClientToken(null);
         setPayForm(null);
-        getPaymentToken(paymentLink.organizationId, total, paymentLink.id);
+        // Pass paymentLink explicitly to ensure subscription detection works
+        getPaymentToken(paymentLink.organizationId, total, paymentLink.id, cart, paymentLink);
       }, 500);
       return () => clearTimeout(timeout);
     }
@@ -559,7 +560,8 @@ export default function PaymentLinkPage() {
     if (paymentLink) {
       const total = calculateTotal();
       if (total > 0) {
-        await getPaymentToken(paymentLink.organizationId, total, paymentLink.id);
+        // Pass paymentLink explicitly to ensure subscription detection works
+        await getPaymentToken(paymentLink.organizationId, total, paymentLink.id, cart, paymentLink);
       }
     }
   };
