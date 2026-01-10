@@ -178,12 +178,24 @@ export default function PaymentLinkPage() {
       // Events must be attached BEFORE create()
       if (elements.eventBus) {
         elements.eventBus.on('ready', () => {
-          console.log('[Fortis] Payment form ready');
+          console.log('[Fortis] Payment form ready, intentionType:', intentionType);
         });
         
+        // Transaction intention events (payment)
         elements.eventBus.on('payment_success', handleSuccess);
         elements.eventBus.on('success', handleSuccess);
         elements.eventBus.on('done', handleSuccess);
+        
+        // Ticket intention events (tokenization)
+        elements.eventBus.on('tokenize_success', handleSuccess);
+        elements.eventBus.on('ticket_success', handleSuccess);
+        elements.eventBus.on('submit', (data: any) => {
+          console.log('[Fortis] submit event:', data);
+          // Some Elements versions fire 'submit' with the ticket data
+          if (data?.ticket_id || data?.ticket?.id || data?.id) {
+            handleSuccess(data);
+          }
+        });
         
         elements.eventBus.on('payment_error', (err: any) => {
           console.error('[Fortis] payment_error:', err);
@@ -195,11 +207,17 @@ export default function PaymentLinkPage() {
           console.error('[Fortis] error:', err);
           setPaymentError(err?.message || 'Payment form error');
         });
+        
+        // Log all events for debugging
+        elements.eventBus.on('*', (eventName: string, data: any) => {
+          console.log('[Fortis] Event:', eventName, data);
+        });
       } else {
         // Fallback to elements.on() if eventBus not available
         console.log('[Fortis] Using elements.on() fallback');
         elements.on('ready', () => console.log('[Fortis] Payment form ready'));
         elements.on('done', handleSuccess);
+        elements.on('tokenize_success', handleSuccess);
         elements.on('error', (err: any) => setPaymentError(err?.message || 'Payment form error'));
       }
       
@@ -395,12 +413,24 @@ export default function PaymentLinkPage() {
       // TICKET FLOW: For recurring products
       // Fortis Elements returns a ticket_id, we process it server-side with save_account: true
       if (intentionType === 'ticket') {
-        const ticketId = fortisResponse?.ticket_id || fortisResponse?.ticketId || 
-          fortisResponse?.data?.ticket_id || fortisResponse?.data?.ticketId;
+        // Log full response to understand structure
+        console.log('[PaymentLink] Ticket flow - full fortisResponse:', JSON.stringify(fortisResponse, null, 2));
         
-        console.log('[PaymentLink] Ticket flow - ticketId:', ticketId);
+        // Try multiple possible locations for ticket_id
+        // Fortis Elements may return: { ticket: { id: '...' } } or { ticket_id: '...' } or { data: { ticket_id: '...' } }
+        const ticketId = 
+          fortisResponse?.ticket?.id ||
+          fortisResponse?.ticket_id || 
+          fortisResponse?.ticketId ||
+          fortisResponse?.data?.ticket?.id ||
+          fortisResponse?.data?.ticket_id || 
+          fortisResponse?.data?.ticketId ||
+          fortisResponse?.id; // Sometimes the response IS the ticket object
+        
+        console.log('[PaymentLink] Ticket flow - extracted ticketId:', ticketId);
 
         if (!ticketId) {
+          console.error('[PaymentLink] Could not extract ticket_id from response');
           setPaymentError('Card tokenization failed. Please try again.');
           setProcessing(false);
           return;
