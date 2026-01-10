@@ -44,6 +44,7 @@ const publicApiRoutes = [
   '/api/admin/fetch-location-id', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/debug-fortis-onboarding', // TEMPORARY - DELETE AFTER USE!
   '/api/admin/set-fortis-credentials', // TEMPORARY - DELETE AFTER USE!
+  '/api/admin/sync-fortis-credentials', // TEMPORARY - Sync credentials when webhook fails
   '/api/public/', // All public APIs (payment forms, etc.)
   '/api/fortis/webhooks', // Fortis webhook callbacks
   '/api/admin/debug-portals', // TEMPORARY - DELETE AFTER USE!
