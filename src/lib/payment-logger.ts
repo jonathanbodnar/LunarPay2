@@ -17,7 +17,11 @@ export type PaymentEventType =
   | 'refund.failed'
   | 'webhook.received'
   | 'webhook.processed'
-  | 'webhook.failed';
+  | 'webhook.failed'
+  | 'subscription.created'
+  | 'subscription.trial_started'
+  | 'subscription.renewed'
+  | 'subscription.cancelled';
 
 export interface PaymentEventData {
   eventType: PaymentEventType;
