@@ -275,12 +275,14 @@ export default function PaymentLinkPage() {
         if (isAvailable) {
           const initialCart = { [product.id]: 1 };
           setCart(initialCart);
-          // Get token for this amount - pass cart explicitly since state update is async
+          // Get token for this amount - pass cart AND payment link explicitly 
+          // since state updates are async and won't be ready immediately
           await getPaymentToken(
             data.paymentLink.organizationId, 
             Number(product.product.price),
             data.paymentLink.id,
-            initialCart // Pass cart explicitly
+            initialCart,           // Pass cart explicitly
+            data.paymentLink       // Pass payment link explicitly - CRITICAL for subscription detection!
           );
         }
       }
@@ -291,8 +293,18 @@ export default function PaymentLinkPage() {
     }
   };
 
-  const getPaymentToken = async (orgId: number, amount: number, linkId: number, currentCart?: Record<number, number>) => {
+  const getPaymentToken = async (
+    orgId: number, 
+    amount: number, 
+    linkId: number, 
+    currentCart?: Record<number, number>,
+    currentPaymentLink?: PaymentLink // Pass payment link data explicitly for initial load
+  ) => {
     if (amount <= 0) return;
+    
+    // Use passed payment link data if available (for initial load when state hasn't updated yet)
+    // This is critical because setPaymentLink is async and state won't be updated immediately
+    const linkData = currentPaymentLink || paymentLink;
     
     // Check if any product in cart is a subscription - need to save card for recurring
     // Use passed cart if available (for initial load when state hasn't updated yet)
@@ -300,12 +312,12 @@ export default function PaymentLinkPage() {
     
     // Check both: products in cart AND any subscription product on this link
     // This ensures we use ticket intention if ANY product is a subscription
-    const hasSubscriptionInCart = paymentLink?.products.some(plp => 
+    const hasSubscriptionInCart = linkData?.products.some(plp => 
       cartToCheck[plp.id] && cartToCheck[plp.id] > 0 && plp.product.isSubscription
     );
     
     // Also check if any product on this link is a subscription (for single-product links)
-    const hasAnySubscriptionProduct = paymentLink?.products.some(plp => plp.product.isSubscription);
+    const hasAnySubscriptionProduct = linkData?.products.some(plp => plp.product.isSubscription);
     
     const hasSubscription = hasSubscriptionInCart || hasAnySubscriptionProduct;
     const shouldSaveCard = hasSubscription || savePaymentMethod;
@@ -316,6 +328,8 @@ export default function PaymentLinkPage() {
       hasAnySubscriptionProduct,
       hasSubscription,
       cartToCheck,
+      linkDataAvailable: !!linkData,
+      products: linkData?.products?.map(p => ({ id: p.id, isSubscription: p.product.isSubscription })),
     });
     
     try {
