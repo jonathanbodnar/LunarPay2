@@ -18,9 +18,7 @@ import {
   X,
   HelpCircle,
   ChevronDown,
-  Rocket,
-  Ticket,
-  Shield
+  Rocket
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -75,15 +73,6 @@ const navigation: NavItem[] = [
       { name: 'Integrations', href: '/settings/integrations', permission: 'manage_settings' },
       { name: 'Team', href: '/settings/team', permission: 'manage_team' },
       { name: 'Notifications', href: '/settings/notifications', permission: 'manage_settings' },
-    ]
-  },
-  { 
-    name: 'Admin', 
-    href: '/admin/tickets', 
-    icon: Shield,
-    permission: 'manage_settings', // Only owners/admins see this
-    children: [
-      { name: 'Support Tickets', href: '/admin/tickets', permission: 'manage_settings' },
     ]
   },
 ];

@@ -1,20 +1,11 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { requireAdmin } from '@/lib/admin-auth';
 import { prisma } from '@/lib/prisma';
 
-// GET /api/admin/tickets - List all tickets (admin only)
+// GET /api/admin/tickets - List all tickets (super admin only)
 export async function GET(request: Request) {
   try {
-    const currentUser = await requireAuth();
-
-    // Check if user is admin (has organizations = account owner)
-    const isAdmin = await prisma.organization.findFirst({
-      where: { userId: currentUser.userId },
-    });
-
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
+    await requireAdmin();
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
@@ -101,7 +92,7 @@ export async function GET(request: Request) {
       counts,
     });
   } catch (error) {
-    if ((error as Error).message === 'Unauthorized') {
+    if ((error as Error).message === 'AdminUnauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('List admin tickets error:', error);

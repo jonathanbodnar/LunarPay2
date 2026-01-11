@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { 
   ArrowLeft, 
   Send, 
@@ -80,12 +79,10 @@ export default function AdminTicketDetailPage() {
 
   const fetchTicket = async () => {
     try {
-      const res = await fetch(`/api/tickets/${params.id}`, { credentials: 'include' });
+      const res = await fetch(`/api/admin/tickets/${params.id}`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setTicket(data.ticket);
-      } else if (res.status === 403) {
-        router.push('/admin/tickets');
       }
     } catch (error) {
       console.error('Failed to fetch ticket:', error);
@@ -99,7 +96,7 @@ export default function AdminTicketDetailPage() {
 
     setSendingMessage(true);
     try {
-      const res = await fetch(`/api/tickets/${ticket.id}/messages`, {
+      const res = await fetch(`/api/admin/tickets/${ticket.id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: newMessage }),
@@ -127,7 +124,7 @@ export default function AdminTicketDetailPage() {
     setUpdatingStatus(true);
     setShowActions(false);
     try {
-      const res = await fetch(`/api/tickets/${ticket.id}`, {
+      const res = await fetch(`/api/admin/tickets/${ticket.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -146,11 +143,11 @@ export default function AdminTicketDetailPage() {
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      open: 'bg-blue-100 text-blue-700',
-      in_progress: 'bg-yellow-100 text-yellow-700',
-      resolved: 'bg-green-100 text-green-700',
-      closed: 'bg-gray-100 text-gray-700',
-      archived: 'bg-gray-100 text-gray-500',
+      open: 'bg-blue-500/20 text-blue-400',
+      in_progress: 'bg-yellow-500/20 text-yellow-400',
+      resolved: 'bg-green-500/20 text-green-400',
+      closed: 'bg-slate-500/20 text-slate-400',
+      archived: 'bg-slate-500/20 text-slate-500',
     };
     const labels: Record<string, string> = {
       open: 'Open',
@@ -168,10 +165,10 @@ export default function AdminTicketDetailPage() {
 
   const getPriorityBadge = (priority: string) => {
     const styles: Record<string, string> = {
-      low: 'bg-gray-100 text-gray-600',
-      normal: 'bg-blue-100 text-blue-600',
-      high: 'bg-orange-100 text-orange-600',
-      urgent: 'bg-red-100 text-red-600',
+      low: 'bg-slate-500/20 text-slate-400',
+      normal: 'bg-blue-500/20 text-blue-400',
+      high: 'bg-orange-500/20 text-orange-400',
+      urgent: 'bg-red-500/20 text-red-400',
     };
     return (
       <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${styles[priority] || styles.normal}`}>
@@ -183,7 +180,7 @@ export default function AdminTicketDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
       </div>
     );
   }
@@ -192,8 +189,12 @@ export default function AdminTicketDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
         <XCircle className="h-12 w-12 text-red-500 mb-4" />
-        <h2 className="text-lg font-medium">Ticket not found</h2>
-        <Button variant="outline" onClick={() => router.push('/admin/tickets')} className="mt-4">
+        <h2 className="text-lg font-medium text-white">Ticket not found</h2>
+        <Button 
+          variant="outline" 
+          onClick={() => router.push('/admin/tickets')} 
+          className="mt-4 bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
+        >
           Back to Tickets
         </Button>
       </div>
@@ -205,17 +206,22 @@ export default function AdminTicketDetailPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-4">
-          <Button variant="ghost" size="sm" onClick={() => router.push('/admin/tickets')}>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => router.push('/admin/tickets')}
+            className="text-slate-400 hover:text-white hover:bg-slate-700"
+          >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-mono text-muted-foreground">{ticket.ticketNumber}</span>
+              <span className="text-sm font-mono text-slate-500">{ticket.ticketNumber}</span>
               {getStatusBadge(ticket.status)}
               {getPriorityBadge(ticket.priority)}
             </div>
-            <h1 className="text-xl font-semibold mt-1">{ticket.subject}</h1>
-            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+            <h1 className="text-xl font-semibold text-white mt-1">{ticket.subject}</h1>
+            <div className="flex items-center gap-4 mt-2 text-sm text-slate-400">
               <span className="flex items-center gap-1">
                 <User className="h-3 w-3" />
                 {ticket.user.name} ({ticket.user.email})
@@ -241,6 +247,7 @@ export default function AdminTicketDetailPage() {
             size="sm"
             onClick={() => setShowActions(!showActions)}
             disabled={updatingStatus}
+            className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
           >
             {updatingStatus ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -253,50 +260,50 @@ export default function AdminTicketDetailPage() {
           </Button>
           
           {showActions && (
-            <div className="absolute right-0 mt-2 w-48 bg-background border border-border rounded-lg shadow-lg z-10">
+            <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-10">
               <div className="py-1">
                 {ticket.status !== 'in_progress' && (
                   <button
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
                     onClick={() => updateStatus('in_progress')}
                   >
-                    <Clock className="h-4 w-4 text-yellow-600" />
+                    <Clock className="h-4 w-4 text-yellow-400" />
                     Mark In Progress
                   </button>
                 )}
                 {ticket.status !== 'resolved' && (
                   <button
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
                     onClick={() => updateStatus('resolved')}
                   >
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <CheckCircle2 className="h-4 w-4 text-green-400" />
                     Mark Resolved
                   </button>
                 )}
                 {ticket.status !== 'closed' && (
                   <button
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
                     onClick={() => updateStatus('closed')}
                   >
-                    <XCircle className="h-4 w-4 text-gray-600" />
+                    <XCircle className="h-4 w-4 text-slate-400" />
                     Close Ticket
                   </button>
                 )}
                 {ticket.status !== 'archived' && (
                   <button
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
                     onClick={() => updateStatus('archived')}
                   >
-                    <Archive className="h-4 w-4 text-gray-500" />
+                    <Archive className="h-4 w-4 text-slate-500" />
                     Archive
                   </button>
                 )}
                 {ticket.status !== 'open' && (
                   <button
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
                     onClick={() => updateStatus('open')}
                   >
-                    <AlertTriangle className="h-4 w-4 text-blue-600" />
+                    <AlertTriangle className="h-4 w-4 text-blue-400" />
                     Reopen Ticket
                   </button>
                 )}
@@ -307,7 +314,7 @@ export default function AdminTicketDetailPage() {
       </div>
 
       {/* Chat Messages */}
-      <Card className="flex flex-col" style={{ height: 'calc(100vh - 300px)', minHeight: '400px' }}>
+      <Card className="bg-slate-800 border-slate-700 flex flex-col" style={{ height: 'calc(100vh - 300px)', minHeight: '400px' }}>
         <CardContent className="flex-1 overflow-y-auto p-4">
           <div className="space-y-4">
             {ticket.messages.map((msg) => (
@@ -318,13 +325,13 @@ export default function AdminTicketDetailPage() {
                 <div
                   className={`max-w-[75%] rounded-lg p-3 ${
                     msg.isAdminReply
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-gray-100 text-gray-900'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-700 text-white'
                   }`}
                 >
                   <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
                   <div className={`flex items-center gap-2 mt-2 text-xs ${
-                    msg.isAdminReply ? 'text-primary-foreground/70' : 'text-gray-500'
+                    msg.isAdminReply ? 'text-blue-200' : 'text-slate-400'
                   }`}>
                     <span>{msg.user.name}</span>
                     <span>•</span>
@@ -339,10 +346,10 @@ export default function AdminTicketDetailPage() {
 
         {/* Reply input */}
         {ticket.status !== 'closed' && ticket.status !== 'archived' && (
-          <div className="border-t p-4">
+          <div className="border-t border-slate-700 p-4">
             <div className="flex gap-2">
               <textarea
-                className="flex-1 min-h-[80px] px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none"
+                className="flex-1 min-h-[80px] px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white placeholder:text-slate-400 text-sm resize-none focus:outline-none focus:border-blue-500"
                 placeholder="Type your reply... (Enter to send, Shift+Enter for new line)"
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
@@ -357,7 +364,7 @@ export default function AdminTicketDetailPage() {
               <Button 
                 onClick={sendMessage} 
                 disabled={sendingMessage || !newMessage.trim()}
-                className="self-end"
+                className="self-end bg-blue-600 hover:bg-blue-700"
               >
                 {sendingMessage ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -373,7 +380,7 @@ export default function AdminTicketDetailPage() {
         )}
 
         {(ticket.status === 'closed' || ticket.status === 'archived') && (
-          <div className="border-t p-4 bg-gray-50 text-center text-sm text-muted-foreground">
+          <div className="border-t border-slate-700 p-4 bg-slate-800/50 text-center text-sm text-slate-400">
             This ticket is {ticket.status}. Reopen it to send more messages.
           </div>
         )}

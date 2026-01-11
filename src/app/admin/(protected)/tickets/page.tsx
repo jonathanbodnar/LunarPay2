@@ -78,8 +78,6 @@ export default function AdminTicketsPage() {
         const data = await res.json();
         setTickets(data.tickets || []);
         setCounts(data.counts || { all: 0, open: 0, in_progress: 0, resolved: 0, closed: 0, archived: 0 });
-      } else if (res.status === 403) {
-        router.push('/dashboard');
       }
     } catch (error) {
       console.error('Failed to fetch tickets:', error);
@@ -90,11 +88,11 @@ export default function AdminTicketsPage() {
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      open: 'bg-blue-100 text-blue-700',
-      in_progress: 'bg-yellow-100 text-yellow-700',
-      resolved: 'bg-green-100 text-green-700',
-      closed: 'bg-gray-100 text-gray-700',
-      archived: 'bg-gray-100 text-gray-500',
+      open: 'bg-blue-500/20 text-blue-400',
+      in_progress: 'bg-yellow-500/20 text-yellow-400',
+      resolved: 'bg-green-500/20 text-green-400',
+      closed: 'bg-slate-500/20 text-slate-400',
+      archived: 'bg-slate-500/20 text-slate-500',
     };
     const labels: Record<string, string> = {
       open: 'Open',
@@ -112,10 +110,10 @@ export default function AdminTicketsPage() {
 
   const getPriorityBadge = (priority: string) => {
     const styles: Record<string, string> = {
-      low: 'bg-gray-100 text-gray-600',
-      normal: 'bg-blue-100 text-blue-600',
-      high: 'bg-orange-100 text-orange-600',
-      urgent: 'bg-red-100 text-red-600',
+      low: 'bg-slate-500/20 text-slate-400',
+      normal: 'bg-blue-500/20 text-blue-400',
+      high: 'bg-orange-500/20 text-orange-400',
+      urgent: 'bg-red-500/20 text-red-400',
     };
     return (
       <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${styles[priority] || styles.normal}`}>
@@ -136,13 +134,8 @@ export default function AdminTicketsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold flex items-center gap-2">
-          <Ticket className="h-6 w-6" />
-          Support Tickets
-        </h1>
-        <p className="mt-1 text-muted-foreground">
-          Manage customer support requests
-        </p>
+        <h1 className="text-2xl font-bold text-white">Support Tickets</h1>
+        <p className="text-slate-400 mt-1">Manage customer support requests from all merchants</p>
       </div>
 
       {/* Status tabs */}
@@ -153,11 +146,17 @@ export default function AdminTicketsPage() {
             variant={statusFilter === tab.key ? 'default' : 'outline'}
             size="sm"
             onClick={() => setStatusFilter(tab.key)}
-            className="whitespace-nowrap"
+            className={`whitespace-nowrap ${
+              statusFilter === tab.key 
+                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+            }`}
           >
             <tab.icon className="h-4 w-4 mr-2" />
             {tab.label}
-            <span className="ml-2 bg-white/20 px-1.5 py-0.5 rounded text-xs">
+            <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
+              statusFilter === tab.key ? 'bg-white/20' : 'bg-slate-700'
+            }`}>
               {counts[tab.key as keyof StatusCounts]}
             </span>
           </Button>
@@ -166,9 +165,9 @@ export default function AdminTicketsPage() {
 
       {/* Priority filter */}
       <div className="flex items-center gap-2">
-        <Filter className="h-4 w-4 text-muted-foreground" />
+        <Filter className="h-4 w-4 text-slate-400" />
         <select
-          className="h-9 px-3 rounded-lg border border-border bg-background text-sm"
+          className="h-9 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm"
           value={priorityFilter}
           onChange={(e) => setPriorityFilter(e.target.value)}
         >
@@ -182,14 +181,14 @@ export default function AdminTicketsPage() {
 
       {loading ? (
         <div className="flex items-center justify-center min-h-[300px]">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
         </div>
       ) : tickets.length === 0 ? (
-        <Card>
+        <Card className="bg-slate-800 border-slate-700">
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Ticket className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No tickets found</h3>
-            <p className="text-muted-foreground text-center">
+            <Ticket className="h-12 w-12 text-slate-500 mb-4" />
+            <h3 className="text-lg font-medium text-white mb-2">No tickets found</h3>
+            <p className="text-slate-400 text-center">
               {statusFilter !== 'all' 
                 ? `No ${statusFilter.replace('_', ' ')} tickets`
                 : 'No support tickets have been submitted yet'}
@@ -201,23 +200,23 @@ export default function AdminTicketsPage() {
           {tickets.map((ticket) => (
             <Card
               key={ticket.id}
-              className="cursor-pointer hover:border-primary/50 transition-colors"
+              className="bg-slate-800 border-slate-700 cursor-pointer hover:border-blue-500/50 transition-colors"
               onClick={() => router.push(`/admin/tickets/${ticket.id}`)}
             >
               <CardContent className="p-4">
                 <div className="flex items-start gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-xs font-mono text-muted-foreground">{ticket.ticketNumber}</span>
+                      <span className="text-xs font-mono text-slate-500">{ticket.ticketNumber}</span>
                       {getStatusBadge(ticket.status)}
                       {getPriorityBadge(ticket.priority)}
                       {ticket.category && (
-                        <span className="text-xs text-muted-foreground">• {ticket.category}</span>
+                        <span className="text-xs text-slate-500">• {ticket.category}</span>
                       )}
                     </div>
-                    <h3 className="font-medium">{ticket.subject}</h3>
+                    <h3 className="font-medium text-white">{ticket.subject}</h3>
                     
-                    <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-4 mt-2 text-sm text-slate-400">
                       <span className="flex items-center gap-1">
                         <User className="h-3 w-3" />
                         {ticket.user.name}
@@ -231,25 +230,25 @@ export default function AdminTicketsPage() {
                     </div>
 
                     {ticket.lastMessage && (
-                      <p className="text-sm text-muted-foreground mt-2 line-clamp-1">
+                      <p className="text-sm text-slate-400 mt-2 line-clamp-1">
                         {ticket.lastMessage.isAdminReply ? (
-                          <span className="text-green-600 font-medium">You: </span>
+                          <span className="text-green-400 font-medium">You: </span>
                         ) : (
-                          <span className="text-blue-600 font-medium">Customer: </span>
+                          <span className="text-blue-400 font-medium">Customer: </span>
                         )}
                         {ticket.lastMessage.message}
                       </p>
                     )}
                   </div>
                   
-                  <div className="text-right text-xs text-muted-foreground">
+                  <div className="text-right text-xs text-slate-500">
                     <p>{new Date(ticket.createdAt).toLocaleDateString()}</p>
                     <p className="flex items-center gap-1 justify-end mt-1">
                       <MessageSquare className="h-3 w-3" />
                       {ticket.messageCount}
                     </p>
                     {ticket.lastMessage && !ticket.lastMessage.isAdminReply && ticket.status !== 'closed' && (
-                      <span className="inline-block mt-2 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs">
+                      <span className="inline-block mt-2 px-2 py-0.5 bg-red-500/20 text-red-400 rounded-full text-xs">
                         Needs Reply
                       </span>
                     )}

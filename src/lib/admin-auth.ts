@@ -1,0 +1,110 @@
+// Super Admin Authentication
+// This is for LunarPay platform administrators only
+
+import { cookies } from 'next/headers';
+import { sign, verify } from 'jsonwebtoken';
+
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'lunarpay-super-admin-secret-change-in-production';
+const ADMIN_COOKIE_NAME = 'lunarpay_admin_token';
+
+// Super admin credentials (in production, store hashed in DB)
+const SUPER_ADMIN_EMAIL = 'admin@lunarpay.com';
+const SUPER_ADMIN_PASSWORD = 'Trump2028!##!9';
+
+export interface AdminJWTPayload {
+  email: string;
+  isSuperAdmin: true;
+  iat?: number;
+  exp?: number;
+}
+
+/**
+ * Verify super admin credentials
+ */
+export function verifySuperAdminCredentials(email: string, password: string): boolean {
+  return email === SUPER_ADMIN_EMAIL && password === SUPER_ADMIN_PASSWORD;
+}
+
+/**
+ * Generate admin JWT token
+ */
+export function generateAdminToken(email: string): string {
+  return sign(
+    { email, isSuperAdmin: true },
+    ADMIN_JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+}
+
+/**
+ * Verify admin JWT token
+ */
+export function verifyAdminToken(token: string): AdminJWTPayload | null {
+  try {
+    const decoded = verify(token, ADMIN_JWT_SECRET) as AdminJWTPayload;
+    if (decoded.isSuperAdmin) {
+      return decoded;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get admin token from cookies (server-side)
+ */
+export async function getAdminTokenFromCookies(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ADMIN_COOKIE_NAME);
+  return token?.value || null;
+}
+
+/**
+ * Get current admin from token (server-side)
+ */
+export async function getCurrentAdmin(): Promise<AdminJWTPayload | null> {
+  const token = await getAdminTokenFromCookies();
+  
+  if (!token) {
+    return null;
+  }
+
+  return verifyAdminToken(token);
+}
+
+/**
+ * Set admin auth cookie (server-side)
+ */
+export async function setAdminCookie(token: string): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(ADMIN_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24, // 24 hours
+    path: '/',
+  });
+}
+
+/**
+ * Clear admin auth cookie (server-side)
+ */
+export async function clearAdminCookie(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete(ADMIN_COOKIE_NAME);
+}
+
+/**
+ * Require admin authentication (throws if not authenticated)
+ */
+export async function requireAdmin(): Promise<AdminJWTPayload> {
+  const admin = await getCurrentAdmin();
+  
+  if (!admin) {
+    throw new Error('AdminUnauthorized');
+  }
+
+  return admin;
+}
+
