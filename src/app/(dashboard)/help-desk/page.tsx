@@ -67,6 +67,7 @@ export default function HelpDeskPage() {
   const [loadingTicket, setLoadingTicket] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageError, setMessageError] = useState('');
 
   const [newTicketForm, setNewTicketForm] = useState({
     subject: '',
@@ -122,6 +123,8 @@ export default function HelpDeskPage() {
 
   const viewTicket = async (ticketId: number) => {
     setLoadingTicket(true);
+    setMessageError('');
+    setNewMessage('');
     try {
       const res = await fetch(`/api/tickets/${ticketId}`, { credentials: 'include' });
       if (res.ok) {
@@ -139,6 +142,7 @@ export default function HelpDeskPage() {
     if (!selectedTicket || !newMessage.trim()) return;
 
     setSendingMessage(true);
+    setMessageError('');
     try {
       const res = await fetch(`/api/tickets/${selectedTicket.id}/messages`, {
         method: 'POST',
@@ -147,17 +151,21 @@ export default function HelpDeskPage() {
         credentials: 'include',
       });
 
+      const data = await res.json();
+
       if (res.ok) {
-        const data = await res.json();
         setSelectedTicket(prev => prev ? {
           ...prev,
           messages: [...prev.messages, data.message],
         } : null);
         setNewMessage('');
         fetchTickets(); // Refresh list
+      } else {
+        setMessageError(data.error || 'Failed to send message');
       }
     } catch (error) {
       console.error('Failed to send message:', error);
+      setMessageError('Failed to send message');
     } finally {
       setSendingMessage(false);
     }
@@ -212,7 +220,11 @@ export default function HelpDeskPage() {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => setSelectedTicket(null)}>
+          <Button variant="ghost" onClick={() => {
+            setSelectedTicket(null);
+            setMessageError('');
+            setNewMessage('');
+          }}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
@@ -254,8 +266,13 @@ export default function HelpDeskPage() {
             </div>
 
             {/* Reply input */}
-            {selectedTicket.status !== 'closed' && selectedTicket.status !== 'archived' && (
+            {!['resolved', 'closed', 'archived'].includes(selectedTicket.status) ? (
               <div className="border-t p-4">
+                {messageError && (
+                  <div className="mb-3 p-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                    {messageError}
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Input
                     placeholder="Type your reply..."
@@ -268,6 +285,13 @@ export default function HelpDeskPage() {
                     {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 </div>
+              </div>
+            ) : (
+              <div className="border-t p-4 bg-muted text-center">
+                <p className="text-sm text-muted-foreground">
+                  This ticket is {selectedTicket.status}. 
+                  {selectedTicket.status === 'resolved' && ' If you need further assistance, please create a new ticket.'}
+                </p>
               </div>
             )}
           </CardContent>

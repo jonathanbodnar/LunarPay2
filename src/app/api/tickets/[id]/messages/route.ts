@@ -55,6 +55,14 @@ export async function POST(
       isAdminReply = true;
     }
 
+    // Prevent merchants from replying to resolved, closed, or archived tickets
+    if (!isAdminReply && ['resolved', 'closed', 'archived'].includes(ticket.status)) {
+      return NextResponse.json(
+        { error: `Cannot reply to ${ticket.status} tickets. Please create a new ticket if you need further assistance.` },
+        { status: 400 }
+      );
+    }
+
     // Create message
     const ticketMessage = await prisma.ticketMessage.create({
       data: {
