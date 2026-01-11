@@ -23,12 +23,27 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const organizationId = searchParams.get('organizationId');
 
+    // Get user's organizations
+    const userOrganizations = await prisma.organization.findMany({
+      where: { userId: currentUser.userId },
+      select: { id: true },
+    });
+    const orgIds = userOrganizations.map(org => org.id);
+
     const where: any = {
-      userId: currentUser.userId,
+      OR: [
+        { userId: currentUser.userId },
+        { organizationId: { in: orgIds } },
+      ],
     };
 
     if (organizationId) {
-      where.organizationId = parseInt(organizationId);
+      // If specific org requested, filter to just that org (if user owns it)
+      const requestedOrgId = parseInt(organizationId);
+      if (orgIds.includes(requestedOrgId)) {
+        where.organizationId = requestedOrgId;
+        delete where.OR; // Remove the OR clause since we're filtering by specific org
+      }
     }
 
     const customers = await prisma.donor.findMany({

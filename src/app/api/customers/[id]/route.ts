@@ -23,10 +23,21 @@ export async function GET(
     const { id } = await params;
     const customerId = parseInt(id);
 
+    // First, get the user's organizations
+    const userOrganizations = await prisma.organization.findMany({
+      where: { userId: currentUser.userId },
+      select: { id: true },
+    });
+    const orgIds = userOrganizations.map(org => org.id);
+
+    // Find customer that belongs to user directly OR to user's organizations
     const customer = await prisma.donor.findFirst({
       where: {
         id: customerId,
-        userId: currentUser.userId,
+        OR: [
+          { userId: currentUser.userId },
+          { organizationId: { in: orgIds } },
+        ],
       },
       include: {
         organization: {
@@ -92,11 +103,21 @@ export async function PUT(
 
     const validatedData = updateCustomerSchema.parse(body);
 
-    // Verify ownership
+    // Get user's organizations
+    const userOrganizations = await prisma.organization.findMany({
+      where: { userId: currentUser.userId },
+      select: { id: true },
+    });
+    const orgIds = userOrganizations.map(org => org.id);
+
+    // Verify ownership (direct or via organization)
     const existing = await prisma.donor.findFirst({
       where: {
         id: customerId,
-        userId: currentUser.userId,
+        OR: [
+          { userId: currentUser.userId },
+          { organizationId: { in: orgIds } },
+        ],
       },
     });
 
@@ -155,10 +176,20 @@ export async function DELETE(
     const { id } = await params;
     const customerId = parseInt(id);
 
+    // Get user's organizations
+    const userOrganizations = await prisma.organization.findMany({
+      where: { userId: currentUser.userId },
+      select: { id: true },
+    });
+    const orgIds = userOrganizations.map(org => org.id);
+
     const existing = await prisma.donor.findFirst({
       where: {
         id: customerId,
-        userId: currentUser.userId,
+        OR: [
+          { userId: currentUser.userId },
+          { organizationId: { in: orgIds } },
+        ],
       },
     });
 
