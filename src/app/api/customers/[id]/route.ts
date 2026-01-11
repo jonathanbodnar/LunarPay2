@@ -23,12 +23,20 @@ export async function GET(
     const { id } = await params;
     const customerId = parseInt(id);
 
+    console.log('[Customer API] Fetching customer:', {
+      customerId,
+      userId: currentUser.userId,
+      userEmail: currentUser.email,
+    });
+
     // First, get the user's organizations
     const userOrganizations = await prisma.organization.findMany({
       where: { userId: currentUser.userId },
       select: { id: true },
     });
     const orgIds = userOrganizations.map(org => org.id);
+
+    console.log('[Customer API] User organizations:', orgIds);
 
     // Find customer that belongs to user directly OR to user's organizations
     const customer = await prisma.donor.findFirst({
@@ -68,11 +76,39 @@ export async function GET(
     });
 
     if (!customer) {
+      console.log('[Customer API] Customer not found or not accessible:', {
+        customerId,
+        userId: currentUser.userId,
+        orgIds,
+      });
+      
+      // Check if customer exists at all
+      const anyCustomer = await prisma.donor.findUnique({
+        where: { id: customerId },
+        select: { id: true, userId: true, organizationId: true },
+      });
+      
+      if (anyCustomer) {
+        console.log('[Customer API] Customer exists but not accessible:', {
+          customer: anyCustomer,
+          currentUserId: currentUser.userId,
+          userOrgIds: orgIds,
+        });
+      } else {
+        console.log('[Customer API] Customer does not exist:', customerId);
+      }
+      
       return NextResponse.json(
         { error: 'Customer not found' },
         { status: 404 }
       );
     }
+
+    console.log('[Customer API] Customer found:', {
+      id: customer.id,
+      userId: customer.userId,
+      organizationId: customer.organizationId,
+    });
 
     return NextResponse.json({ customer });
   } catch (error) {
@@ -83,7 +119,7 @@ export async function GET(
       );
     }
 
-    console.error('Get customer error:', error);
+    console.error('[Customer API] Error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
