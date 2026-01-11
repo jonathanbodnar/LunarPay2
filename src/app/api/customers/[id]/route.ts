@@ -38,15 +38,26 @@ export async function GET(
 
     console.log('[Customer API] User organizations:', orgIds);
 
+    // Build where clause - handle case where user has no orgs
+    const whereClause: any = {
+      id: customerId,
+    };
+
+    if (orgIds.length > 0) {
+      whereClause.OR = [
+        { userId: currentUser.userId },
+        { organizationId: { in: orgIds } },
+      ];
+    } else {
+      // User has no orgs, so only match direct ownership
+      whereClause.userId = currentUser.userId;
+    }
+
+    console.log('[Customer API] Where clause:', JSON.stringify(whereClause, null, 2));
+
     // Find customer that belongs to user directly OR to user's organizations
     const customer = await prisma.donor.findFirst({
-      where: {
-        id: customerId,
-        OR: [
-          { userId: currentUser.userId },
-          { organizationId: { in: orgIds } },
-        ],
-      },
+      where: whereClause,
       include: {
         organization: {
           select: {
@@ -146,15 +157,20 @@ export async function PUT(
     });
     const orgIds = userOrganizations.map(org => org.id);
 
+    // Build where clause - handle case where user has no orgs
+    const whereClauseUpdate: any = { id: customerId };
+    if (orgIds.length > 0) {
+      whereClauseUpdate.OR = [
+        { userId: currentUser.userId },
+        { organizationId: { in: orgIds } },
+      ];
+    } else {
+      whereClauseUpdate.userId = currentUser.userId;
+    }
+
     // Verify ownership (direct or via organization)
     const existing = await prisma.donor.findFirst({
-      where: {
-        id: customerId,
-        OR: [
-          { userId: currentUser.userId },
-          { organizationId: { in: orgIds } },
-        ],
-      },
+      where: whereClauseUpdate,
     });
 
     if (!existing) {
@@ -219,14 +235,19 @@ export async function DELETE(
     });
     const orgIds = userOrganizations.map(org => org.id);
 
+    // Build where clause
+    const whereClauseDelete: any = { id: customerId };
+    if (orgIds.length > 0) {
+      whereClauseDelete.OR = [
+        { userId: currentUser.userId },
+        { organizationId: { in: orgIds } },
+      ];
+    } else {
+      whereClauseDelete.userId = currentUser.userId;
+    }
+
     const existing = await prisma.donor.findFirst({
-      where: {
-        id: customerId,
-        OR: [
-          { userId: currentUser.userId },
-          { organizationId: { in: orgIds } },
-        ],
-      },
+      where: whereClauseDelete,
     });
 
     if (!existing) {

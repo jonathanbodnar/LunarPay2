@@ -30,19 +30,27 @@ export async function GET(request: Request) {
     });
     const orgIds = userOrganizations.map(org => org.id);
 
-    const where: any = {
-      OR: [
-        { userId: currentUser.userId },
-        { organizationId: { in: orgIds } },
-      ],
-    };
+    let where: any = {};
 
     if (organizationId) {
       // If specific org requested, filter to just that org (if user owns it)
       const requestedOrgId = parseInt(organizationId);
       if (orgIds.includes(requestedOrgId)) {
         where.organizationId = requestedOrgId;
-        delete where.OR; // Remove the OR clause since we're filtering by specific org
+      } else {
+        // User doesn't own this org, return empty
+        where.id = -1; // No customer will match
+      }
+    } else {
+      // List all customers from user's orgs
+      if (orgIds.length > 0) {
+        where.OR = [
+          { userId: currentUser.userId },
+          { organizationId: { in: orgIds } },
+        ];
+      } else {
+        // User has no orgs, only show direct customers
+        where.userId = currentUser.userId;
       }
     }
 
