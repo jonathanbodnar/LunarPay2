@@ -62,9 +62,9 @@ export async function GET() {
       permissions: string | null;
       organization_name: string;
     }>>`
-      SELECT tm.id, tm.organization_id, tm.role, tm.permissions, cd.company_name as organization_name
+      SELECT tm.id, tm.organization_id, tm.role, tm.permissions, cd.church_name as organization_name
       FROM team_members tm
-      JOIN church_detail cd ON tm.organization_id = cd.id
+      JOIN church_detail cd ON tm.organization_id = cd.ch_id
       WHERE tm.user_id = ${user.id}
     `;
 
