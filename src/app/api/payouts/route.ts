@@ -116,12 +116,13 @@ export async function GET(request: Request) {
       });
     }
 
-    // If batches didn't work, try settlements endpoint
-    console.log('[Payouts API] No batches from Fortis, trying settlements...');
+    // If batches didn't work, try settlements endpoints
+    console.log('[Payouts API] No batches from Fortis, trying multiple settlement endpoints...');
     const settlements = await fortisClient.getSettlements({ page, pageSize });
     
     console.log('[Payouts API] Fortis settlements response:', {
       status: settlements.status,
+      endpoint: settlements.endpoint,
       count: settlements.settlements?.length || 0,
       message: settlements.message,
     });
@@ -157,6 +158,7 @@ export async function GET(request: Request) {
           nextPayoutDate: null,
         },
         source: 'fortis_settlements',
+        fortisEndpoint: settlements.endpoint,
       });
     }
 

@@ -737,10 +737,8 @@ export class FortisClient {
   }
 
   /**
-   * 9. GET SETTLEMENTS (Funding/Deposits)
-   * GET /v1/settlements or /v1/reports/settlement
-   * 
-   * Fetches actual funding/deposit data - when money was transferred to merchant bank
+   * 9. GET SETTLEMENTS (Funding/Deposits) - Try multiple endpoints
+   * Tries various Fortis endpoints to find settlement/payout data
    */
   async getSettlements(params?: {
     page?: number;
@@ -762,51 +760,102 @@ export class FortisClient {
       location_id?: string;
     }>;
     message?: string;
+    endpoint?: string;
   }> {
-    try {
-      const queryParams = new URLSearchParams();
-      if (params?.page) queryParams.append('page[number]', params.page.toString());
-      if (params?.pageSize) queryParams.append('page[size]', (params.pageSize || 50).toString());
-      
-      // Sort by most recent first
-      queryParams.append('sort', '-created_ts');
-      
-      const url = `settlements${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
-      console.log('[Fortis] Fetching settlements:', url);
-      
-      const response = await this.client.get(url);
-      
-      if (response.data?.list && Array.isArray(response.data.list)) {
-        return {
-          status: true,
-          settlements: response.data.list.map((settlement: any) => ({
-            id: settlement.id,
-            settlement_date: settlement.settlement_date || settlement.created_ts,
-            batch_date: settlement.batch_date || settlement.created_ts,
-            deposit_date: settlement.deposit_date,
-            gross_amount: settlement.gross_amount || settlement.total_amount || 0,
-            fee_amount: settlement.fee_amount || settlement.total_fees || 0,
-            net_amount: settlement.net_amount || (settlement.gross_amount - settlement.fee_amount) || 0,
-            transaction_count: settlement.transaction_count || settlement.count || 0,
-            status: settlement.status || (settlement.is_settled ? 'settled' : 'pending'),
-            location_id: settlement.location_id,
-          })),
-        };
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page[number]', params.page.toString());
+    if (params?.pageSize) queryParams.append('page[size]', (params.pageSize || 50).toString());
+    queryParams.append('sort', '-created_ts');
+    
+    const queryString = queryParams.toString();
+    
+    // Try multiple potential endpoints
+    const endpoints = [
+      'deposits',
+      'settlements',
+      'reports/settlement',
+      'funding',
+      'funding-accounts',
+      'batches',
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        const url = `${endpoint}${queryString ? '?' + queryString : ''}`;
+        console.log(`[Fortis] Trying endpoint: ${url}`);
+        
+        const response = await this.client.get(url);
+        
+        console.log(`[Fortis] ${endpoint} response:`, {
+          status: response.status,
+          hasData: !!response.data,
+          keys: Object.keys(response.data || {}),
+        });
+        
+        if (response.data?.list && Array.isArray(response.data.list) && response.data.list.length > 0) {
+          console.log(`[Fortis] SUCCESS: Found data at ${endpoint}`, {
+            count: response.data.list.length,
+            sample: response.data.list[0],
+          });
+          
+          return {
+            status: true,
+            endpoint: endpoint,
+            settlements: response.data.list.map((settlement: any) => ({
+              id: settlement.id,
+              settlement_date: settlement.settlement_date || settlement.created_ts || settlement.date,
+              batch_date: settlement.batch_date || settlement.created_ts || settlement.date,
+              deposit_date: settlement.deposit_date || settlement.funded_at,
+              gross_amount: settlement.gross_amount || settlement.total_amount || settlement.amount || 0,
+              fee_amount: settlement.fee_amount || settlement.total_fees || settlement.fees || 0,
+              net_amount: settlement.net_amount || settlement.net || 
+                          ((settlement.gross_amount || settlement.amount || 0) - (settlement.fee_amount || settlement.fees || 0)),
+              transaction_count: settlement.transaction_count || settlement.count || settlement.txn_count || 0,
+              status: settlement.status || (settlement.is_settled ? 'settled' : 'pending'),
+              location_id: settlement.location_id,
+            })),
+          };
+        }
+        
+        // Also check for 'data' instead of 'list'
+        if (response.data?.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
+          console.log(`[Fortis] SUCCESS: Found data.data at ${endpoint}`, {
+            count: response.data.data.length,
+            sample: response.data.data[0],
+          });
+          
+          return {
+            status: true,
+            endpoint: endpoint,
+            settlements: response.data.data.map((settlement: any) => ({
+              id: settlement.id,
+              settlement_date: settlement.settlement_date || settlement.created_ts || settlement.date,
+              batch_date: settlement.batch_date || settlement.created_ts || settlement.date,
+              deposit_date: settlement.deposit_date || settlement.funded_at,
+              gross_amount: settlement.gross_amount || settlement.total_amount || settlement.amount || 0,
+              fee_amount: settlement.fee_amount || settlement.total_fees || settlement.fees || 0,
+              net_amount: settlement.net_amount || settlement.net || 
+                          ((settlement.gross_amount || settlement.amount || 0) - (settlement.fee_amount || settlement.fees || 0)),
+              transaction_count: settlement.transaction_count || settlement.count || settlement.txn_count || 0,
+              status: settlement.status || (settlement.is_settled ? 'settled' : 'pending'),
+              location_id: settlement.location_id,
+            })),
+          };
+        }
+      } catch (error) {
+        const status = (error as any)?.response?.status;
+        console.log(`[Fortis] ${endpoint} failed:`, {
+          status,
+          error: status === 404 ? 'Not Found' : (error as any)?.message,
+        });
+        // Continue to next endpoint
       }
-      
-      return {
-        status: true,
-        settlements: [],
-        message: 'No settlements found',
-      };
-    } catch (error) {
-      console.error('[Fortis] Get settlements error:', error);
-      // If settlements endpoint doesn't exist, fall back to transaction batches
-      return {
-        status: false,
-        message: this.formatError(error),
-      };
     }
+    
+    return {
+      status: false,
+      message: 'No settlement endpoints returned data. Tried: ' + endpoints.join(', '),
+    };
   }
 }
 
