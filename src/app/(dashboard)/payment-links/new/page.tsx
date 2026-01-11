@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Plus, Trash2, Webhook, HelpCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { ProductSelect } from '@/components/forms/ProductSelect';
+import { QuantitySelect } from '@/components/forms/QuantitySelect';
 
 export default function NewPaymentLinkPage() {
   const router = useRouter();
@@ -260,17 +261,19 @@ export default function NewPaymentLinkPage() {
                       </div>
                     )}
                   </div>
-                  <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">Quantity</label>
-                    <Input
-                      type="number"
-                      min="1"
+                  <div className="col-span-3">
+                    <QuantitySelect
+                      label="Quantity"
                       value={item.qty}
-                      onChange={(e) => updateProduct(index, 'qty', parseInt(e.target.value) || 1)}
-                      disabled={item.unlimitedQty}
+                      isUnlimited={item.unlimitedQty}
+                      onChange={(val, isUnlimited) => {
+                        updateProduct(index, 'qty', val || 1);
+                        updateProduct(index, 'unlimitedQty', isUnlimited);
+                      }}
+                      showUnlimited={true}
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-3">
                     <label className="text-xs text-muted-foreground">Price</label>
                     <Input
                       type="number"
@@ -279,21 +282,6 @@ export default function NewPaymentLinkPage() {
                       value={item.price}
                       onChange={(e) => updateProduct(index, 'price', parseFloat(e.target.value) || 0)}
                     />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">No Limit</label>
-                    <div className="flex items-center gap-2 h-10">
-                      <input
-                        type="checkbox"
-                        id={`unlimited-${index}`}
-                        checked={item.unlimitedQty}
-                        onChange={(e) => updateProduct(index, 'unlimitedQty', e.target.checked)}
-                        className="h-4 w-4"
-                      />
-                      <label htmlFor={`unlimited-${index}`} className="text-sm text-muted-foreground">
-                        ∞
-                      </label>
-                    </div>
                   </div>
                   <div className="col-span-1">
                     <Button

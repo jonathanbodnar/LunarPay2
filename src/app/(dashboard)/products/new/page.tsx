@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { QuantitySelect } from '@/components/forms/QuantitySelect';
 
 export default function NewProductPage() {
   const router = useRouter();
@@ -17,7 +18,8 @@ export default function NewProductPage() {
     name: '',
     description: '',
     price: '',
-    qty: '',
+    qty: null as number | null,
+    qtyUnlimited: true,
     recurrence: 'one_time', // one_time, periodically, custom
     billingPeriod: 'monthly', // daily, weekly, monthly, quarterly, yearly
     customSchedule: [] as Array<{ date: string; amount: string }>,
@@ -76,7 +78,7 @@ export default function NewProductPage() {
           name: formData.name,
           description: formData.description,
           price: parseFloat(formData.price),
-          qty: formData.qty ? parseInt(formData.qty) : null,
+          qty: formData.qtyUnlimited ? null : formData.qty,
           isSubscription: formData.recurrence !== 'one_time',
           subscriptionInterval: formData.recurrence === 'periodically' ? formData.billingPeriod : null,
           recurrence: formData.recurrence,
@@ -166,16 +168,19 @@ export default function NewProductPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Inventory (blank = no limit)</label>
-                <Input
-                  type="number"
-                  min="0"
+                <label className="text-sm font-medium">Inventory</label>
+                <QuantitySelect
                   value={formData.qty}
-                  onChange={(e) => setFormData({ ...formData, qty: e.target.value })}
-                  placeholder="No limit"
+                  isUnlimited={formData.qtyUnlimited}
+                  onChange={(val, isUnlimited) => setFormData({ 
+                    ...formData, 
+                    qty: val, 
+                    qtyUnlimited: isUnlimited 
+                  })}
+                  showUnlimited={true}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Leave blank for unlimited inventory. Set a number to track stock.
+                  Set inventory quantity or select unlimited for no limit.
                 </p>
               </div>
             </div>

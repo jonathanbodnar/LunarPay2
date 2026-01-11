@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { CustomerSelect } from '@/components/forms/CustomerSelect';
 import { ProductSelect } from '@/components/forms/ProductSelect';
+import { QuantitySelect } from '@/components/forms/QuantitySelect';
 
 function NewInvoiceContent() {
   const router = useRouter();
@@ -245,13 +246,11 @@ function NewInvoiceContent() {
                     )}
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">Quantity *</label>
-                    <Input
-                      type="number"
-                      min="1"
+                    <QuantitySelect
+                      label="Quantity *"
                       value={item.qty}
-                      onChange={(e) => updateLineItem(index, 'qty', parseInt(e.target.value))}
-                      required
+                      onChange={(val) => updateLineItem(index, 'qty', val || 1)}
+                      showUnlimited={false}
                     />
                   </div>
                   <div className="col-span-3">
