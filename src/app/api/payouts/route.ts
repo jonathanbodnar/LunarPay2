@@ -168,19 +168,19 @@ export async function GET(request: Request) {
  * Groups transactions by day and shows what should have been deposited
  */
 async function calculatePayoutsFromTransactions(organizationId: number) {
-  // Get successful transactions grouped by date
+  // Get all transactions (successful and refunded) grouped by date
   const transactions = await prisma.transaction.findMany({
     where: {
       organizationId,
-      status: 'P', // Successful transactions only
+      status: { in: ['P', 'R'] }, // Successful and Refunded transactions
     },
     select: {
       id: true,
       totalAmount: true,
       subTotalAmount: true,
       fee: true,
+      status: true, // P = Success, R = Refunded
       createdAt: true,
-      isRefund: true,
     },
     orderBy: { createdAt: 'desc' },
     take: 500, // Last 500 transactions for grouping
@@ -212,10 +212,12 @@ async function calculatePayoutsFromTransactions(organizationId: number) {
     const amount = Number(tx.totalAmount) || 0;
     const fee = Number(tx.fee) || 0;
 
-    if (tx.isRefund) {
+    if (tx.status === 'R') {
+      // Refunded transaction
       existing.refundAmount += amount;
       existing.refundCount += 1;
     } else {
+      // Successful transaction
       existing.totalAmount += amount;
       existing.totalFees += fee;
       existing.netAmount += amount - fee;
