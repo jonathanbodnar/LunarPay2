@@ -765,13 +765,56 @@ export default function CustomerDetailPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Transaction History</CardTitle>
-            <Button variant="outline" size="sm">View All</Button>
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-center py-8">
-            No transactions yet
-          </p>
+          {customer?.transactions && customer.transactions.length > 0 ? (
+            <div className="space-y-3">
+              {customer.transactions.map((txn: any) => (
+                <div key={txn.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    {txn.source === 'CC' ? (
+                      <CreditCard className="h-5 w-5 text-muted-foreground" />
+                    ) : (
+                      <Landmark className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <div>
+                      <p className="font-medium">
+                        {formatCurrency(Number(txn.totalAmount))}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatDate(txn.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    {txn.status === 'P' ? (
+                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                        Success
+                      </span>
+                    ) : txn.status === 'R' ? (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                        Refunded
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">
+                        Failed
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {customer._count?.transactions > 10 && (
+                <p className="text-center text-sm text-muted-foreground pt-2">
+                  Showing 10 of {customer._count.transactions} transactions
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-center py-8">
+              No transactions yet
+            </p>
+          )}
         </CardContent>
       </Card>
 

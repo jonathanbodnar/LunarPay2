@@ -35,6 +35,17 @@ export async function GET(
             name: true,
           },
         },
+        transactions: {
+          orderBy: { createdAt: 'desc' },
+          take: 10, // Last 10 transactions
+          select: {
+            id: true,
+            totalAmount: true,
+            source: true,
+            status: true,
+            createdAt: true,
+          },
+        },
         _count: {
           select: {
             transactions: true,

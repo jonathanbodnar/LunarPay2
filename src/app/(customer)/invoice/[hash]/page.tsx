@@ -253,6 +253,12 @@ export default function PublicInvoicePage() {
         setEmail(data.invoice.donor.email);
       }
 
+      // Auto-check save card if invoice contains subscription
+      const hasSubscription = data.invoice.products.some((p: any) => p.product?.isSubscription);
+      if (hasSubscription) {
+        setSavePaymentMethod(true);
+      }
+
       // Get transaction intention token - pass invoice data explicitly for subscription detection
       await getPaymentToken(
         data.invoice.organizationId, 
@@ -741,14 +747,20 @@ export default function PublicInvoicePage() {
                   </div>
 
                   {/* Save Payment Method */}
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className={`flex items-center gap-2 ${invoice?.products.some(p => p.product?.isSubscription) ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={savePaymentMethod}
                       onChange={(e) => setSavePaymentMethod(e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                      disabled={invoice?.products.some(p => p.product?.isSubscription)}
+                      className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black disabled:opacity-50"
                     />
-                    <span className="text-sm text-gray-600">Save payment method for future use</span>
+                    <span className="text-sm text-gray-600">
+                      Save payment method for future use
+                      {invoice?.products.some(p => p.product?.isSubscription) && (
+                        <span className="text-xs text-muted-foreground ml-2">(Required for subscription)</span>
+                      )}
+                    </span>
                   </label>
 
                   {/* Submit Button */}
