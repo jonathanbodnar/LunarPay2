@@ -3,15 +3,20 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 // Available permissions for team members
+// These IDs must match what's used in the sidebar and permissions.ts
 export const AVAILABLE_PERMISSIONS = [
-  { id: 'dashboard', name: 'Dashboard', description: 'View dashboard overview' },
-  { id: 'invoices', name: 'Invoices', description: 'Create and manage invoices' },
-  { id: 'payment_links', name: 'Payment Links', description: 'Create and manage payment links' },
-  { id: 'transactions', name: 'Transactions', description: 'View transactions' },
-  { id: 'subscriptions', name: 'Subscriptions', description: 'Manage subscriptions' },
-  { id: 'customers', name: 'Customers', description: 'View and manage customers' },
-  { id: 'products', name: 'Products', description: 'Manage products' },
-  { id: 'payouts', name: 'Payouts', description: 'View payouts' },
+  { id: 'view_transactions', name: 'View Transactions', description: 'View transactions and payment history' },
+  { id: 'create_transactions', name: 'Create Transactions', description: 'Process new payments' },
+  { id: 'refund_transactions', name: 'Refund Transactions', description: 'Process refunds' },
+  { id: 'view_customers', name: 'View Customers', description: 'View customer list and details' },
+  { id: 'manage_customers', name: 'Manage Customers', description: 'Create and edit customers' },
+  { id: 'view_invoices', name: 'View Invoices', description: 'View invoices and payment links' },
+  { id: 'manage_invoices', name: 'Manage Invoices', description: 'Create and manage invoices' },
+  { id: 'view_products', name: 'View Products', description: 'View product catalog' },
+  { id: 'manage_products', name: 'Manage Products', description: 'Create and edit products' },
+  { id: 'view_reports', name: 'View Reports', description: 'Access reports and analytics' },
+  { id: 'manage_team', name: 'Manage Team', description: 'Invite and manage team members' },
+  { id: 'manage_settings', name: 'Manage Settings', description: 'Access organization settings' },
 ] as const;
 
 // GET /api/team - List team members and pending invites

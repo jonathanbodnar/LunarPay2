@@ -341,20 +341,20 @@ export default function TeamPage() {
                 <p className="text-xs text-muted-foreground mb-2">
                   Select what this member can access:
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
                   {availablePermissions.map((perm) => (
                     <button
                       key={perm.id}
                       type="button"
                       onClick={() => togglePermission(perm.id)}
-                      className={`p-3 text-left rounded-lg border transition-all ${
+                      className={`w-full p-3 text-left rounded-lg border transition-all ${
                         selectedPermissions.includes(perm.id)
                           ? 'border-primary bg-primary/5'
                           : 'border-border hover:border-primary/50'
                       }`}
                     >
                       <div className="flex items-start gap-2">
-                        <div className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center ${
+                        <div className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 ${
                           selectedPermissions.includes(perm.id)
                             ? 'bg-primary border-primary'
                             : 'border-muted-foreground'
@@ -371,6 +371,11 @@ export default function TeamPage() {
                     </button>
                   ))}
                 </div>
+                {selectedPermissions.length > 0 && (
+                  <p className="text-xs text-muted-foreground pt-2 border-t">
+                    {selectedPermissions.length} permission{selectedPermissions.length !== 1 ? 's' : ''} selected
+                  </p>
+                )}
               </div>
             )}
           </div>

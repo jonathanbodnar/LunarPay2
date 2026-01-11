@@ -27,44 +27,77 @@ interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  children?: { name: string; href: string }[];
+  children?: { name: string; href: string; permission?: string }[];
+  permission?: string; // Required permission to see this item
 }
 
+interface UserPermissions {
+  role: string;
+  permissions: string[];
+  isOwner: boolean;
+}
+
+// Map nav items to required permissions
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Organizations', href: '/organizations', icon: Building2 },
+  { name: 'Organizations', href: '/organizations', icon: Building2, permission: 'manage_settings' },
   { 
     name: 'Payments', 
     href: '/invoices', 
     icon: CreditCard,
+    permission: 'view_invoices',
     children: [
-      { name: 'Invoices', href: '/invoices' },
-      { name: 'Payment Links', href: '/payment-links' },
-      { name: 'Transactions', href: '/transactions' },
-      { name: 'Subscriptions', href: '/subscriptions' },
-      { name: 'Payouts', href: '/payouts' },
+      { name: 'Invoices', href: '/invoices', permission: 'view_invoices' },
+      { name: 'Payment Links', href: '/payment-links', permission: 'view_invoices' },
+      { name: 'Transactions', href: '/transactions', permission: 'view_transactions' },
+      { name: 'Subscriptions', href: '/subscriptions', permission: 'view_transactions' },
+      { name: 'Payouts', href: '/payouts', permission: 'view_transactions' },
     ]
   },
-  { name: 'Customers', href: '/customers', icon: Users },
+  { name: 'Customers', href: '/customers', icon: Users, permission: 'view_customers' },
   { 
     name: 'Products', 
     href: '/products', 
     icon: Package,
+    permission: 'view_products',
   },
   { 
     name: 'Settings', 
     href: '/settings', 
     icon: Settings,
+    permission: 'manage_settings',
     children: [
-      { name: 'Customer Portal', href: '/settings/customer-portal' },
-      { name: 'Branding', href: '/settings/branding' },
-      { name: 'Email Templates', href: '/settings/email-templates' },
-      { name: 'Integrations', href: '/settings/integrations' },
-      { name: 'Team', href: '/settings/team' },
-      { name: 'Notifications', href: '/settings/notifications' },
+      { name: 'Customer Portal', href: '/settings/customer-portal', permission: 'manage_settings' },
+      { name: 'Branding', href: '/settings/branding', permission: 'manage_settings' },
+      { name: 'Email Templates', href: '/settings/email-templates', permission: 'manage_settings' },
+      { name: 'Integrations', href: '/settings/integrations', permission: 'manage_settings' },
+      { name: 'Team', href: '/settings/team', permission: 'manage_team' },
+      { name: 'Notifications', href: '/settings/notifications', permission: 'manage_settings' },
     ]
   },
 ];
+
+// Helper to check if user has permission
+function hasPermission(userPerms: UserPermissions | null, requiredPerm?: string): boolean {
+  // If no permission required, allow access
+  if (!requiredPerm) return true;
+  
+  // If user is owner, they have all permissions
+  if (userPerms?.isOwner) return true;
+  
+  // Check if user has the specific permission
+  return userPerms?.permissions?.includes(requiredPerm) || false;
+}
+
+// Filter navigation based on permissions
+function getFilteredNavigation(userPerms: UserPermissions | null): NavItem[] {
+  return navigation
+    .filter(item => hasPermission(userPerms, item.permission))
+    .map(item => ({
+      ...item,
+      children: item.children?.filter(child => hasPermission(userPerms, child.permission)),
+    }));
+}
 
 interface SetupProgress {
   completed: number;
@@ -79,10 +112,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [expandedItems, setExpandedItems] = useState<string[]>(['Payments']);
   const [setupProgress, setSetupProgress] = useState<SetupProgress | null>(null);
   const [organizationName, setOrganizationName] = useState<string>('');
+  const [userPermissions, setUserPermissions] = useState<UserPermissions | null>(null);
+  const [filteredNav, setFilteredNav] = useState<NavItem[]>(navigation);
 
   useEffect(() => {
+    fetchUserPermissions();
     checkSetupProgress();
   }, []);
+
+  const fetchUserPermissions = async () => {
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        const perms: UserPermissions = {
+          role: data.user.role,
+          permissions: data.user.permissions || [],
+          isOwner: data.user.isOwner,
+        };
+        setUserPermissions(perms);
+        setFilteredNav(getFilteredNavigation(perms));
+      }
+    } catch (error) {
+      console.error('Failed to fetch user permissions:', error);
+    }
+  };
 
   const checkSetupProgress = async () => {
     try {
@@ -243,7 +297,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </button>
             </div>
             <nav className="flex-1 space-y-1 px-4 py-6">
-              {navigation.map((item) => (
+              {filteredNav.map((item) => (
                 <NavLink key={item.name} item={item} mobile />
               ))}
             </nav>
@@ -273,7 +327,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
           </div>
           <nav className="flex-1 space-y-1 px-4 py-6 overflow-y-auto">
-            {navigation.map((item) => (
+            {filteredNav.map((item) => (
               <NavLink key={item.name} item={item} />
             ))}
           </nav>
