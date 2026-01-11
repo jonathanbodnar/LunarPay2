@@ -53,66 +53,80 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '50');
 
-    // First try to get settlements (actual deposits)
-    let settlements = await fortisClient.getSettlements({
+    console.log('[Payouts API] Fetching from Fortis for org:', organization.id, organization.name);
+
+    // Get transaction batches from Fortis (this is the primary source for payout data)
+    const batches = await fortisClient.getTransactionBatches({
       page,
       pageSize,
     });
 
-    // If settlements endpoint fails or returns nothing, fall back to transaction batches
-    if (!settlements.status || !settlements.settlements?.length) {
-      const batches = await fortisClient.getTransactionBatches({
-        page,
-        pageSize,
+    console.log('[Payouts API] Fortis batches response:', {
+      status: batches.status,
+      count: batches.batches?.length || 0,
+      message: batches.message,
+    });
+
+    // If Fortis returns batch data, use it
+    if (batches.status && batches.batches && batches.batches.length > 0) {
+      // Transform batches to payout format
+      const payouts = batches.batches
+        .filter(batch => !batch.is_open) // Only closed batches are settled
+        .map(batch => ({
+          id: batch.id,
+          batchNumber: batch.batch_num,
+          amount: batch.total_sale_amount / 100, // Convert from cents
+          refunds: batch.total_refund_amount / 100,
+          net: (batch.total_sale_amount - batch.total_refund_amount) / 100,
+          fee: 0, // Fees might be calculated separately
+          status: batch.is_open ? 'pending' : 'paid',
+          transactionCount: batch.total_sale_count,
+          refundCount: batch.total_refund_count,
+          createdAt: new Date(batch.created_ts * 1000).toISOString(),
+          paidAt: batch.batch_close_ts ? new Date(batch.batch_close_ts * 1000).toISOString() : null,
+          periodStart: new Date(batch.created_ts * 1000).toISOString(),
+          periodEnd: batch.batch_close_ts ? new Date(batch.batch_close_ts * 1000).toISOString() : new Date().toISOString(),
+        }));
+
+      // Calculate stats
+      const totalPaidOut = payouts
+        .filter(p => p.status === 'paid')
+        .reduce((sum, p) => sum + p.net, 0);
+      
+      const pendingPayout = payouts
+        .filter(p => p.status === 'pending')
+        .reduce((sum, p) => sum + p.net, 0);
+
+      // Get pending batches for next payout estimate
+      const pendingBatches = batches.batches.filter(b => b.is_open) || [];
+      const pendingTotal = pendingBatches.reduce(
+        (sum, b) => sum + (b.total_sale_amount - b.total_refund_amount), 
+        0
+      ) / 100;
+
+      return NextResponse.json({
+        payouts,
+        stats: {
+          totalPaidOut,
+          pendingPayout: pendingTotal || pendingPayout,
+          nextPayoutDate: null, // Fortis typically settles daily
+        },
+        source: 'fortis_batches',
+        pagination: batches.pagination,
       });
+    }
 
-      if (batches.status && batches.batches?.length) {
-        // Transform batches to payout format
-        const payouts = batches.batches
-          .filter(batch => !batch.is_open) // Only closed batches are settled
-          .map(batch => ({
-            id: batch.id,
-            batchNumber: batch.batch_num,
-            amount: batch.total_sale_amount / 100, // Convert from cents
-            refunds: batch.total_refund_amount / 100,
-            net: (batch.total_sale_amount - batch.total_refund_amount) / 100,
-            fee: 0, // Fees might be calculated separately
-            status: batch.is_open ? 'pending' : 'paid',
-            transactionCount: batch.total_sale_count,
-            refundCount: batch.total_refund_count,
-            createdAt: new Date(batch.created_ts * 1000).toISOString(),
-            paidAt: batch.batch_close_ts ? new Date(batch.batch_close_ts * 1000).toISOString() : null,
-            periodStart: new Date(batch.created_ts * 1000).toISOString(),
-            periodEnd: batch.batch_close_ts ? new Date(batch.batch_close_ts * 1000).toISOString() : new Date().toISOString(),
-          }));
+    // If batches didn't work, try settlements endpoint
+    console.log('[Payouts API] No batches from Fortis, trying settlements...');
+    const settlements = await fortisClient.getSettlements({ page, pageSize });
+    
+    console.log('[Payouts API] Fortis settlements response:', {
+      status: settlements.status,
+      count: settlements.settlements?.length || 0,
+      message: settlements.message,
+    });
 
-        // Calculate stats
-        const totalPaidOut = payouts
-          .filter(p => p.status === 'paid')
-          .reduce((sum, p) => sum + p.net, 0);
-        
-        const pendingPayout = payouts
-          .filter(p => p.status === 'pending')
-          .reduce((sum, p) => sum + p.net, 0);
-
-        // Get pending batches for next payout estimate
-        const pendingBatches = batches.batches?.filter(b => b.is_open) || [];
-        const pendingTotal = pendingBatches.reduce(
-          (sum, b) => sum + (b.total_sale_amount - b.total_refund_amount), 
-          0
-        ) / 100;
-
-        return NextResponse.json({
-          payouts,
-          stats: {
-            totalPaidOut,
-            pendingPayout: pendingTotal || pendingPayout,
-            nextPayoutDate: null, // Fortis typically settles daily
-          },
-          pagination: batches.pagination,
-        });
-      }
-    } else if (settlements.settlements?.length) {
+    if (settlements.status && settlements.settlements && settlements.settlements.length > 0) {
       // Transform settlements to payout format
       const payouts = settlements.settlements.map(settlement => ({
         id: settlement.id,
@@ -142,10 +156,14 @@ export async function GET(request: Request) {
           pendingPayout,
           nextPayoutDate: null,
         },
+        source: 'fortis_settlements',
       });
     }
 
-    // If both methods fail, try to calculate from local transactions
+    // If both Fortis methods fail, fall back to local transaction calculation
+    // This should only happen if Fortis doesn't have batch/settlement data yet
+    console.log('[Payouts API] No data from Fortis, falling back to local calculation');
+    
     // This is a fallback when Fortis API doesn't have settlement data yet
     const localPayouts = await calculatePayoutsFromTransactions(organization.id);
     
