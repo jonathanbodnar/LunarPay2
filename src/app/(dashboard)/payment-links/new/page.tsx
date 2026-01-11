@@ -6,18 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Plus, Trash2, Webhook, HelpCircle, ChevronDown, ChevronRight } from 'lucide-react';
-
-interface Product {
-  id: number;
-  name: string;
-  price: number;
-}
+import { ProductSelect } from '@/components/forms/ProductSelect';
 
 export default function NewPaymentLinkPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [organizations, setOrganizations] = useState<any[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
   
   const [formData, setFormData] = useState({
     organizationId: '',
@@ -30,11 +24,13 @@ export default function NewPaymentLinkPage() {
 
   const [selectedProducts, setSelectedProducts] = useState<Array<{
     productId: number | null;
-    qty: number | null;
+    productName: string;
+    qty: number;
+    price: number;
     unlimitedQty: boolean;
-    productName?: string;
-    price?: number;
-  }>>([]);
+  }>>([
+    { productId: null, productName: '', qty: 1, price: 0, unlimitedQty: false }
+  ]);
 
   const [webhookExpanded, setWebhookExpanded] = useState(false);
 
@@ -44,26 +40,13 @@ export default function NewPaymentLinkPage() {
 
   const fetchData = async () => {
     try {
-      const [orgsRes, productsRes] = await Promise.all([
-        fetch('/api/organizations'),
-        fetch('/api/products')
-      ]);
-
+      const orgsRes = await fetch('/api/organizations');
       if (orgsRes.ok) {
         const data = await orgsRes.json();
         setOrganizations(data.organizations || []);
         if (data.organizations?.length > 0) {
           setFormData(prev => ({ ...prev, organizationId: data.organizations[0].id.toString() }));
         }
-      }
-
-      if (productsRes.ok) {
-        const data = await productsRes.json();
-        const productsList = (data.products || []).map((p: any) => ({
-          ...p,
-          price: Number(p.price), // Convert Decimal to number
-        }));
-        setProducts(productsList);
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -73,7 +56,9 @@ export default function NewPaymentLinkPage() {
   const addProduct = () => {
     setSelectedProducts([...selectedProducts, {
       productId: null,
+      productName: '',
       qty: 1,
+      price: 0,
       unlimitedQty: false,
     }]);
   };
@@ -84,22 +69,23 @@ export default function NewPaymentLinkPage() {
 
   const updateProduct = (index: number, field: string, value: any) => {
     const updated = [...selectedProducts];
-    
-    if (field === 'productId') {
-      const product = products.find(p => p.id === parseInt(value));
-      if (product) {
-        updated[index] = {
-          ...updated[index],
-          productId: product.id,
-          productName: product.name,
-          price: Number(product.price), // Ensure price is a number
-        };
-      }
-    } else {
-      updated[index] = { ...updated[index], [field]: value };
-    }
-    
+    updated[index] = { ...updated[index], [field]: value };
     setSelectedProducts(updated);
+  };
+
+  const handleProductSelect = (index: number, product: { id: number; name: string; price: number }) => {
+    const updated = [...selectedProducts];
+    updated[index] = {
+      ...updated[index],
+      productId: product.id,
+      productName: product.name,
+      price: Number(product.price),
+    };
+    setSelectedProducts(updated);
+  };
+
+  const calculateTotal = () => {
+    return selectedProducts.reduce((sum, item) => sum + (item.qty * item.price), 0);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -257,75 +243,79 @@ export default function NewPaymentLinkPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {selectedProducts.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <p>No products added yet.</p>
-                <p className="text-sm mt-2">Click "Add Product" to get started.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {selectedProducts.map((item, index) => (
-                  <div key={index} className="grid grid-cols-12 gap-3 items-end p-4 border border-border rounded-lg">
-                    <div className="col-span-5">
-                      <label className="text-xs text-muted-foreground">Product *</label>
-                      <select
-                        className="w-full h-10 px-3 rounded-lg border border-border bg-background"
-                        value={item.productId || ''}
-                        onChange={(e) => updateProduct(index, 'productId', e.target.value)}
-                        required
-                      >
-                        <option value="">Select product...</option>
-                        {products.map(product => (
-                          <option key={product.id} value={product.id}>
-                            {product.name} (${Number(product.price).toFixed(2)})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <div className="col-span-3">
-                      <label className="text-xs text-muted-foreground">Available qty</label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={item.qty || ''}
-                        onChange={(e) => updateProduct(index, 'qty', parseInt(e.target.value) || null)}
-                        disabled={item.unlimitedQty}
-                        placeholder={item.unlimitedQty ? "∞" : "Qty"}
+            <div className="space-y-3">
+              {selectedProducts.map((item, index) => (
+                <div key={index} className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-5">
+                    <label className="text-xs text-muted-foreground">Product *</label>
+                    {formData.organizationId ? (
+                      <ProductSelect
+                        organizationId={formData.organizationId}
+                        value={item.productId}
+                        onSelect={(product) => handleProductSelect(index, product)}
                       />
-                    </div>
-                    
-                    <div className="col-span-3">
-                      <label className="text-xs text-muted-foreground">Limit</label>
-                      <div className="flex items-center gap-2 h-10">
-                        <input
-                          type="checkbox"
-                          id={`unlimited-${index}`}
-                          checked={item.unlimitedQty}
-                          onChange={(e) => updateProduct(index, 'unlimitedQty', e.target.checked)}
-                          className="h-4 w-4"
-                        />
-                        <label htmlFor={`unlimited-${index}`} className="text-sm text-muted-foreground">
-                          No limit
-                        </label>
+                    ) : (
+                      <div className="h-10 px-3 rounded-lg border border-border bg-muted flex items-center text-muted-foreground text-sm">
+                        Select organization
                       </div>
-                    </div>
-                    
-                    <div className="col-span-1">
-                      <label className="text-xs text-gray-500 invisible">Del</label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeProduct(index)}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
+                    )}
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs text-muted-foreground">Quantity</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={item.qty}
+                      onChange={(e) => updateProduct(index, 'qty', parseInt(e.target.value) || 1)}
+                      disabled={item.unlimitedQty}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs text-muted-foreground">Price</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={item.price}
+                      onChange={(e) => updateProduct(index, 'price', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs text-muted-foreground">No Limit</label>
+                    <div className="flex items-center gap-2 h-10">
+                      <input
+                        type="checkbox"
+                        id={`unlimited-${index}`}
+                        checked={item.unlimitedQty}
+                        onChange={(e) => updateProduct(index, 'unlimitedQty', e.target.checked)}
+                        className="h-4 w-4"
+                      />
+                      <label htmlFor={`unlimited-${index}`} className="text-sm text-muted-foreground">
+                        ∞
+                      </label>
                     </div>
                   </div>
-                ))}
+                  <div className="col-span-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeProduct(index)}
+                      disabled={selectedProducts.length === 1}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              <div className="border-t pt-4 mt-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-semibold">Total</span>
+                  <span className="text-2xl font-bold">${calculateTotal().toFixed(2)}</span>
+                </div>
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
 
@@ -397,7 +387,7 @@ export default function NewPaymentLinkPage() {
         <div className="flex gap-4">
           <Button
             type="submit"
-            disabled={loading || selectedProducts.length === 0 || selectedProducts.every(p => !p.productId)}
+            disabled={loading || selectedProducts.every(p => !p.productName || p.price <= 0)}
           >
             {loading ? 'Creating...' : 'Create Payment Link'}
           </Button>
