@@ -18,7 +18,9 @@ import {
   X,
   HelpCircle,
   ChevronDown,
-  Rocket
+  Rocket,
+  Ticket,
+  Shield
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -73,6 +75,15 @@ const navigation: NavItem[] = [
       { name: 'Integrations', href: '/settings/integrations', permission: 'manage_settings' },
       { name: 'Team', href: '/settings/team', permission: 'manage_team' },
       { name: 'Notifications', href: '/settings/notifications', permission: 'manage_settings' },
+    ]
+  },
+  { 
+    name: 'Admin', 
+    href: '/admin/tickets', 
+    icon: Shield,
+    permission: 'manage_settings', // Only owners/admins see this
+    children: [
+      { name: 'Support Tickets', href: '/admin/tickets', permission: 'manage_settings' },
     ]
   },
 ];
@@ -302,13 +313,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               ))}
             </nav>
             <div className="absolute bottom-0 left-0 right-0 p-4">
-              <button
-                onClick={() => {}}
+              <Link
+                href="/help-desk"
                 className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
+                onClick={() => setSidebarOpen(false)}
               >
                 <HelpCircle className="h-[18px] w-[18px]" />
                 <span>Help Desk</span>
-              </button>
+              </Link>
             </div>
           </div>
         </div>
@@ -332,13 +344,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             ))}
           </nav>
           <div className="p-4">
-            <button
-              onClick={() => {}}
+            <Link
+              href="/help-desk"
               className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
             >
               <HelpCircle className="h-[18px] w-[18px]" />
               <span>Help Desk</span>
-            </button>
+            </Link>
           </div>
         </div>
       </div>

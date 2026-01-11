@@ -853,3 +853,84 @@ export async function sendTeamInviteEmail(data: TeamInviteEmailData): Promise<bo
     html,
   });
 }
+
+// ============================================
+// NEW SUPPORT TICKET NOTIFICATION
+// ============================================
+
+interface NewTicketNotificationData {
+  ticketNumber: string;
+  subject: string;
+  message: string;
+  category: string;
+  priority: string;
+  userName: string;
+  userEmail: string;
+  organizationName: string;
+}
+
+export async function sendNewTicketNotification(data: NewTicketNotificationData): Promise<boolean> {
+  const priorityColors: Record<string, string> = {
+    low: '#28a745',
+    normal: '#17a2b8',
+    high: '#fd7e14',
+    urgent: '#dc3545',
+  };
+
+  const priorityColor = priorityColors[data.priority] || '#17a2b8';
+  const adminUrl = `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/admin/tickets`;
+
+  const html = baseTemplate(`
+    <div class="header">
+      <div class="logo">LunarPay Support</div>
+    </div>
+    <div class="content">
+      <h2 style="margin-top: 0;">New Support Ticket</h2>
+      <p>A new support ticket has been submitted and requires attention.</p>
+      
+      <div class="details">
+        <table>
+          <tr>
+            <td>Ticket Number</td>
+            <td style="text-align: right;"><strong>${data.ticketNumber}</strong></td>
+          </tr>
+          <tr>
+            <td>Subject</td>
+            <td style="text-align: right;"><strong>${data.subject}</strong></td>
+          </tr>
+          <tr>
+            <td>Category</td>
+            <td style="text-align: right;">${data.category}</td>
+          </tr>
+          <tr>
+            <td>Priority</td>
+            <td style="text-align: right;"><span style="background: ${priorityColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${data.priority.toUpperCase()}</span></td>
+          </tr>
+          <tr>
+            <td>From</td>
+            <td style="text-align: right;">${data.userName} (${data.userEmail})</td>
+          </tr>
+          <tr>
+            <td>Organization</td>
+            <td style="text-align: right;">${data.organizationName}</td>
+          </tr>
+        </table>
+      </div>
+      
+      <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+        <p style="font-weight: 600; margin: 0 0 10px 0;">Message:</p>
+        <p style="margin: 0; white-space: pre-wrap;">${data.message}</p>
+      </div>
+      
+      <div style="text-align: center;">
+        <a href="${adminUrl}" class="button">View in Admin Panel</a>
+      </div>
+    </div>
+  `);
+
+  return sendEmail({
+    to: 'jb@lunarpay.com',
+    subject: `[${data.ticketNumber}] New Support Ticket: ${data.subject}`,
+    html,
+  });
+}

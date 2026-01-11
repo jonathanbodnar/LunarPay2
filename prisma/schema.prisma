@@ -44,6 +44,8 @@ model User {
   stateSlack            String?   @map("state_slack") @db.VarChar(50)
   
   organizations         Organization[]
+  tickets               Ticket[]
+  ticketMessages        TicketMessage[]
   
   @@map("users")
 }
@@ -112,6 +114,7 @@ model Organization {
   subscriptions         Subscription[]
   transactions          Transaction[]
   fortisOnboarding      FortisOnboarding?
+  tickets               Ticket[]
   
   @@map("church_detail")
 }
@@ -856,4 +859,47 @@ model TeamMember {
   
   @@unique([userId, organizationId])
   @@map("team_members")
+}
+
+// ============================================
+// HELP DESK / SUPPORT TICKETS
+// ============================================
+
+model Ticket {
+  id              Int       @id @default(autoincrement())
+  ticketNumber    String?   @unique @map("ticket_number") @db.VarChar(20)
+  userId          Int       @map("user_id")
+  organizationId  Int?      @map("organization_id")
+  subject         String    @db.VarChar(255)
+  status          String    @default("open") @db.VarChar(20) // open, in_progress, resolved, closed, archived
+  priority        String    @default("normal") @db.VarChar(20) // low, normal, high, urgent
+  category        String?   @db.VarChar(50)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  resolvedAt      DateTime? @map("resolved_at")
+  closedAt        DateTime? @map("closed_at")
+  
+  user            User      @relation(fields: [userId], references: [id])
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  messages        TicketMessage[]
+  
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id              Int       @id @default(autoincrement())
+  ticketId        Int       @map("ticket_id")
+  userId          Int       @map("user_id")
+  message         String    @db.Text
+  isAdminReply    Boolean   @default(false) @map("is_admin_reply")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  ticket          Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id])
+  
+  @@index([ticketId])
+  @@map("ticket_messages")
 }
