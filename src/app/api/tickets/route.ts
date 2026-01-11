@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { sendNewTicketNotification } from '@/lib/email';
+import { sendNewTicketNotification, sendTicketConfirmation } from '@/lib/email';
 
 const createTicketSchema = z.object({
   subject: z.string().min(1, 'Subject is required').max(255),
@@ -127,6 +127,19 @@ export async function POST(request: Request) {
       });
     } catch (emailError) {
       console.error('Failed to send ticket notification email:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    // Send confirmation email to user
+    try {
+      await sendTicketConfirmation({
+        ticketNumber,
+        subject,
+        customerName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'there',
+        customerEmail: user?.email || currentUser.email,
+      });
+    } catch (emailError) {
+      console.error('Failed to send ticket confirmation email:', emailError);
       // Don't fail the request if email fails
     }
 

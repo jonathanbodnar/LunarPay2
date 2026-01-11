@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { sendAdminReplyNotification } from '@/lib/email';
 
 const createMessageSchema = z.object({
   message: z.string().min(1, 'Message is required'),
@@ -32,9 +33,14 @@ export async function POST(
 
     const { message } = validation.data;
 
-    // Get ticket
+    // Get ticket with user info
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
+      include: {
+        user: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+      },
     });
 
     if (!ticket) {
@@ -77,6 +83,20 @@ export async function POST(
       where: { id: ticketId },
       data: { updatedAt: new Date() },
     });
+
+    // Send email notification to user
+    try {
+      await sendAdminReplyNotification({
+        ticketNumber: ticket.ticketNumber || `TKT-${String(ticket.id).padStart(6, '0')}`,
+        subject: ticket.subject,
+        replyMessage: message,
+        customerName: `${ticket.user.firstName || ''} ${ticket.user.lastName || ''}`.trim() || 'there',
+        customerEmail: ticket.user.email,
+      });
+    } catch (emailError) {
+      console.error('Failed to send admin reply notification email:', emailError);
+      // Don't fail the request if email fails
+    }
 
     return NextResponse.json({
       success: true,

@@ -934,3 +934,127 @@ export async function sendNewTicketNotification(data: NewTicketNotificationData)
     html,
   });
 }
+
+// ============================================
+// TICKET CONFIRMATION EMAIL (to user)
+// ============================================
+
+interface TicketConfirmationData {
+  ticketNumber: string;
+  subject: string;
+  customerName: string;
+  customerEmail: string;
+}
+
+export async function sendTicketConfirmation(data: TicketConfirmationData): Promise<boolean> {
+  const ticketUrl = `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/help-desk`;
+
+  const html = baseTemplate(`
+    <div class="header">
+      <div class="logo">LunarPay Support</div>
+    </div>
+    <div class="content">
+      <h2 style="margin-top: 0;">We've Got Your Request!</h2>
+      <p>Hi ${data.customerName},</p>
+      <p>Thank you for contacting LunarPay support. We've received your support ticket and our team is reviewing it now.</p>
+      
+      <div class="details">
+        <table>
+          <tr>
+            <td>Ticket Number</td>
+            <td style="text-align: right;"><strong>${data.ticketNumber}</strong></td>
+          </tr>
+          <tr>
+            <td>Subject</td>
+            <td style="text-align: right;">${data.subject}</td>
+          </tr>
+        </table>
+      </div>
+      
+      <p style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+        💡 <strong>What's next?</strong><br>
+        Our support team will review your request and respond as soon as possible. You'll receive an email when we reply.
+      </p>
+      
+      <div style="text-align: center;">
+        <a href="${ticketUrl}" class="button">View Your Tickets</a>
+      </div>
+      
+      <p style="font-size: 14px; color: #666; margin-top: 20px;">
+        You can view the status of your ticket and reply to our team anytime in the Help Desk section of your dashboard.
+      </p>
+    </div>
+  `);
+
+  return sendEmail({
+    to: data.customerEmail,
+    subject: `[${data.ticketNumber}] We've received your support request`,
+    html,
+  });
+}
+
+// ============================================
+// ADMIN REPLY NOTIFICATION EMAIL (to user)
+// ============================================
+
+interface AdminReplyNotificationData {
+  ticketNumber: string;
+  subject: string;
+  replyMessage: string;
+  customerName: string;
+  customerEmail: string;
+}
+
+export async function sendAdminReplyNotification(data: AdminReplyNotificationData): Promise<boolean> {
+  const ticketUrl = `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/help-desk`;
+
+  // Truncate message if too long
+  const messagePreview = data.replyMessage.length > 200 
+    ? data.replyMessage.substring(0, 200) + '...' 
+    : data.replyMessage;
+
+  const html = baseTemplate(`
+    <div class="header">
+      <div class="logo">LunarPay Support</div>
+    </div>
+    <div class="content">
+      <h2 style="margin-top: 0;">You Have a New Reply!</h2>
+      <p>Hi ${data.customerName},</p>
+      <p>Our support team has replied to your ticket:</p>
+      
+      <div class="details">
+        <table>
+          <tr>
+            <td>Ticket Number</td>
+            <td style="text-align: right;"><strong>${data.ticketNumber}</strong></td>
+          </tr>
+          <tr>
+            <td>Subject</td>
+            <td style="text-align: right;">${data.subject}</td>
+          </tr>
+        </table>
+      </div>
+      
+      <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #007bff;">
+        <p style="margin: 0; font-weight: 600; color: #007bff; font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">
+          Support Team Response
+        </p>
+        <p style="margin: 0; white-space: pre-wrap;">${messagePreview}</p>
+      </div>
+      
+      <div style="text-align: center;">
+        <a href="${ticketUrl}" class="button">View Full Response</a>
+      </div>
+      
+      <p style="font-size: 14px; color: #666; margin-top: 20px;">
+        You can continue the conversation by replying in your Help Desk.
+      </p>
+    </div>
+  `);
+
+  return sendEmail({
+    to: data.customerEmail,
+    subject: `[${data.ticketNumber}] New reply from LunarPay Support`,
+    html,
+  });
+}
