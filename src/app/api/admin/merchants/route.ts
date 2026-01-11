@@ -23,8 +23,8 @@ export async function GET() {
           },
         },
         transactions: {
-          where: { status: 'successful' },
-          select: { amount: true },
+          where: { status: 'P' }, // P = successful
+          select: { totalAmount: true },
         },
         donors: {
           select: { id: true },
@@ -44,7 +44,7 @@ export async function GET() {
       state: m.state,
       createdAt: m.createdAt.toISOString(),
       fortisStatus: m.fortisOnboarding?.appStatus || 'NOT_STARTED',
-      totalProcessed: m.transactions.reduce((sum, t) => sum + Number(t.amount), 0),
+      totalProcessed: m.transactions.reduce((sum, t) => sum + Number(t.totalAmount), 0),
       totalCustomers: m.donors.length,
       totalInvoices: m.invoices.length,
       ownerName: `${m.user.firstName || ''} ${m.user.lastName || ''}`.trim() || 'Unknown',

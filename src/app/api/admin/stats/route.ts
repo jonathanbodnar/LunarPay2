@@ -25,10 +25,10 @@ export async function GET() {
 
     // Get total processed (sum of all transactions)
     const totalProcessedResult = await prisma.transaction.aggregate({
-      _sum: { amount: true },
-      where: { status: 'successful' },
+      _sum: { totalAmount: true },
+      where: { status: 'P' }, // P = successful
     });
-    const totalProcessed = Number(totalProcessedResult._sum.amount || 0);
+    const totalProcessed = Number(totalProcessedResult._sum.totalAmount || 0);
 
     // Get total customers
     const totalCustomers = await prisma.donor.count();
@@ -51,8 +51,8 @@ export async function GET() {
           select: { appStatus: true },
         },
         transactions: {
-          where: { status: 'successful' },
-          select: { amount: true },
+          where: { status: 'P' }, // P = successful
+          select: { totalAmount: true },
         },
       },
     });
@@ -61,7 +61,7 @@ export async function GET() {
       id: m.id,
       name: m.name,
       status: m.fortisOnboarding?.appStatus || 'NOT_STARTED',
-      processed: m.transactions.reduce((sum, t) => sum + Number(t.amount), 0),
+      processed: m.transactions.reduce((sum, t) => sum + Number(t.totalAmount), 0),
       createdAt: m.createdAt.toISOString(),
     }));
 
