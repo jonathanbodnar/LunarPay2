@@ -680,6 +680,15 @@ export class FortisClient {
       
       const response = await this.client.get(url);
       
+      console.log('[Fortis] Transaction batches response:', {
+        status: response.status,
+        hasData: !!response.data,
+        hasList: !!response.data?.list,
+        isArray: Array.isArray(response.data?.list),
+        listLength: response.data?.list?.length || 0,
+        fullResponse: JSON.stringify(response.data).substring(0, 500),
+      });
+      
       if (response.data?.list && Array.isArray(response.data.list)) {
         return {
           status: true,
@@ -714,7 +723,12 @@ export class FortisClient {
         message: 'No batches found',
       };
     } catch (error) {
-      console.error('[Fortis] Get transaction batches error:', error);
+      console.error('[Fortis] Get transaction batches error:', {
+        error: error,
+        message: (error as any)?.message,
+        response: (error as any)?.response?.data,
+        status: (error as any)?.response?.status,
+      });
       return {
         status: false,
         message: this.formatError(error),

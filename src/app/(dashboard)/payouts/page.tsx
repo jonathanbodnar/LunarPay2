@@ -27,6 +27,7 @@ export default function PayoutsPage() {
     pendingPayout: 0,
     nextPayoutDate: null as string | null,
   });
+  const [dataSource, setDataSource] = useState<string>('');
 
   useEffect(() => {
     fetchPayouts();
@@ -42,6 +43,11 @@ export default function PayoutsPage() {
         const data = await response.json();
         setPayouts(data.payouts || []);
         setStats(data.stats || stats);
+        setDataSource(data.source || 'unknown');
+        
+        // Log data source for debugging
+        console.log('[Payouts] Data source:', data.source);
+        console.log('[Payouts] Response:', data);
       }
     } catch (error) {
       console.error('Failed to fetch payouts:', error);
@@ -84,6 +90,16 @@ export default function PayoutsPage() {
           <p className="mt-2 text-gray-600">
             View your payout history and schedule
           </p>
+          {dataSource && (
+            <p className="mt-1 text-xs text-gray-500">
+              Data source: {
+                dataSource === 'fortis_batches' ? '✓ Fortis Settlement Batches' :
+                dataSource === 'fortis_settlements' ? '✓ Fortis Settlements' :
+                dataSource === 'local_transactions' ? '⚠️ Calculated from transactions (Fortis API unavailable)' :
+                dataSource
+              }
+            </p>
+          )}
         </div>
         <Button variant="outline" onClick={handleExport}>
           <Download className="h-4 w-4 mr-2" />
