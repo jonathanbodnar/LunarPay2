@@ -29,7 +29,35 @@ export async function GET() {
         where: {
           userId: currentUser.userId,
         },
-        include: {
+        select: {
+          id: true,
+          userId: true,
+          name: true,
+          legalName: true,
+          phoneNumber: true,
+          website: true,
+          email: true,
+          streetAddress: true,
+          streetAddressSuite: true,
+          city: true,
+          state: true,
+          country: true,
+          postal: true,
+          taxId: true,
+          token: true,
+          slug: true,
+          logo: true,
+          primaryColor: true,
+          backgroundColor: true,
+          buttonTextColor: true,
+          fortisTemplate: true,
+          portalSlug: true,
+          portalEnabled: true,
+          portalCustomDomain: true,
+          portalTitle: true,
+          portalDescription: true,
+          createdAt: true,
+          updatedAt: true,
           fortisOnboarding: {
             select: {
               appStatus: true,
@@ -42,7 +70,7 @@ export async function GET() {
               merchantCity: true,
               merchantState: true,
               merchantPostalCode: true,
-              processorResponse: true, // Contains additional saved fields as JSON
+              processorResponse: true,
             },
           },
           _count: {
@@ -76,10 +104,13 @@ export async function GET() {
         token: string;
         slug: string | null;
         logo: string | null;
+        primary_color: string | null;
+        background_color: string | null;
+        button_text_color: string | null;
       }>>`
         SELECT ch_id, client_id, church_name, legal_name, phone_no, website, 
                email, street_address, city, state, country, postal, token, 
-               slug, logo
+               slug, logo, primary_color, background_color, button_text_color
         FROM church_detail 
         WHERE client_id = ${currentUser.userId}
         ORDER BY ch_id ASC
@@ -101,6 +132,9 @@ export async function GET() {
         token: org.token,
         slug: org.slug,
         logo: org.logo,
+        primaryColor: org.primary_color,
+        backgroundColor: org.background_color,
+        buttonTextColor: org.button_text_color,
         fortisOnboarding: null,
         _count: { invoices: 0, donors: 0, funds: 0 },
       }));

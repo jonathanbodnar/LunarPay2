@@ -80,7 +80,12 @@ export default function GettingStartedPage() {
           id: 'branding',
           title: 'Customize Your Branding',
           description: 'Add your logo and brand colors',
-          completed: false, // TODO: Check if branding is set
+          completed: orgs.organizations?.[0] && (
+            orgs.organizations[0].logo || 
+            (orgs.organizations[0].primaryColor && orgs.organizations[0].primaryColor !== '#000000') ||
+            (orgs.organizations[0].backgroundColor && orgs.organizations[0].backgroundColor !== '#ffffff') ||
+            (orgs.organizations[0].buttonTextColor && orgs.organizations[0].buttonTextColor !== '#ffffff')
+          ),
           path: '/settings/branding',
         },
       ]);
