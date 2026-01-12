@@ -4,13 +4,9 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Building2, 
-  CreditCard, 
   Users, 
   Ticket,
   TrendingUp,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
   Loader2,
   DollarSign
 } from 'lucide-react';
@@ -23,7 +19,7 @@ interface Stats {
   totalProcessed: number;
   totalCustomers: number;
   openTickets: number;
-  monthlyVolume: number;
+  recurringRevenue: number;
   recentMerchants: Array<{
     id: number;
     name: string;
@@ -139,7 +135,27 @@ export default function AdminDashboardPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-400">Open Tickets</p>
+                <p className="text-sm text-slate-400">Recurring Revenue</p>
+                <p className="text-2xl font-bold text-white mt-1">{formatCurrency(stats?.recurringRevenue || 0)}</p>
+              </div>
+              <div className="h-12 w-12 bg-cyan-500/20 rounded-xl flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-cyan-500" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-3 text-sm text-slate-400">
+              From active subscriptions
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="bg-slate-800 border-slate-700">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-400">Open Support Tickets</p>
                 <p className="text-2xl font-bold text-white mt-1">{stats?.openTickets || 0}</p>
               </div>
               <div className="h-12 w-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
