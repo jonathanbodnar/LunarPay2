@@ -55,18 +55,38 @@ export async function GET() {
     }
 
     // Get team memberships with their permissions
-    const teamMemberships = await prisma.$queryRaw<Array<{
+    // Handle case where team_members table doesn't exist yet
+    let teamMemberships: Array<{
       id: number;
       organization_id: number;
       role: string;
       permissions: string | null;
       organization_name: string;
-    }>>`
-      SELECT tm.id, tm.organization_id, tm.role, tm.permissions, cd.church_name as organization_name
-      FROM team_members tm
-      JOIN church_detail cd ON tm.organization_id = cd.ch_id
-      WHERE tm.user_id = ${user.id}
-    `;
+    }> = [];
+    
+    try {
+      teamMemberships = await prisma.$queryRaw<Array<{
+        id: number;
+        organization_id: number;
+        role: string;
+        permissions: string | null;
+        organization_name: string;
+      }>>`
+        SELECT tm.id, tm.organization_id, tm.role, tm.permissions, cd.church_name as organization_name
+        FROM team_members tm
+        JOIN church_detail cd ON tm.organization_id = cd.ch_id
+        WHERE tm.user_id = ${user.id}
+      `;
+    } catch (error: any) {
+      // If table doesn't exist, return empty array (team management not set up yet)
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        console.log('[Auth/Me] team_members table does not exist yet, skipping team memberships');
+        teamMemberships = [];
+      } else {
+        // Re-throw other errors
+        throw error;
+      }
+    }
 
     // Determine effective permissions
     // If user is owner (has their own organizations), they're admin

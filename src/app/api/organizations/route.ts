@@ -198,15 +198,41 @@ export async function POST(request: Request) {
     });
 
     // Create default fund
-    await prisma.fund.create({
-      data: {
-        userId: currentUser.userId,
-        organizationId: organization.id,
-        name: 'General Fund',
-        description: 'Default fund for all donations',
-        isActive: true,
-      },
-    });
+    try {
+      await prisma.fund.create({
+        data: {
+          userId: currentUser.userId,
+          organizationId: organization.id,
+          name: 'General Fund',
+          description: 'Default fund for all donations',
+          isActive: true,
+        },
+      });
+    } catch (fundError: any) {
+      // Handle sequence sync issue
+      if (fundError?.code === 'P2002' && fundError?.meta?.target?.includes('id')) {
+        console.error('[Create Organization] Fund sequence out of sync, attempting to fix...');
+        // Try to fix the sequence and retry once
+        try {
+          await prisma.$executeRaw`SELECT setval('fund_id_seq', COALESCE((SELECT MAX(id) FROM fund), 0), true)`;
+          await prisma.fund.create({
+            data: {
+              userId: currentUser.userId,
+              organizationId: organization.id,
+              name: 'General Fund',
+              description: 'Default fund for all donations',
+              isActive: true,
+            },
+          });
+        } catch (retryError) {
+          console.error('[Create Organization] Failed to create fund after sequence fix:', retryError);
+          // Continue without fund - organization is created, fund can be added manually
+        }
+      } else {
+        // Re-throw if it's a different error
+        throw fundError;
+      }
+    }
 
     // Create chat settings
     await prisma.chatSetting.create({
