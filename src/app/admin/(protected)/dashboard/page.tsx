@@ -20,6 +20,7 @@ interface Stats {
   totalCustomers: number;
   openTickets: number;
   recurringRevenue: number;
+  totalFees: number;
   recentMerchants: Array<{
     id: number;
     name: string;
@@ -168,6 +169,23 @@ export default function AdminDashboardPage() {
             >
               View all tickets →
             </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-800 border-slate-700">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-400">Platform Fees</p>
+                <p className="text-2xl font-bold text-white mt-1">{formatCurrency(stats?.totalFees || 0)}</p>
+              </div>
+              <div className="h-12 w-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
+                <DollarSign className="h-6 w-6 text-yellow-500" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-3 text-sm text-slate-400">
+              Total processing fees collected
+            </div>
           </CardContent>
         </Card>
       </div>

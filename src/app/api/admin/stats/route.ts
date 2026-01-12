@@ -49,6 +49,13 @@ export async function GET() {
     });
     const recurringRevenue = activeSubscriptions.reduce((sum, sub) => sum + Number(sub.amount), 0);
 
+    // Get total fees collected across all merchants
+    const totalFeesResult = await prisma.transaction.aggregate({
+      _sum: { fee: true },
+      where: { status: 'P' }, // Successful transactions only
+    });
+    const totalFees = Number(totalFeesResult._sum.fee || 0);
+
     // Get recent merchants with their stats
     const recentMerchants = await prisma.organization.findMany({
       take: 5,
@@ -80,6 +87,7 @@ export async function GET() {
       totalCustomers,
       openTickets,
       recurringRevenue,
+      totalFees,
       recentMerchants: formattedMerchants,
     });
   } catch (error) {

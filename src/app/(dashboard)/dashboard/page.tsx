@@ -27,6 +27,7 @@ interface DashboardStats {
     yearly: number;
     last30Days: number;
   };
+  recurringRevenue: number;
   fees: {
     total: number;
     monthly: number;
@@ -231,16 +232,16 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Processing Fees
+              Recurring Revenue
             </CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <RefreshCw className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">
-              {formatCurrency(stats.fees.monthly)}
+            <div className="text-2xl font-bold text-green-600">
+              {formatCurrency(stats.recurringRevenue || 0)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              This month • Total: {formatCurrency(stats.fees.total)}
+              From active subscriptions
             </p>
           </CardContent>
         </Card>

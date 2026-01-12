@@ -100,6 +100,19 @@ export async function GET() {
       });
     } catch (e) { console.error('newCustomersThisMonth error:', e); }
 
+    // Get recurring revenue
+    let recurringRevenue = 0;
+    try {
+      const activeSubs = await prisma.subscription.findMany({
+        where: {
+          organization: { userId: currentUser.userId },
+          status: 'A',
+        },
+        select: { amount: true },
+      });
+      recurringRevenue = activeSubs.reduce((sum, sub) => sum + Number(sub.amount), 0);
+    } catch (e) { console.error('recurringRevenue error:', e); }
+
     // Calculate net amounts
     const totalNet = Number(totalRevenue._sum.totalAmount || 0) - Number(totalRevenue._sum.fee || 0);
     const monthlyNet = Number(monthlyRevenue._sum.totalAmount || 0) - Number(monthlyRevenue._sum.fee || 0);
@@ -113,6 +126,7 @@ export async function GET() {
           yearly: Number(yearlyRevenue._sum.totalAmount || 0),
           last30Days: Number(last30DaysRevenue._sum.totalAmount || 0),
         },
+        recurringRevenue,
         fees: {
           total: Number(totalRevenue._sum.fee || 0),
           monthly: Number(monthlyRevenue._sum.fee || 0),
