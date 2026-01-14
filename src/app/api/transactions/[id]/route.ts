@@ -6,6 +6,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const startTime = Date.now();
   try {
     const { id } = await params;
     const currentUser = await requireAuth();
@@ -13,6 +14,8 @@ export async function GET(
     // Determine if id is a numeric database ID or a Fortis transaction ID
     const isNumericId = /^\d+$/.test(id);
     const isFortisTransactionId = id.startsWith('txn_');
+
+    console.log(`[Transaction Detail API] GET request - User: ${currentUser.userId}, Transaction ID: ${id}, Type: ${isNumericId ? 'Database ID' : isFortisTransactionId ? 'Fortis ID' : 'Invalid'}`);
     
     let transaction;
     
@@ -148,6 +151,8 @@ export async function GET(
     }
 
     if (!transaction) {
+      const duration = Date.now() - startTime;
+      console.warn(`[Transaction Detail API] Transaction not found - ID: ${id}, User: ${currentUser.userId}, Duration: ${duration}ms`);
       return NextResponse.json(
         { error: 'Transaction not found' },
         { status: 404 }
@@ -219,6 +224,9 @@ export async function GET(
       };
     };
 
+    const duration = Date.now() - startTime;
+    console.log(`[Transaction Detail API] Success - Transaction ID: ${id}, Status: ${transaction.status}, Duration: ${duration}ms`);
+
     return NextResponse.json({
       transaction: serializeTransaction({
         ...transaction,
@@ -227,14 +235,19 @@ export async function GET(
       }),
     });
   } catch (error) {
+    const duration = Date.now() - startTime;
     if ((error as Error).message === 'Unauthorized') {
+      console.warn(`[Transaction Detail API] Unauthorized access attempt - Duration: ${duration}ms`);
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    console.error('Get transaction error:', error);
+    console.error(`[Transaction Detail API] Error after ${duration}ms:`, {
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+    });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

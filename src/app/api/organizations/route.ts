@@ -19,8 +19,11 @@ const createOrganizationSchema = z.object({
 
 // GET /api/organizations - List all organizations for current user
 export async function GET() {
+  const startTime = Date.now();
   try {
     const currentUser = await requireAuth();
+
+    console.log(`[Organizations API] GET request - User: ${currentUser.userId}`);
 
     // Query organizations - use try/catch for graceful handling
     let organizations;
@@ -140,17 +143,25 @@ export async function GET() {
       }));
     }
 
+    const duration = Date.now() - startTime;
+    console.log(`[Organizations API] Success - Found ${organizations.length} organizations for user ${currentUser.userId} in ${duration}ms`);
+
     return NextResponse.json({ organizations });
   } catch (error) {
+    const duration = Date.now() - startTime;
     if ((error as Error).message === 'Unauthorized') {
+      console.warn(`[Organizations API] Unauthorized access attempt - Duration: ${duration}ms`);
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    console.error('Get organizations error:', error);
-    console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.error(`[Organizations API] Error after ${duration}ms:`, {
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+      details: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+    });
     return NextResponse.json(
       { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
@@ -160,9 +171,12 @@ export async function GET() {
 
 // POST /api/organizations - Create new organization
 export async function POST(request: Request) {
+  const startTime = Date.now();
   try {
     const currentUser = await requireAuth();
     const body = await request.json();
+
+    console.log(`[Organizations API] POST request - User: ${currentUser.userId}, Organization name: ${body.name}`);
 
     const validatedData = createOrganizationSchema.parse(body);
 
@@ -254,12 +268,17 @@ export async function POST(request: Request) {
       },
     });
 
+    const duration = Date.now() - startTime;
+    console.log(`[Organizations API] Successfully created organization - ID: ${organization.id}, Name: ${organization.name}, Duration: ${duration}ms`);
+
     return NextResponse.json(
       { organization },
       { status: 201 }
     );
   } catch (error) {
+    const duration = Date.now() - startTime;
     if (error instanceof z.ZodError) {
+      console.warn(`[Organizations API] Validation error after ${duration}ms:`, error.issues);
       return NextResponse.json(
         { error: 'Validation error', details: error.issues },
         { status: 400 }
@@ -267,13 +286,17 @@ export async function POST(request: Request) {
     }
 
     if ((error as Error).message === 'Unauthorized') {
+      console.warn(`[Organizations API] Unauthorized access attempt - Duration: ${duration}ms`);
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    console.error('Create organization error:', error);
+    console.error(`[Organizations API] Error creating organization after ${duration}ms:`, {
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+    });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

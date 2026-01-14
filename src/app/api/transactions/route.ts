@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: Request) {
+  const startTime = Date.now();
   try {
     const currentUser = await requireAuth();
     const { searchParams } = new URL(request.url);
@@ -14,6 +15,16 @@ export async function GET(request: Request) {
     const dateTo = searchParams.get('dateTo');
     const organizationId = searchParams.get('organizationId');
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 100;
+
+    console.log(`[Transactions API] GET request - User: ${currentUser.userId}, Filters:`, {
+      status,
+      paymentMethod,
+      search: search ? '***' : null,
+      dateFrom,
+      dateTo,
+      organizationId,
+      limit,
+    });
 
     const where: any = {
       organization: {
@@ -91,16 +102,24 @@ export async function GET(request: Request) {
       } : null,
     }));
 
+    const duration = Date.now() - startTime;
+    console.log(`[Transactions API] Success - Found ${serializedTransactions.length} transactions in ${duration}ms`);
+
     return NextResponse.json({ transactions: serializedTransactions });
   } catch (error) {
+    const duration = Date.now() - startTime;
     if ((error as Error).message === 'Unauthorized') {
+      console.warn(`[Transactions API] Unauthorized access attempt - Duration: ${duration}ms`);
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    console.error('Get transactions error:', error);
+    console.error(`[Transactions API] Error after ${duration}ms:`, {
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+    });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
