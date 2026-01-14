@@ -119,7 +119,10 @@ export default function EmailTemplatesPage() {
     try {
       setLoading(true);
       const res = await fetch(`/api/organizations/${organization.id}/email-templates`);
-      if (!res.ok) throw new Error('Failed to fetch templates');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to fetch templates (${res.status})`);
+      }
       const data = await res.json();
       setTemplates(data);
       if (data.length > 0 && !selectedTemplate) {
@@ -127,6 +130,7 @@ export default function EmailTemplatesPage() {
       }
     } catch (error) {
       console.error('Error fetching templates:', error);
+      alert(error instanceof Error ? error.message : 'Failed to fetch email templates');
     } finally {
       setLoading(false);
     }

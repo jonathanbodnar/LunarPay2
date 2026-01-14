@@ -141,7 +141,12 @@ export default function NewPaymentLinkPage() {
         router.push(`/payment-links`);
       } else {
         console.error('Payment link creation failed:', data);
-        alert(data.error || data.details?.map((d: any) => d.message).join(', ') || 'Failed to create payment link');
+        const errorMessage = data.error 
+          || (data.details && Array.isArray(data.details) 
+            ? data.details.map((d: any) => d.message || d.path?.join('.') + ': ' + d.message).join(', ')
+            : data.details)
+          || `Failed to create payment link (${response.status})`;
+        alert(errorMessage);
       }
     } catch (error) {
       console.error('Payment link error:', error);

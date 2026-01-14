@@ -10,7 +10,11 @@ const createPaymentLinkSchema = z.object({
   description: z.string().optional(),
   paymentMethods: z.enum(['cc', 'ach', 'both']).default('both'),
   status: z.enum(['active', 'inactive']).default('active'),
-  webhookUrl: z.string().url().optional().or(z.literal('')),
+  webhookUrl: z.union([
+    z.string().url(),
+    z.string().length(0),
+    z.undefined(),
+  ]).optional(),
   products: z.array(z.object({
     productId: z.number(),
     qty: z.number().nullable(),
@@ -78,11 +82,33 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const currentUser = await requireAuth();
-    const body = await request.json();
+    
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error('Failed to parse request body:', parseError);
+      return NextResponse.json(
+        { error: 'Invalid JSON in request body' },
+        { status: 400 }
+      );
+    }
 
     console.log('Creating payment link with data:', JSON.stringify(body, null, 2));
 
-    const validatedData = createPaymentLinkSchema.parse(body);
+    let validatedData;
+    try {
+      validatedData = createPaymentLinkSchema.parse(body);
+    } catch (validationError) {
+      if (validationError instanceof z.ZodError) {
+        console.error('Payment link validation error:', validationError.issues);
+        return NextResponse.json(
+          { error: 'Validation error', details: validationError.issues },
+          { status: 400 }
+        );
+      }
+      throw validationError;
+    }
 
     // Verify organization ownership
     const organization = await prisma.organization.findFirst({
@@ -143,7 +169,9 @@ export async function POST(request: Request) {
         status: validatedData.status,
         hash,
         paymentMethods: validatedData.paymentMethods,
-        webhookUrl: validatedData.webhookUrl || null,
+        webhookUrl: validatedData.webhookUrl && validatedData.webhookUrl.trim() !== '' 
+          ? validatedData.webhookUrl.trim() 
+          : null,
         products: {
           create: validatedData.products.map((product) => ({
             productId: product.productId,
@@ -166,14 +194,6 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      console.error('Payment link validation error:', error.issues);
-      return NextResponse.json(
-        { error: 'Validation error', details: error.issues },
-        { status: 400 }
-      );
-    }
-
     if ((error as Error).message === 'Unauthorized') {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -182,8 +202,9 @@ export async function POST(request: Request) {
     }
 
     console.error('Create payment link error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Internal server error', message: (error as Error).message },
+      { error: 'Internal server error', message: errorMessage },
       { status: 500 }
     );
   }
