@@ -221,6 +221,14 @@ export class FortisClient {
         data
       );
 
+      // Check for error response in the data
+      if (response.data.type === 'Error') {
+        return {
+          status: false,
+          message: response.data.detail || response.data.title || 'Failed to create transaction intention',
+        };
+      }
+
       if (response.data.data?.client_token) {
         return {
           status: true,
@@ -230,12 +238,18 @@ export class FortisClient {
 
       return {
         status: false,
-        message: 'Failed to create transaction intention',
+        message: 'Failed to create transaction intention - no client token received',
       };
     } catch (error) {
+      const errorMessage = this.formatError(error);
+      console.error('[Fortis Transaction Intention] Error:', {
+        message: errorMessage,
+        action: data.action,
+        locationId: data.location_id,
+      });
       return {
         status: false,
-        message: this.formatError(error),
+        message: errorMessage,
       };
     }
   }

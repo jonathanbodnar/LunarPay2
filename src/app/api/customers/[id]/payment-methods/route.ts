@@ -146,11 +146,40 @@ export async function POST(
       
       const fortisEnv = process.env.fortis_environment || 'dev';
       const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
-      const fortisClient = createFortisClient(
-        env as 'sandbox' | 'production',
-        fortisOnboarding.authUserId,
-        fortisOnboarding.authUserApiKey
-      );
+      
+      // Validate developer ID is configured
+      const developerIdEnv = env === 'sandbox' 
+        ? (process.env.FORTIS_DEVELOPER_ID_SANDBOX || process.env.fortis_developer_id_sandbox)
+        : (process.env.FORTIS_DEVELOPER_ID_PRODUCTION || process.env.fortis_developer_id_production);
+      
+      if (!developerIdEnv) {
+        console.error('[Payment Methods] Developer ID not configured for environment:', env);
+        return NextResponse.json(
+          { 
+            error: 'Payment processing is not fully configured. Please contact support.',
+            details: `Missing developer ID for ${env} environment`
+          },
+          { status: 500 }
+        );
+      }
+      
+      let fortisClient;
+      try {
+        fortisClient = createFortisClient(
+          env as 'sandbox' | 'production',
+          fortisOnboarding.authUserId,
+          fortisOnboarding.authUserApiKey
+        );
+      } catch (clientError) {
+        console.error('[Payment Methods] Failed to create Fortis client:', clientError);
+        return NextResponse.json(
+          { 
+            error: 'Payment processing configuration error. Please contact support.',
+            details: (clientError as Error).message
+          },
+          { status: 500 }
+        );
+      }
 
       // If no location ID, try to fetch it
       if (!locationId) {
@@ -185,8 +214,29 @@ export async function POST(
       console.log('[Payment Methods] Fortis result:', { status: result.status, hasToken: !!result.clientToken, message: result.message });
 
       if (!result.status || !result.clientToken) {
+        // Provide more detailed error message
+        const errorMessage = result.message || 'Failed to get payment form token from Fortis';
+        console.error('[Payment Methods] Failed to create transaction intention:', {
+          error: errorMessage,
+          locationId,
+          environment: env,
+          hasAuthUserId: !!fortisOnboarding.authUserId,
+          hasAuthUserApiKey: !!fortisOnboarding.authUserApiKey,
+        });
+        
+        // Check if it's an authentication error
+        if (errorMessage.toLowerCase().includes('unauthorized') || errorMessage.toLowerCase().includes('invalid credentials')) {
+          return NextResponse.json(
+            { 
+              error: 'Payment processing credentials are invalid or expired. Please contact support to update your payment configuration.',
+              details: 'The Fortis API returned an authentication error. This may indicate that the merchant credentials need to be refreshed.'
+            },
+            { status: 401 }
+          );
+        }
+        
         return NextResponse.json(
-          { error: result.message || 'Failed to get payment form token from Fortis' },
+          { error: errorMessage },
           { status: 400 }
         );
       }

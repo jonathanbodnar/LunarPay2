@@ -125,15 +125,15 @@ export function middleware(request: NextRequest) {
 
   // Check for auth token in cookies
   const token = request.cookies.get('lunarpay_token');
+  const tokenValue = token?.value?.trim() || '';
 
   console.log('[MIDDLEWARE]', pathname, 'Token:', token ? 'Present' : 'Missing');
 
-  // If no token and trying to access protected route, redirect to login
-  if (!token && (isProtectedRoute || isProtectedApi)) {
-    console.log('[MIDDLEWARE] No token, redirecting to login');
+  // If no token or empty token value and trying to access protected route
+  if (!tokenValue && (isProtectedRoute || isProtectedApi)) {
     if (isProtectedApi) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', message: 'Authentication token is required' },
         { status: 401 }
       );
     }
@@ -141,12 +141,19 @@ export function middleware(request: NextRequest) {
   }
 
   // Verify token if present
-  if (token && (isProtectedRoute || isProtectedApi)) {
-    const payload = verifyToken(token.value);
+  if (tokenValue && (isProtectedRoute || isProtectedApi)) {
+    const payload = verifyToken(tokenValue);
     
     if (!payload) {
-      console.log('[MIDDLEWARE] Invalid token, redirecting to login');
-      // Invalid token - clear it and redirect
+      // Invalid token - clear it and return appropriate response
+      if (isProtectedApi) {
+        const response = NextResponse.json(
+          { error: 'Unauthorized', message: 'Invalid or expired authentication token' },
+          { status: 401 }
+        );
+        response.cookies.delete('lunarpay_token');
+        return response;
+      }
       const response = NextResponse.redirect(new URL('/login', request.url));
       response.cookies.delete('lunarpay_token');
       return response;

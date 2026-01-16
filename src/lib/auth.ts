@@ -40,12 +40,17 @@ export function generateToken(payload: JWTPayload, expiresIn: string = '7d'): st
  */
 export function verifyToken(token: string): JWTPayload | null {
   try {
+    // Return null immediately if token is empty or whitespace
+    if (!token || !token.trim()) {
+      return null;
+    }
+
     console.log('[VERIFY] Attempting to verify token');
     console.log('[VERIFY] JWT_SECRET exists:', !!JWT_SECRET);
     console.log('[VERIFY] JWT_SECRET length:', JWT_SECRET?.length);
     console.log('[VERIFY] Token preview:', token?.substring(0, 20) + '...');
     
-    const decoded = verify(token, JWT_SECRET) as JWTPayload;
+    const decoded = verify(token.trim(), JWT_SECRET) as JWTPayload;
     
     console.log('[VERIFY] Token verified successfully');
     return decoded;
@@ -62,7 +67,9 @@ export function verifyToken(token: string): JWTPayload | null {
 export async function getTokenFromCookies(): Promise<string | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(TOKEN_COOKIE_NAME);
-  return token?.value || null;
+  const tokenValue = token?.value?.trim() || '';
+  // Return null if token is empty string
+  return tokenValue || null;
 }
 
 /**
