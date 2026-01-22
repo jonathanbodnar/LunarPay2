@@ -11,9 +11,13 @@ import { sendSubscriptionRecurringPaymentReceipt } from '@/lib/email';
  * Configure in Railway Dashboard:
  * - Service Settings > Cron Jobs > Add Job
  * - Schedule: "0 2 * * *" (2 AM UTC daily)
- * - Command: curl -X POST https://lunarpay2-development.up.railway.app/api/cron/process-subscriptions
+ * - Endpoint: GET /api/cron/process-subscriptions
  * 
  * Or use an external cron service like cron-job.org, Vercel Cron, etc.
+ * 
+ * Manual trigger: Add ?admin_key=YOUR_ADMIN_PASSWORD to bypass auth
+ * 
+ * @version 2.0.0
  */
 
 // Allow both GET (for easier testing/external cron) and POST
