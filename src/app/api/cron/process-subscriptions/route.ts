@@ -36,7 +36,12 @@ async function processSubscriptions(request: Request) {
     // Also check for Vercel cron header
     const vercelCronHeader = request.headers.get('x-vercel-cron');
     
-    if (cronSecret && !vercelCronHeader && authHeader !== `Bearer ${cronSecret}`) {
+    // Check for admin trigger (query param with admin secret)
+    const url = new URL(request.url);
+    const adminTrigger = url.searchParams.get('admin_key');
+    const isAdminTrigger = adminTrigger === process.env.ADMIN_PASSWORD; // Use existing admin password
+    
+    if (cronSecret && !vercelCronHeader && !isAdminTrigger && authHeader !== `Bearer ${cronSecret}`) {
       console.log('[CRON] Unauthorized attempt');
       return NextResponse.json(
         { error: 'Unauthorized' },
