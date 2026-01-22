@@ -2,54 +2,84 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { dollarsToCents, calculateFee } from '@/lib/utils';
+import { sendSubscriptionRecurringPaymentReceipt } from '@/lib/email';
 
 /**
  * Cron job to process recurring subscriptions
- * Should be called daily via Railway Cron or Vercel Cron
+ * Should be called daily via Railway Cron or external cron service
  * 
- * Railway Cron Config:
- * Schedule: "0 2 * * *" (2 AM daily)
- * Command: curl https://yourapp.railway.app/api/cron/process-subscriptions
+ * Configure in Railway Dashboard:
+ * - Service Settings > Cron Jobs > Add Job
+ * - Schedule: "0 2 * * *" (2 AM UTC daily)
+ * - Command: curl -X POST https://lunarpay2-development.up.railway.app/api/cron/process-subscriptions
+ * 
+ * Or use an external cron service like cron-job.org, Vercel Cron, etc.
  */
+
+// Allow both GET (for easier testing/external cron) and POST
+export async function GET(request: Request) {
+  return processSubscriptions(request);
+}
+
 export async function POST(request: Request) {
+  return processSubscriptions(request);
+}
+
+async function processSubscriptions(request: Request) {
+  console.log('[CRON] Process subscriptions started at:', new Date().toISOString());
+  
   try {
-    // Verify cron secret for security
+    // Verify cron secret for security (optional - skip if not set)
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
     
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    // Also check for Vercel cron header
+    const vercelCronHeader = request.headers.get('x-vercel-cron');
+    
+    if (cronSecret && !vercelCronHeader && authHeader !== `Bearer ${cronSecret}`) {
+      console.log('[CRON] Unauthorized attempt');
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    // Set to end of today to catch all due subscriptions
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
 
-    // Get all active subscriptions due today
+    console.log('[CRON] Looking for subscriptions due on or before:', endOfToday.toISOString());
+
+    // Get all active subscriptions due today or earlier
     const subscriptions = await prisma.subscription.findMany({
       where: {
         status: 'A',
         nextPaymentOn: {
-          lte: today,
+          lte: endOfToday,
         },
       },
       include: {
         donor: true,
+        organization: true,
       },
     });
+
+    console.log('[CRON] Found', subscriptions.length, 'subscriptions to process');
 
     const results = {
       total: subscriptions.length,
       successful: 0,
       failed: 0,
+      skipped: 0,
       details: [] as any[],
     };
 
     for (const subscription of subscriptions) {
+      console.log(`[CRON] Processing subscription ${subscription.id} for ${subscription.email}`);
+      
       try {
-        // Get organization and Fortis credentials
+        // Get organization with Fortis credentials
         const organization = await prisma.organization.findFirst({
           where: { id: subscription.organizationId },
           include: {
@@ -58,11 +88,17 @@ export async function POST(request: Request) {
         });
 
         if (!organization?.fortisOnboarding?.authUserId) {
-          results.failed++;
+          console.log(`[CRON] Skipping subscription ${subscription.id} - no Fortis credentials`);
+          results.skipped++;
+          results.details.push({
+            subscriptionId: subscription.id,
+            status: 'skipped',
+            reason: 'No Fortis credentials',
+          });
           continue;
         }
 
-        // Get payment source
+        // Get payment source (saved card/bank)
         const source = await prisma.source.findFirst({
           where: {
             id: subscription.sourceId,
@@ -71,9 +107,17 @@ export async function POST(request: Request) {
         });
 
         if (!source) {
-          results.failed++;
+          console.log(`[CRON] Skipping subscription ${subscription.id} - no active payment source`);
+          results.skipped++;
+          results.details.push({
+            subscriptionId: subscription.id,
+            status: 'skipped',
+            reason: 'No active payment source',
+          });
           continue;
         }
+        
+        console.log(`[CRON] Processing $${subscription.amount} charge for subscription ${subscription.id}`);
 
         // Calculate fee
         const feePercentage = 0.023;
@@ -149,6 +193,8 @@ export async function POST(request: Request) {
 
         // Update transaction with result
         if (result.status) {
+          console.log(`[CRON] Subscription ${subscription.id} payment successful, transaction ${transaction.id}`);
+          
           await prisma.transaction.update({
             where: { id: transaction.id },
             data: {
@@ -169,21 +215,30 @@ export async function POST(request: Request) {
           });
 
           // Calculate next payment date
-          let nextPaymentDate = new Date(subscription.nextPaymentOn);
+          let nextPaymentDate = new Date(subscription.nextPaymentOn!);
           switch (subscription.frequency) {
             case 'weekly':
+            case 'W':
               nextPaymentDate.setDate(nextPaymentDate.getDate() + 7);
               break;
             case 'monthly':
+            case 'M':
               nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
               break;
             case 'quarterly':
+            case 'Q':
               nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 3);
               break;
             case 'yearly':
+            case 'Y':
               nextPaymentDate.setFullYear(nextPaymentDate.getFullYear() + 1);
               break;
+            default:
+              // Default to monthly
+              nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
           }
+
+          console.log(`[CRON] Subscription ${subscription.id} next payment: ${nextPaymentDate.toISOString()}`);
 
           // Update subscription
           await prisma.subscription.update({
@@ -195,13 +250,37 @@ export async function POST(request: Request) {
             },
           });
 
+          // Send receipt email
+          try {
+            await sendSubscriptionRecurringPaymentReceipt({
+              customerName: `${subscription.firstName} ${subscription.lastName}`,
+              customerEmail: subscription.email,
+              amount: Number(subscription.amount),
+              fee: subscription.isFeeCovered ? fee : 0,
+              organizationName: organization.name,
+              frequency: subscription.frequency,
+              nextPaymentDate: nextPaymentDate.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              }),
+              transactionId: transaction.id.toString(),
+            });
+            console.log(`[CRON] Receipt email sent for subscription ${subscription.id}`);
+          } catch (emailError) {
+            console.error(`[CRON] Failed to send receipt email for subscription ${subscription.id}:`, emailError);
+          }
+
           results.successful++;
           results.details.push({
             subscriptionId: subscription.id,
             status: 'success',
-            transactionId: transaction.id,
+            transactionId: Number(transaction.id),
+            amount: Number(subscription.amount),
+            nextPayment: nextPaymentDate.toISOString(),
           });
         } else {
+          console.log(`[CRON] Subscription ${subscription.id} payment FAILED:`, result.message);
           await prisma.transaction.update({
             where: { id: transaction.id },
             data: {

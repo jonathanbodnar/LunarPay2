@@ -705,6 +705,95 @@ export async function sendSubscriptionCancelledEmail(
 }
 
 // ============================================
+// SUBSCRIPTION RECURRING PAYMENT RECEIPT
+// ============================================
+
+interface SubscriptionRecurringPaymentData {
+  customerName: string;
+  customerEmail: string;
+  amount: number;
+  fee?: number;
+  organizationName: string;
+  frequency: string;
+  nextPaymentDate: string;
+  transactionId: string;
+  organizationEmail?: string;
+  organizationId?: number;
+  brandColor?: string;
+}
+
+export async function sendSubscriptionRecurringPaymentReceipt(data: SubscriptionRecurringPaymentData): Promise<boolean> {
+  const formatFrequency = (freq: string) => {
+    const map: Record<string, string> = {
+      'W': 'Weekly',
+      'M': 'Monthly',
+      'Q': 'Quarterly',
+      'Y': 'Yearly',
+      'weekly': 'Weekly',
+      'monthly': 'Monthly',
+      'quarterly': 'Quarterly',
+      'yearly': 'Yearly',
+    };
+    return map[freq] || freq;
+  };
+
+  const totalAmount = data.fee ? data.amount + data.fee : data.amount;
+  
+  const html = baseTemplate(`
+    <div class="header">
+      <div class="logo">${data.organizationName}</div>
+    </div>
+    <div class="content">
+      <h2 style="margin-top: 0; color: #16a34a;">✓ Payment Successful</h2>
+      <p>Hi ${data.customerName},</p>
+      <p>Your recurring ${formatFrequency(data.frequency).toLowerCase()} payment to ${data.organizationName} has been processed successfully.</p>
+      
+      <div class="details">
+        <table>
+          <tr>
+            <td><strong>Amount</strong></td>
+            <td style="text-align: right;"><span class="amount">$${data.amount.toFixed(2)}</span></td>
+          </tr>
+          ${data.fee ? `
+          <tr>
+            <td>Processing Fee (covered by you)</td>
+            <td style="text-align: right;">$${data.fee.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td><strong>Total Charged</strong></td>
+            <td style="text-align: right;"><strong>$${totalAmount.toFixed(2)}</strong></td>
+          </tr>
+          ` : ''}
+          <tr>
+            <td>Transaction ID</td>
+            <td style="text-align: right;">${data.transactionId}</td>
+          </tr>
+          <tr>
+            <td>Billing Frequency</td>
+            <td style="text-align: right;">${formatFrequency(data.frequency)}</td>
+          </tr>
+          <tr>
+            <td>Next Payment</td>
+            <td style="text-align: right;">${data.nextPaymentDate}</td>
+          </tr>
+        </table>
+      </div>
+      
+      <p style="font-size: 14px; color: #666;">
+        This is an automated recurring payment. You can manage or cancel your subscription at any time from your customer portal.
+      </p>
+    </div>
+  `, data.brandColor);
+
+  return sendEmail({
+    to: data.customerEmail,
+    subject: `Payment receipt - ${data.organizationName}`,
+    html,
+    replyTo: data.organizationEmail,
+  });
+}
+
+// ============================================
 // PAYMENT FAILED NOTIFICATION
 // ============================================
 
