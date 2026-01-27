@@ -20,7 +20,7 @@ const ADMIN_TRIGGER_PASSWORD = 'Trump2028!##!9';
  * 
  * Manual trigger: Add ?admin_key=YOUR_ADMIN_PASSWORD to bypass auth
  * 
- * @version 2.0.0
+ * @version 2.0.1 - Fixed build cache issue
  */
 
 // Allow both GET (for easier testing/external cron) and POST
