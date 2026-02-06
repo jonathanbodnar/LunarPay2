@@ -28,14 +28,33 @@ export default function RestrictedPage() {
   });
 
   useEffect(() => {
-    checkRestrictionStatus();
+    fetchUserAndOrganization();
   }, []);
 
-  const checkRestrictionStatus = async () => {
+  const fetchUserAndOrganization = async () => {
     try {
-      const res = await fetch('/api/organizations', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
+      // Fetch user info and organization in parallel
+      const [userRes, orgsRes] = await Promise.all([
+        fetch('/api/auth/me', { credentials: 'include' }),
+        fetch('/api/organizations', { credentials: 'include' }),
+      ]);
+
+      // Pre-fill user info
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        const user = userData.user;
+        if (user) {
+          setFormData(prev => ({
+            ...prev,
+            name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+            email: user.email || '',
+          }));
+        }
+      }
+
+      // Check organization restriction
+      if (orgsRes.ok) {
+        const data = await orgsRes.json();
         const org = data.organizations?.[0];
         if (org) {
           setOrganization(org);
@@ -46,7 +65,7 @@ export default function RestrictedPage() {
         }
       }
     } catch (error) {
-      console.error('Error checking restriction:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
@@ -164,8 +183,8 @@ export default function RestrictedPage() {
                     type="email"
                     required
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="john@example.com"
+                    readOnly
+                    className="bg-muted"
                   />
                 </div>
 
