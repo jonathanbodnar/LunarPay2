@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { trackLead } from '@/lib/fbpixel';
 
 function RegisterForm() {
   // URL format: /register?email=user@example.com&firstName=John&lastName=Doe&phone=+15551234567
@@ -82,6 +83,12 @@ function RegisterForm() {
       if (data.token) {
         localStorage.setItem('lunarpay_token', data.token);
       }
+
+      // Track Lead conversion event
+      trackLead({ 
+        email: formData.email, 
+        businessName: formData.businessName 
+      });
 
       // Redirect to getting started
       router.push('/getting-started');

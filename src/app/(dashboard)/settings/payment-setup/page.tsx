@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import {
   Clock,
   Mail
 } from 'lucide-react';
+import { trackPurchase } from '@/lib/fbpixel';
 
 interface Organization {
   id: number;
@@ -83,9 +84,27 @@ export default function PaymentSetupPage() {
     accountHolderName: '',
   });
 
+  // Track if we've already fired the purchase event
+  const purchaseTracked = useRef(false);
+
   useEffect(() => {
     fetchOrganizations();
   }, []);
+
+  // Track Purchase event when onboarding is complete (ACTIVE status)
+  useEffect(() => {
+    if (
+      selectedOrg?.fortisOnboarding?.appStatus === 'ACTIVE' && 
+      !purchaseTracked.current
+    ) {
+      purchaseTracked.current = true;
+      trackPurchase({ 
+        organizationName: selectedOrg.name,
+        value: 0,
+        currency: 'USD'
+      });
+    }
+  }, [selectedOrg]);
 
   const fetchOrganizations = async () => {
     try {
