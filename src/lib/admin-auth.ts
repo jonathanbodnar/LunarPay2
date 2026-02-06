@@ -5,17 +5,19 @@ import { cookies } from 'next/headers';
 import { sign, verify } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-// SECURITY: All secrets must be set via environment variables
-const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
 const ADMIN_COOKIE_NAME = 'lunarpay_admin_token';
 
-// Admin credentials from environment variables
-const SUPER_ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-const SUPER_ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
+// Helper functions to get env vars at runtime (not module load time)
+function getAdminJwtSecret(): string | undefined {
+  return process.env.ADMIN_JWT_SECRET;
+}
 
-// Validate required environment variables at startup
-if (!ADMIN_JWT_SECRET && process.env.NODE_ENV === 'production') {
-  throw new Error('ADMIN_JWT_SECRET environment variable is required in production');
+function getAdminEmail(): string | undefined {
+  return process.env.ADMIN_EMAIL;
+}
+
+function getAdminPasswordHash(): string | undefined {
+  return process.env.ADMIN_PASSWORD_HASH;
 }
 
 export interface AdminJWTPayload {
@@ -29,29 +31,38 @@ export interface AdminJWTPayload {
  * Verify super admin credentials
  */
 export async function verifySuperAdminCredentials(email: string, password: string): Promise<boolean> {
-  if (!SUPER_ADMIN_EMAIL || !SUPER_ADMIN_PASSWORD_HASH) {
-    console.error('[ADMIN AUTH] Admin credentials not configured in environment variables');
+  const adminEmail = getAdminEmail();
+  const adminPasswordHash = getAdminPasswordHash();
+  
+  if (!adminEmail || !adminPasswordHash) {
+    console.error('[ADMIN AUTH] Admin credentials not configured. ADMIN_EMAIL:', !!adminEmail, 'ADMIN_PASSWORD_HASH:', !!adminPasswordHash);
     return false;
   }
   
-  if (email !== SUPER_ADMIN_EMAIL) {
+  if (email !== adminEmail) {
+    console.error('[ADMIN AUTH] Email mismatch. Expected:', adminEmail, 'Got:', email);
     return false;
   }
   
   // Compare password against stored hash
-  return bcrypt.compare(password, SUPER_ADMIN_PASSWORD_HASH);
+  const isValid = await bcrypt.compare(password, adminPasswordHash);
+  if (!isValid) {
+    console.error('[ADMIN AUTH] Password hash comparison failed');
+  }
+  return isValid;
 }
 
 /**
  * Generate admin JWT token
  */
 export function generateAdminToken(email: string): string {
-  if (!ADMIN_JWT_SECRET) {
+  const secret = getAdminJwtSecret();
+  if (!secret) {
     throw new Error('ADMIN_JWT_SECRET environment variable is required');
   }
   return sign(
     { email, isSuperAdmin: true },
-    ADMIN_JWT_SECRET,
+    secret,
     { expiresIn: '24h' }
   );
 }
@@ -60,12 +71,13 @@ export function generateAdminToken(email: string): string {
  * Verify admin JWT token
  */
 export function verifyAdminToken(token: string): AdminJWTPayload | null {
-  if (!ADMIN_JWT_SECRET) {
+  const secret = getAdminJwtSecret();
+  if (!secret) {
     console.error('[ADMIN AUTH] ADMIN_JWT_SECRET not configured');
     return null;
   }
   try {
-    const decoded = verify(token, ADMIN_JWT_SECRET) as AdminJWTPayload;
+    const decoded = verify(token, secret) as AdminJWTPayload;
     if (decoded.isSuperAdmin) {
       return decoded;
     }
