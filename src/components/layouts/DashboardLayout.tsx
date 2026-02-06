@@ -118,7 +118,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     fetchUserPermissions();
     checkSetupProgress();
+    checkRestrictionStatus();
   }, []);
+
+  const checkRestrictionStatus = async () => {
+    // Don't check if we're already on the restricted page
+    if (pathname === '/restricted') return;
+    
+    try {
+      const res = await fetch('/api/organizations', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        const org = data.organizations?.[0];
+        if (org?.restricted) {
+          router.push('/restricted');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check restriction status:', error);
+    }
+  };
 
   const fetchUserPermissions = async () => {
     try {

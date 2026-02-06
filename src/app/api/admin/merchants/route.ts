@@ -49,6 +49,8 @@ export async function GET() {
       totalInvoices: m.invoices.length,
       ownerName: `${m.user.firstName || ''} ${m.user.lastName || ''}`.trim() || 'Unknown',
       ownerEmail: m.user.email,
+      restricted: m.restricted || false,
+      restrictedReason: m.restrictedReason || null,
     }));
 
     return NextResponse.json({

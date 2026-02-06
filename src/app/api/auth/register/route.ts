@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword, generateToken, setAuthCookie, generateRandomToken } from '@/lib/auth';
 import { sendWelcomeEmail } from '@/lib/email';
+import { checkForSpam } from '@/lib/spam-detection';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -34,6 +35,12 @@ export async function POST(request: Request) {
       if (existingUser.organizations.length === 0) {
         console.log('Completing partial registration for user:', existingUser.id);
         
+        // Check for spam
+        const spamCheck = checkForSpam(validatedData.businessName || 'My Organization', validatedData.email);
+        if (spamCheck.isSpam) {
+          console.log(`[REGISTRATION] Auto-restricting suspicious account: ${validatedData.email}, Reason: ${spamCheck.reason}`);
+        }
+        
         const result = await prisma.$transaction(async (tx) => {
           // Create initial organization with business name
           const orgToken = generateRandomToken(32);
@@ -42,6 +49,9 @@ export async function POST(request: Request) {
               userId: existingUser.id,
               name: validatedData.businessName || 'My Organization',
               token: orgToken,
+              restricted: spamCheck.isSpam,
+              restrictedReason: spamCheck.isSpam ? spamCheck.reason : null,
+              restrictedAt: spamCheck.isSpam ? new Date() : null,
             },
           });
 
@@ -106,6 +116,12 @@ export async function POST(request: Request) {
     // Hash password
     const hashedPassword = await hashPassword(validatedData.password);
 
+    // Check for spam/suspicious business names
+    const spamCheck = checkForSpam(validatedData.businessName, validatedData.email);
+    if (spamCheck.isSpam) {
+      console.log(`[REGISTRATION] Auto-restricting suspicious account: ${validatedData.email}, Reason: ${spamCheck.reason}`);
+    }
+
     // Use a transaction to ensure all-or-nothing registration
     const result = await prisma.$transaction(async (tx) => {
       // Create user
@@ -131,12 +147,16 @@ export async function POST(request: Request) {
       });
 
       // Create initial organization for user with business name
+      // Auto-restrict if spam detected
       const orgToken = generateRandomToken(32);
       const organization = await tx.organization.create({
         data: {
           userId: user.id,
           name: validatedData.businessName,
           token: orgToken,
+          restricted: spamCheck.isSpam,
+          restrictedReason: spamCheck.isSpam ? spamCheck.reason : null,
+          restrictedAt: spamCheck.isSpam ? new Date() : null,
         },
       });
 

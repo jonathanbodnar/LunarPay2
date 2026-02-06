@@ -100,6 +100,11 @@ model Organization {
   twilioCountryNumber   String?   @map("twilio_country_number") @db.VarChar(10)
   twilioToken           String?   @map("twilio_token") @db.VarChar(255)
   
+  // Account Restriction
+  restricted            Boolean   @default(false)
+  restrictedReason      String?   @map("restricted_reason") @db.VarChar(500)
+  restrictedAt          DateTime? @map("restricted_at")
+  
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
   

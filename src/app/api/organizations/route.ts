@@ -56,6 +56,9 @@ export async function GET() {
           portalCustomDomain: true,
           portalTitle: true,
           portalDescription: true,
+          restricted: true,
+          restrictedReason: true,
+          restrictedAt: true,
           createdAt: true,
           updatedAt: true,
           fortisOnboarding: {
@@ -107,10 +110,13 @@ export async function GET() {
         primary_color: string | null;
         background_color: string | null;
         button_text_color: string | null;
+        restricted: boolean;
+        restricted_reason: string | null;
       }>>`
         SELECT ch_id, client_id, church_name, legal_name, phone_no, website, 
                email, street_address, city, state, country, postal, token, 
-               slug, logo, primary_color, background_color, button_text_color
+               slug, logo, primary_color, background_color, button_text_color,
+               COALESCE(restricted, false) as restricted, restricted_reason
         FROM church_detail 
         WHERE client_id = ${currentUser.userId}
         ORDER BY ch_id ASC
@@ -135,6 +141,8 @@ export async function GET() {
         primaryColor: org.primary_color,
         backgroundColor: org.background_color,
         buttonTextColor: org.button_text_color,
+        restricted: org.restricted,
+        restrictedReason: org.restricted_reason,
         fortisOnboarding: null,
         _count: { invoices: 0, donors: 0, funds: 0 },
       }));
