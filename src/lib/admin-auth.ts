@@ -46,6 +46,9 @@ export async function verifySuperAdminCredentials(email: string, password: strin
  * Generate admin JWT token
  */
 export function generateAdminToken(email: string): string {
+  if (!ADMIN_JWT_SECRET) {
+    throw new Error('ADMIN_JWT_SECRET environment variable is required');
+  }
   return sign(
     { email, isSuperAdmin: true },
     ADMIN_JWT_SECRET,
@@ -57,6 +60,10 @@ export function generateAdminToken(email: string): string {
  * Verify admin JWT token
  */
 export function verifyAdminToken(token: string): AdminJWTPayload | null {
+  if (!ADMIN_JWT_SECRET) {
+    console.error('[ADMIN AUTH] ADMIN_JWT_SECRET not configured');
+    return null;
+  }
   try {
     const decoded = verify(token, ADMIN_JWT_SECRET) as AdminJWTPayload;
     if (decoded.isSuperAdmin) {
