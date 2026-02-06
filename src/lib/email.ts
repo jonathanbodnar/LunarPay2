@@ -1147,3 +1147,261 @@ export async function sendAdminReplyNotification(data: AdminReplyNotificationDat
     html,
   });
 }
+
+// ============================================
+// ONBOARDING DRIP EMAIL SEQUENCE
+// ============================================
+
+interface OnboardingEmailData {
+  to: string;
+  firstName: string;
+}
+
+const onboardingEmailTemplate = (content: string, preheader: string = '') => `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${preheader ? `<meta name="x-apple-disable-message-reformatting">` : ''}
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.7; color: #333; margin: 0; padding: 0; background: #f9fafb; }
+    .preheader { display: none; max-width: 0; max-height: 0; overflow: hidden; font-size: 1px; line-height: 1px; color: #f9fafb; }
+    .container { max-width: 580px; margin: 0 auto; padding: 40px 20px; }
+    .content { background: #ffffff; border-radius: 8px; padding: 40px; }
+    .button { display: inline-block; background: #000000; color: #ffffff !important; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 24px 0; }
+    .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #999; }
+    p { margin: 0 0 16px 0; }
+    ul { margin: 16px 0; padding-left: 20px; }
+    li { margin-bottom: 8px; }
+    strong { color: #111; }
+    h2 { margin: 0 0 20px 0; color: #111; font-size: 22px; }
+    .signature { margin-top: 32px; color: #666; }
+  </style>
+</head>
+<body>
+  ${preheader ? `<div class="preheader">${preheader}</div>` : ''}
+  <div class="container">
+    <div class="content">
+      ${content}
+    </div>
+    <div class="footer">
+      <p>© ${new Date().getFullYear()} LunarPay. All rights reserved.</p>
+      <p style="margin-top: 8px;">Questions? Reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+// EMAIL 1: Welcome (Sent ~1 hour after registration)
+export async function sendOnboardingEmail1(data: OnboardingEmailData): Promise<boolean> {
+  const onboardingUrl = `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/settings/payment-setup`;
+
+  const html = onboardingEmailTemplate(`
+    <h2>Welcome to LunarPay.</h2>
+    
+    <p>Before you finish setup, there's something important you need to know.</p>
+    
+    <p><strong>LunarPay does payments differently—on purpose.</strong></p>
+    
+    <p>Most processors let you:</p>
+    <ul>
+      <li>Start accepting payments instantly</li>
+      <li>Build revenue</li>
+      <li>Then quietly run underwriting later</li>
+    </ul>
+    
+    <p>If that review fails, they don't warn you.<br>
+    They shut you down.</p>
+    
+    <p>We've lived that scenario. That's why LunarPay works in reverse.</p>
+    
+    <p><strong>We underwrite first.</strong></p>
+    
+    <p>That means <em>before</em> you accept your first $1:</p>
+    <ul>
+      <li>Your business is reviewed</li>
+      <li>Your risk profile is approved</li>
+      <li>Your account is protected</li>
+    </ul>
+    
+    <p>So you don't wake up to frozen funds or a terminated account after you've already built momentum.</p>
+    
+    <p>It takes a little more intention upfront.<br>
+    But it ensures you're safe <em>before</em> you scale.</p>
+    
+    <p>👉 <strong>Get approved first</strong></p>
+    
+    <div style="text-align: center;">
+      <a href="${onboardingUrl}" class="button">Start Secure Onboarding</a>
+    </div>
+    
+    <p class="signature">— Jonathan</p>
+  `, 'There\'s something important you need to know about your payments.');
+
+  return sendEmail({
+    to: data.to,
+    subject: 'Welcome to LunarPay.',
+    html,
+  });
+}
+
+// EMAIL 2: 24 Hours - The Story
+export async function sendOnboardingEmail2(data: OnboardingEmailData): Promise<boolean> {
+  const onboardingUrl = `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/settings/payment-setup`;
+
+  const html = onboardingEmailTemplate(`
+    <p>I remember the day like it was yesterday.</p>
+    
+    <p>I was standing in my kitchen when the notification came through.</p>
+    
+    <p>It might as well have said:</p>
+    
+    <p><strong>"This is the last day of your business."</strong></p>
+    
+    <p>Because that's exactly what it meant.</p>
+    
+    <p><strong>"Your Stripe account has been terminated."</strong></p>
+    
+    <p>No warning.<br>
+    No explanation.<br>
+    No one to call.</p>
+    
+    <p>At the time, we had spent <strong>14 months</strong> building a marketing company to <strong>$135,000 in monthly recurring revenue</strong>.</p>
+    
+    <p>No venture capital.<br>
+    No shortcuts.<br>
+    Just blood, sweat, and long nights.</p>
+    
+    <p>And overnight, our cashflow disappeared.</p>
+    
+    <p>Cards stopped charging.<br>
+    Revenue flatlined.<br>
+    Payroll became a crisis.</p>
+    
+    <p>It took <strong>three months</strong> to move cards and resume billing—but by then, the damage was already done.</p>
+    
+    <p>We lost more than half our customers.<br>
+    We couldn't pay our staff.<br>
+    A real business collapsed because of one processor decision.</p>
+    
+    <p>Stripe never told us <em>why</em>.</p>
+    
+    <p>That moment permanently changed how I think about payments.</p>
+    
+    <p><strong>If you don't control your payments, you don't control your business.</strong></p>
+    
+    <p>That's why LunarPay exists—and why we make sure you're approved <em>before</em> you ever accept money.</p>
+    
+    <p>👉 <strong>Protect my payments</strong></p>
+    
+    <div style="text-align: center;">
+      <a href="${onboardingUrl}" class="button">Finish Account Review</a>
+    </div>
+    
+    <p class="signature">— Jonathan</p>
+  `, 'I was standing in my kitchen when the notification came through.');
+
+  return sendEmail({
+    to: data.to,
+    subject: 'This is the last day of your business.',
+    html,
+  });
+}
+
+// EMAIL 3: 72 Hours - The Explanation
+export async function sendOnboardingEmail3(data: OnboardingEmailData): Promise<boolean> {
+  const onboardingUrl = `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/settings/payment-setup`;
+
+  const html = onboardingEmailTemplate(`
+    <p>Here's what most payment processors don't explain.</p>
+    
+    <p>When they say "start accepting payments instantly,"<br>
+    what they really mean is:</p>
+    
+    <blockquote style="border-left: 3px solid #ddd; margin: 20px 0; padding-left: 20px; color: #555; font-style: italic;">
+      "We'll review you later."
+    </blockquote>
+    
+    <p>Underwriting happens <em>after</em> you build revenue.<br>
+    Risk checks happen <em>after</em> customers are on file.<br>
+    Shutdowns happen when it hurts the most.</p>
+    
+    <p><strong>LunarPay flips that model.</strong></p>
+    
+    <p>We intentionally:</p>
+    <ul>
+      <li>Review businesses <strong>before activation</strong></li>
+      <li>Work only with free-speech-aligned partners</li>
+      <li>Reduce chargebacks and sudden holds</li>
+      <li>Protect long-term operators, not short-term volume</li>
+    </ul>
+    
+    <p>Yes, it's different.<br>
+    Yes, it's more deliberate.</p>
+    
+    <p>But it means you don't build on quicksand.</p>
+    
+    <p>We'd rather take a little more time now<br>
+    than force you to rebuild later.</p>
+    
+    <p>👉 <strong>Secure my account</strong></p>
+    
+    <div style="text-align: center;">
+      <a href="${onboardingUrl}" class="button">Complete Approval</a>
+    </div>
+    
+    <p class="signature">— Jonathan</p>
+  `, 'What most payment processors don\'t tell you.');
+
+  return sendEmail({
+    to: data.to,
+    subject: 'The part they don\'t tell you',
+    html,
+  });
+}
+
+// EMAIL 4: 2 Weeks - Re-engagement
+export async function sendOnboardingEmail4(data: OnboardingEmailData): Promise<boolean> {
+  const onboardingUrl = `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/settings/payment-setup`;
+
+  const html = onboardingEmailTemplate(`
+    <p>Quick check-in.</p>
+    
+    <p>If you're still processing payments elsewhere, ask yourself one question:</p>
+    
+    <p><strong>Would you be okay losing your ability to charge customers tomorrow—without explanation?</strong></p>
+    
+    <p>Because that's the reality for most businesses today.</p>
+    
+    <p>LunarPay isn't for everyone.</p>
+    
+    <p>It's for businesses that:</p>
+    <ul>
+      <li>Value stability over shortcuts</li>
+      <li>Care about free speech and independence</li>
+      <li>Want to build something that lasts</li>
+    </ul>
+    
+    <p>If that sounds like you, the next step is still open.</p>
+    
+    <p>👉 <strong>Lock in payment protection</strong></p>
+    
+    <div style="text-align: center;">
+      <a href="${onboardingUrl}" class="button">Finish Onboarding</a>
+    </div>
+    
+    <p>No hype.<br>
+    No surprises.<br>
+    Just a payment stack built for businesses that plan to be here tomorrow.</p>
+    
+    <p class="signature">— Jonathan</p>
+  `, 'Would you be okay losing your ability to charge customers tomorrow?');
+
+  return sendEmail({
+    to: data.to,
+    subject: 'Are your payments safe?',
+    html,
+  });
+}

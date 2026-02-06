@@ -189,6 +189,12 @@ model FortisOnboarding {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime? @updatedAt @map("updated_at")
   
+  // Onboarding Email Drip Sequence Tracking
+  onboardingEmail1SentAt  DateTime? @map("onboarding_email1_sent_at")
+  onboardingEmail2SentAt  DateTime? @map("onboarding_email2_sent_at")
+  onboardingEmail3SentAt  DateTime? @map("onboarding_email3_sent_at")
+  onboardingEmail4SentAt  DateTime? @map("onboarding_email4_sent_at")
+  
   organization          Organization @relation(fields: [organizationId], references: [id])
   
   @@map("church_onboard_fortis")
