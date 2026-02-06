@@ -66,15 +66,21 @@ export function generateSlug(text: string): string {
 }
 
 /**
- * Generate random token
+ * Generate cryptographically secure random token
  */
 export function generateRandomToken(length: number = 32): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  // Use crypto for secure randomness
+  if (typeof window === 'undefined') {
+    // Server-side: use Node.js crypto
+    const crypto = require('crypto');
+    return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
+  } else {
+    // Client-side: use Web Crypto API
+    const array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    return Array.from(array, byte => chars[byte % chars.length]).join('');
   }
-  return result;
 }
 
 /**

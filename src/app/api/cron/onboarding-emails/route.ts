@@ -21,8 +21,8 @@ import {
   sendOnboardingEmail4,
 } from '@/lib/email';
 
-// Manual trigger password (same as subscription cron)
-const ADMIN_TRIGGER_PASSWORD = 'Trump2028!##!9';
+// Admin key for manual triggering (must be set via environment variable)
+const ADMIN_TRIGGER_KEY = process.env.CRON_ADMIN_KEY;
 
 // Time thresholds in milliseconds
 const ONE_HOUR = 60 * 60 * 1000;
@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
   const isAuthorized =
     cronSecret === process.env.CRON_SECRET ||
     cronSecret === `Bearer ${process.env.CRON_SECRET}` ||
-    adminKey === ADMIN_TRIGGER_PASSWORD;
+    ADMIN_TRIGGER_KEY && adminKey === ADMIN_TRIGGER_KEY;
 
   if (!isAuthorized) {
     console.log('[ONBOARDING_EMAILS] Unauthorized request');

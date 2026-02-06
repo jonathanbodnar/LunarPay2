@@ -6,8 +6,10 @@ This is a lightweight container that runs on a schedule to process recurring sub
 
 1. **Create a new service** in Railway from this directory
 2. **Set environment variables:**
-   - `CRON_URL` = `https://app.lunarpay.com/api/cron/process-subscriptions?admin_key=Trump2028!%23%23!9`
-   - `ONBOARDING_EMAILS_URL` = `https://app.lunarpay.com/api/cron/onboarding-emails?admin_key=Trump2028!%23%23!9`
+   - `CRON_URL` = `https://app.lunarpay.com/api/cron/process-subscriptions?admin_key=${CRON_ADMIN_KEY}`
+   - `ONBOARDING_EMAILS_URL` = `https://app.lunarpay.com/api/cron/onboarding-emails?admin_key=${CRON_ADMIN_KEY}`
+   
+   **Note:** `CRON_ADMIN_KEY` should be set as an environment variable in your Railway/Supabase deployment.
 
 3. **Set Cron Schedule:** `0 * * * *` (runs every hour)
 
@@ -49,8 +51,10 @@ You can manually trigger either endpoint:
 
 ```bash
 # Process subscriptions
-curl "https://app.lunarpay.com/api/cron/process-subscriptions?admin_key=Trump2028!%23%23!9"
+curl "https://app.lunarpay.com/api/cron/process-subscriptions?admin_key=${CRON_ADMIN_KEY}"
 
 # Process onboarding emails
-curl "https://app.lunarpay.com/api/cron/onboarding-emails?admin_key=Trump2028!%23%23!9"
+curl "https://app.lunarpay.com/api/cron/onboarding-emails?admin_key=${CRON_ADMIN_KEY}"
 ```
+
+**Security Note:** Never commit actual admin keys to version control. Use environment variables.

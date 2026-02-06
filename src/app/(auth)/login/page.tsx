@@ -53,20 +53,11 @@ export default function LoginPage() {
       // Store token in localStorage for client-side access
       if (data.token) {
         localStorage.setItem('lunarpay_token', data.token);
-        console.log('[FRONTEND] Token stored in localStorage');
       }
-
-      console.log('[FRONTEND] Login successful!');
-      console.log('[FRONTEND] Token:', data.token);
-      console.log('[FRONTEND] User:', data.user);
       
       setIsRedirecting(true);
       
-      // Try multiple redirect methods
-      console.log('[FRONTEND] Attempting redirect...');
-      
       setTimeout(() => {
-        console.log('[FRONTEND] Redirecting now...');
         window.location.replace('/dashboard');
       }, 500);
     } catch (err) {

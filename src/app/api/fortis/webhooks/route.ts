@@ -2,6 +2,47 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { FortisWebhookPayload } from '@/types/fortis';
 import { logWebhookReceived, logPaymentStatusUpdated } from '@/lib/payment-logger';
+import crypto from 'crypto';
+
+// Webhook signature secret (should be configured in Fortis dashboard)
+const WEBHOOK_SECRET = process.env.FORTIS_WEBHOOK_SECRET;
+
+/**
+ * Verify Fortis webhook signature
+ * Fortis sends a signature in the x-fortis-signature header
+ */
+function verifyWebhookSignature(payload: string, signature: string | null): boolean {
+  // If no webhook secret is configured, log warning but allow (for development)
+  if (!WEBHOOK_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[SECURITY] FORTIS_WEBHOOK_SECRET not configured - rejecting webhook');
+      return false;
+    }
+    // In development, allow webhooks without signature verification
+    return true;
+  }
+
+  if (!signature) {
+    console.error('[SECURITY] Webhook received without signature');
+    return false;
+  }
+
+  // Calculate expected signature
+  const expectedSignature = crypto
+    .createHmac('sha256', WEBHOOK_SECRET)
+    .update(payload)
+    .digest('hex');
+
+  // Use timing-safe comparison to prevent timing attacks
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    );
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Fortis Webhook Handler
@@ -9,7 +50,20 @@ import { logWebhookReceived, logPaymentStatusUpdated } from '@/lib/payment-logge
  */
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    // Get raw body for signature verification
+    const rawBody = await request.text();
+    const signature = request.headers.get('x-fortis-signature') || request.headers.get('x-signature');
+
+    // Verify webhook signature
+    if (!verifyWebhookSignature(rawBody, signature)) {
+      console.error('[SECURITY] Invalid webhook signature - rejecting request');
+      return NextResponse.json(
+        { status: false, message: 'Invalid signature' },
+        { status: 401 }
+      );
+    }
+
+    const body = JSON.parse(rawBody);
     
     // Log webhook to database
     await prisma.fortisWebhook.create({
@@ -61,15 +115,7 @@ export async function POST(request: Request) {
 async function handleMerchantOnboardingWebhook(body: FortisWebhookPayload) {
   const { client_app_id, stage, users, locations, location_id: topLevelLocationId, product_transaction_id: topLevelProductTxId } = body;
 
-  console.log('[Fortis Webhook] Merchant onboarding webhook received:', {
-    client_app_id,
-    stage,
-    hasUsers: !!users?.length,
-    hasLocations: !!locations?.length,
-    topLevelLocationId,
-    topLevelProductTxId,
-    fullPayload: JSON.stringify(body, null, 2),
-  });
+  // Log webhook receipt (without sensitive payload data)
 
   await logWebhookReceived('merchant_onboarding', parseInt(client_app_id));
 
@@ -134,11 +180,7 @@ async function handleMerchantOnboardingWebhook(body: FortisWebhookPayload) {
       productTransactionId = topLevelProductTxId;
     }
     
-    console.log('[Fortis Webhook] Extracted credentials:', {
-      userId: merchantUser.user_id,
-      locationId,
-      productTransactionId,
-    });
+    // Credentials extracted successfully
 
     // Update onboarding record with merchant credentials
     await prisma.fortisOnboarding.update({
@@ -157,7 +199,6 @@ async function handleMerchantOnboardingWebhook(body: FortisWebhookPayload) {
     // Log if location_id was not found (will need manual resolution)
     if (!locationId) {
       console.warn('[Fortis Webhook] WARNING: location_id not found in webhook for org:', organizationId);
-      console.warn('[Fortis Webhook] Full payload:', JSON.stringify(body, null, 2));
     }
 
     // TODO: Send email notification to merchant

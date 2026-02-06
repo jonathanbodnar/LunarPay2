@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, generateRandomToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/lib/email';
-import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
-function generatePassword(length: number = 12): string {
+function generateSecurePassword(length: number = 16): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  const randomBytes = crypto.randomBytes(length);
   let password = '';
   for (let i = 0; i < length; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
+    password += chars.charAt(randomBytes[i] % chars.length);
   }
   return password;
 }
@@ -37,30 +38,35 @@ export async function POST(
       );
     }
 
-    // Generate new password
-    const newPassword = generatePassword();
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    // Generate a secure password reset token
+    const resetToken = generateRandomToken(32);
+    const resetTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    // Update password
+    // Update user with reset token
     await prisma.user.update({
       where: { id: memberId },
-      data: { password: hashedPassword },
+      data: { 
+        resetToken,
+        resetTokenExpiry,
+      },
     });
 
-    // Send email with new credentials
+    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${resetToken}`;
+
+    // Send email with reset link (never send plain-text passwords)
     const emailHTML = `
-      <h2>Your credentials have been reset</h2>
+      <h2>Set Up Your LunarPay Account</h2>
       <p>Hello ${member.firstName},</p>
-      <p>Your login credentials have been reset:</p>
-      <p><strong>Email:</strong> ${member.email}<br>
-      <strong>Password:</strong> ${newPassword}</p>
-      <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/login">Click here to login</a></p>
-      <p>Please change your password after logging in.</p>
+      <p>You've been invited to join a team on LunarPay. Click the link below to set up your password:</p>
+      <p><a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #000; color: #fff; text-decoration: none; border-radius: 6px;">Set Up Password</a></p>
+      <p>This link will expire in 24 hours.</p>
+      <p>Your email: <strong>${member.email}</strong></p>
+      <p>If you didn't expect this invitation, you can safely ignore this email.</p>
     `;
 
     await sendEmail({
       to: member.email,
-      subject: 'Your credentials have been reset - LunarPay',
+      subject: 'Set up your LunarPay account',
       html: emailHTML,
     });
 

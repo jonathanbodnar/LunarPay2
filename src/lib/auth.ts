@@ -3,9 +3,16 @@
 import { compare, hash } from 'bcryptjs';
 import { sign, verify } from 'jsonwebtoken';
 import { cookies } from 'next/headers';
+import crypto from 'crypto';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+// SECURITY: JWT secret must be set via environment variable
+const JWT_SECRET = process.env.JWT_SECRET;
 const TOKEN_COOKIE_NAME = 'lunarpay_token';
+
+// Validate required environment variables at startup
+if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('JWT_SECRET environment variable is required in production');
+}
 
 export interface JWTPayload {
   userId: number;
@@ -32,7 +39,8 @@ export async function verifyPassword(password: string, hashedPassword: string): 
  * Generate JWT token
  */
 export function generateToken(payload: JWTPayload, expiresIn: string = '7d'): string {
-  return sign(payload, JWT_SECRET, { expiresIn } as any);
+  const secret = JWT_SECRET || 'dev-secret-not-for-production';
+  return sign(payload, secret, { expiresIn } as any);
 }
 
 /**
@@ -40,18 +48,10 @@ export function generateToken(payload: JWTPayload, expiresIn: string = '7d'): st
  */
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    console.log('[VERIFY] Attempting to verify token');
-    console.log('[VERIFY] JWT_SECRET exists:', !!JWT_SECRET);
-    console.log('[VERIFY] JWT_SECRET length:', JWT_SECRET?.length);
-    console.log('[VERIFY] Token preview:', token?.substring(0, 20) + '...');
-    
-    const decoded = verify(token, JWT_SECRET) as JWTPayload;
-    
-    console.log('[VERIFY] Token verified successfully');
+    const secret = JWT_SECRET || 'dev-secret-not-for-production';
+    const decoded = verify(token, secret) as JWTPayload;
     return decoded;
-  } catch (error) {
-    console.error('[VERIFY] Token verification failed:', error);
-    console.error('[VERIFY] Error message:', (error as Error).message);
+  } catch {
     return null;
   }
 }
@@ -114,23 +114,16 @@ export async function requireAuth(): Promise<JWTPayload> {
 }
 
 /**
- * Generate random token
+ * Generate cryptographically secure random token
  */
 export function generateRandomToken(length: number = 32): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+  return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
 }
 
 /**
- * Generate unique hash
+ * Generate cryptographically secure unique hash
  */
 export function generateHash(): string {
-  return Array.from({ length: 32 }, () => 
-    Math.floor(Math.random() * 16).toString(16)
-  ).join('');
+  return crypto.randomBytes(16).toString('hex');
 }
 

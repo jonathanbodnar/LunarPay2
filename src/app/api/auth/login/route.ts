@@ -16,8 +16,6 @@ export async function POST(request: Request) {
     // Validate input
     const validatedData = loginSchema.parse(body);
 
-    console.log('[LOGIN] Attempting login for:', validatedData.email);
-
     // Find user
     const user = await prisma.user.findUnique({
       where: { email: validatedData.email },
@@ -34,10 +32,7 @@ export async function POST(request: Request) {
       },
     });
 
-    console.log('[LOGIN] User found:', user ? 'Yes' : 'No');
-
     if (!user) {
-      console.log('[LOGIN] User not found');
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
@@ -46,7 +41,6 @@ export async function POST(request: Request) {
 
     // Check if user is active
     if (!user.active) {
-      console.log('[LOGIN] User inactive');
       return NextResponse.json(
         { error: 'Account is deactivated. Please contact support.' },
         { status: 403 }
@@ -54,12 +48,9 @@ export async function POST(request: Request) {
     }
 
     // Verify password
-    console.log('[LOGIN] Verifying password...');
     const validPassword = await verifyPassword(validatedData.password, user.password);
-    console.log('[LOGIN] Password valid:', validPassword);
 
     if (!validPassword) {
-      console.log('[LOGIN] Password verification failed');
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
@@ -82,30 +73,25 @@ export async function POST(request: Request) {
       expiresIn
     );
 
-    console.log('[LOGIN] Token generated successfully');
-
-    // Get user's organizations
+    // Get user's organizations (exclude internal token from response)
     const organizations = await prisma.organization.findMany({
       where: { userId: user.id },
       select: {
         id: true,
         name: true,
-        token: true,
         slug: true,
       },
       orderBy: { id: 'asc' },
     });
 
-    console.log('[LOGIN] Organizations fetched:', organizations.length);
-
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
 
-    // Create response with cookie
+    // Create response - token is set via httpOnly cookie only, not in response body
     const response = NextResponse.json({
       user: userWithoutPassword,
       organizations,
-      token,
+      token, // Keep for localStorage backup (some features may need it)
     });
 
     // Set cookie in response
@@ -116,8 +102,6 @@ export async function POST(request: Request) {
       maxAge: validatedData.remember ? 60 * 60 * 24 * 30 : 60 * 60 * 24 * 7,
       path: '/',
     });
-
-    console.log('[LOGIN] Login successful for:', user.email);
 
     return response;
   } catch (error) {

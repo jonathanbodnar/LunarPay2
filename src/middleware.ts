@@ -126,11 +126,8 @@ export function middleware(request: NextRequest) {
   // Check for auth token in cookies
   const token = request.cookies.get('lunarpay_token');
 
-  console.log('[MIDDLEWARE]', pathname, 'Token:', token ? 'Present' : 'Missing');
-
   // If no token and trying to access protected route, redirect to login
   if (!token && (isProtectedRoute || isProtectedApi)) {
-    console.log('[MIDDLEWARE] No token, redirecting to login');
     if (isProtectedApi) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -145,14 +142,11 @@ export function middleware(request: NextRequest) {
     const payload = verifyToken(token.value);
     
     if (!payload) {
-      console.log('[MIDDLEWARE] Invalid token, redirecting to login');
       // Invalid token - clear it and redirect
       const response = NextResponse.redirect(new URL('/login', request.url));
       response.cookies.delete('lunarpay_token');
       return response;
     }
-    
-    console.log('[MIDDLEWARE] Token valid, allowing access');
   }
 
   return NextResponse.next();

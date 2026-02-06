@@ -3,13 +3,20 @@
 
 import { cookies } from 'next/headers';
 import { sign, verify } from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 
-const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'lunarpay-super-admin-secret-change-in-production';
+// SECURITY: All secrets must be set via environment variables
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
 const ADMIN_COOKIE_NAME = 'lunarpay_admin_token';
 
-// Super admin credentials (in production, store hashed in DB)
-const SUPER_ADMIN_EMAIL = 'admin@lunarpay.com';
-const SUPER_ADMIN_PASSWORD = 'Trump2028!##!9';
+// Admin credentials from environment variables
+const SUPER_ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const SUPER_ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
+
+// Validate required environment variables at startup
+if (!ADMIN_JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('ADMIN_JWT_SECRET environment variable is required in production');
+}
 
 export interface AdminJWTPayload {
   email: string;
@@ -21,8 +28,18 @@ export interface AdminJWTPayload {
 /**
  * Verify super admin credentials
  */
-export function verifySuperAdminCredentials(email: string, password: string): boolean {
-  return email === SUPER_ADMIN_EMAIL && password === SUPER_ADMIN_PASSWORD;
+export async function verifySuperAdminCredentials(email: string, password: string): Promise<boolean> {
+  if (!SUPER_ADMIN_EMAIL || !SUPER_ADMIN_PASSWORD_HASH) {
+    console.error('[ADMIN AUTH] Admin credentials not configured in environment variables');
+    return false;
+  }
+  
+  if (email !== SUPER_ADMIN_EMAIL) {
+    return false;
+  }
+  
+  // Compare password against stored hash
+  return bcrypt.compare(password, SUPER_ADMIN_PASSWORD_HASH);
 }
 
 /**

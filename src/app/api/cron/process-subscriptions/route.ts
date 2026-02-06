@@ -4,8 +4,8 @@ import { createFortisClient } from '@/lib/fortis/client';
 import { dollarsToCents, calculateFee } from '@/lib/utils';
 import { sendSubscriptionRecurringPaymentReceipt } from '@/lib/email';
 
-// Admin password for manual triggering (same as super admin)
-const ADMIN_TRIGGER_PASSWORD = 'Trump2028!##!9';
+// Admin key for manual triggering (must be set via environment variable)
+const ADMIN_TRIGGER_KEY = process.env.CRON_ADMIN_KEY;
 
 /**
  * Cron job to process recurring subscriptions
@@ -46,7 +46,7 @@ async function processSubscriptions(request: Request) {
     // Check for admin trigger (query param with admin secret)
     const url = new URL(request.url);
     const adminTrigger = url.searchParams.get('admin_key');
-    const isAdminTrigger = adminTrigger === ADMIN_TRIGGER_PASSWORD;
+    const isAdminTrigger = ADMIN_TRIGGER_KEY && adminTrigger === ADMIN_TRIGGER_KEY;
     
     if (cronSecret && !vercelCronHeader && !isAdminTrigger && authHeader !== `Bearer ${cronSecret}`) {
       console.log('[CRON] Unauthorized attempt');

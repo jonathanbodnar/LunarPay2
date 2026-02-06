@@ -1,8 +1,13 @@
 // Supabase Edge Function for LunarPay Cron Jobs
 // Handles: Subscription processing & Onboarding email drip sequence
 
-const ADMIN_KEY = 'Trump2028!%23%23!9';
+// SECURITY: Admin key must be set via environment variable
+const ADMIN_KEY = Deno.env.get('CRON_ADMIN_KEY');
 const APP_URL = Deno.env.get('APP_URL') || 'https://app.lunarpay.com';
+
+if (!ADMIN_KEY) {
+  console.error('CRON_ADMIN_KEY environment variable is required');
+}
 
 Deno.serve(async (req) => {
   const corsHeaders = {
