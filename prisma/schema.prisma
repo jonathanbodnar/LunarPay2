@@ -35,6 +35,10 @@ model User {
   parentId              Int?      @map("parent_id") // For team hierarchy
   permissions           String?   @db.Text // JSON array of permissions
   
+  // Password Reset
+  resetToken            String?   @map("reset_token") @db.VarChar(255)
+  resetTokenExpiry      DateTime? @map("reset_token_expiry")
+  
   // OAuth tokens
   stripeOauth           String?   @map("stripe_oauth") @db.Text
   quickbooksOauth       String?   @map("quickbooks_oauth") @db.Text
