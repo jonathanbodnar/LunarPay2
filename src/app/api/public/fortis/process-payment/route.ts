@@ -175,6 +175,9 @@ export async function POST(request: Request) {
     // First try to find by customerId if provided
     if (customerId) {
       donor = await prisma.donor.findUnique({ where: { id: customerId } });
+      if (donor) {
+        console.log('[Process Payment] Found existing customer by customerId:', customerId);
+      }
     }
     
     // If not found by ID but we have email, look up by email + organization
@@ -189,6 +192,47 @@ export async function POST(request: Request) {
       
       if (donor) {
         console.log('[Process Payment] Found existing customer by email:', customerEmail, 'donorId:', donor.id);
+      }
+    }
+    
+    // If still not found, try to match by saved payment token (most reliable for repeat customers)
+    if (!donor && token_id) {
+      const existingSource = await prisma.source.findFirst({
+        where: {
+          fortisWalletId: token_id,
+          organization: { id: organizationId },
+        },
+        include: { donor: true },
+      });
+      
+      if (existingSource?.donor) {
+        donor = existingSource.donor;
+        console.log('[Process Payment] Found existing customer by token_id:', token_id, 'donorId:', donor.id);
+      }
+    }
+    
+    // If still not found and no email, try to match by name + card last 4 digits
+    // This helps prevent duplicate customers when email is not provided
+    if (!donor && !customerEmail && last_four && (customerFirstName || account_holder_name)) {
+      const nameToMatch = customerFirstName || account_holder_name?.split(' ')[0] || '';
+      const lastNameToMatch = customerLastName || account_holder_name?.split(' ').slice(1).join(' ') || '';
+      
+      // Look for a customer with matching name who has a saved card with same last 4 digits
+      const matchingSource = await prisma.source.findFirst({
+        where: {
+          organizationId,
+          lastDigits: last_four,
+          donor: {
+            firstName: { equals: nameToMatch, mode: 'insensitive' },
+            ...(lastNameToMatch ? { lastName: { equals: lastNameToMatch, mode: 'insensitive' } } : {}),
+          },
+        },
+        include: { donor: true },
+      });
+      
+      if (matchingSource?.donor) {
+        donor = matchingSource.donor;
+        console.log('[Process Payment] Found existing customer by name + card last4:', nameToMatch, last_four, 'donorId:', donor.id);
       }
     }
 
@@ -208,7 +252,7 @@ export async function POST(request: Request) {
         },
       });
       
-      console.log('[Process Payment] Created new customer:', customerEmail, 'donorId:', donor.id);
+      console.log('[Process Payment] Created new customer:', customerEmail || '(no email)', 'donorId:', donor.id);
     }
 
     // Truncate fields to match database constraints

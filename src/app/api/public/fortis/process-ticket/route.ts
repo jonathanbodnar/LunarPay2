@@ -146,9 +146,10 @@ export async function POST(request: Request) {
     const fee = calculateFee(amountInDollars, 0.023, 0.30);
     const netAmount = amountInDollars - fee;
 
-    // Find or create donor
+    // Find or create donor - use multiple matching strategies to prevent duplicates
     let donor = null;
     
+    // 1. Try to match by email first (most reliable)
     if (customerEmail) {
       donor = await prisma.donor.findFirst({
         where: {
@@ -156,8 +157,51 @@ export async function POST(request: Request) {
           organizationId,
         },
       });
+      if (donor) {
+        console.log('[Process Ticket] Found existing customer by email:', customerEmail, 'donorId:', donor.id);
+      }
+    }
+    
+    // 2. Try to match by existing saved token (for returning customers)
+    if (!donor && tokenId) {
+      const existingSource = await prisma.source.findFirst({
+        where: {
+          fortisWalletId: tokenId,
+          organization: { id: organizationId },
+        },
+        include: { donor: true },
+      });
+      
+      if (existingSource?.donor) {
+        donor = existingSource.donor;
+        console.log('[Process Ticket] Found existing customer by tokenId:', tokenId, 'donorId:', donor.id);
+      }
+    }
+    
+    // 3. Try to match by name + card last 4 (for customers without email)
+    if (!donor && !customerEmail && last_four && (customerFirstName || account_holder_name)) {
+      const nameToMatch = customerFirstName || account_holder_name?.split(' ')[0] || '';
+      const lastNameToMatch = customerLastName || account_holder_name?.split(' ').slice(1).join(' ') || '';
+      
+      const matchingSource = await prisma.source.findFirst({
+        where: {
+          organizationId,
+          lastDigits: last_four,
+          donor: {
+            firstName: { equals: nameToMatch, mode: 'insensitive' },
+            ...(lastNameToMatch ? { lastName: { equals: lastNameToMatch, mode: 'insensitive' } } : {}),
+          },
+        },
+        include: { donor: true },
+      });
+      
+      if (matchingSource?.donor) {
+        donor = matchingSource.donor;
+        console.log('[Process Ticket] Found existing customer by name + card last4:', nameToMatch, last_four, 'donorId:', donor.id);
+      }
     }
 
+    // 4. Create new donor only if no match found
     if (!donor && (customerEmail || customerFirstName || customerLastName || account_holder_name)) {
       donor = await prisma.donor.create({
         data: {
@@ -171,7 +215,7 @@ export async function POST(request: Request) {
           netAcum: 0,
         },
       });
-      console.log('[Process Ticket] Created donor:', donor.id);
+      console.log('[Process Ticket] Created new customer:', customerEmail || '(no email)', 'donorId:', donor.id);
     }
 
     // Create transaction record
