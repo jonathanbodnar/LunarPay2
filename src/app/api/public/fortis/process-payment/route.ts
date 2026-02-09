@@ -200,7 +200,7 @@ export async function POST(request: Request) {
       const existingSource = await prisma.source.findFirst({
         where: {
           fortisWalletId: token_id,
-          organization: { id: organizationId },
+          organizationId,
         },
         include: { donor: true },
       });
