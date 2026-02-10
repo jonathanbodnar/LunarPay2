@@ -45,19 +45,36 @@ function RegisterForm() {
     }
   }, [emailParam, firstNameParam, lastNameParam, phoneParam, businessNameParam]);
 
+  // Track which emails we've already saved as leads (avoid duplicate calls)
+  const [savedLeadEmail, setSavedLeadEmail] = useState('');
+
   // Auto-save email as a lead when arriving with an email param
   useEffect(() => {
     if (emailParam) {
-      fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailParam, source: 'website' }),
-      }).catch(() => {}); // fire and forget
+      saveLead(emailParam);
     }
   }, [emailParam]);
 
+  const saveLead = (email: string) => {
+    const normalized = email.toLowerCase().trim();
+    if (!normalized || !normalized.includes('@') || normalized === savedLeadEmail) return;
+    setSavedLeadEmail(normalized);
+    fetch('/api/leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: normalized, source: 'website' }),
+    }).catch(() => {}); // fire and forget
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // Capture email as lead when user leaves the email field
+  const handleEmailBlur = () => {
+    if (formData.email) {
+      saveLead(formData.email);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -180,6 +197,7 @@ function RegisterForm() {
                 placeholder="you@example.com"
                 value={formData.email}
                 onChange={handleChange}
+                onBlur={handleEmailBlur}
                 required
                 disabled={loading}
               />
