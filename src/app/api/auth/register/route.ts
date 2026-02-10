@@ -208,6 +208,12 @@ export async function POST(request: Request) {
     // Set cookie
     await setAuthCookie(token);
 
+    // Mark any existing lead as converted (don't block on this)
+    prisma.lead.updateMany({
+      where: { email: validatedData.email.toLowerCase().trim(), converted: false },
+      data: { converted: true, convertedAt: new Date() },
+    }).catch(err => console.error('Failed to update lead:', err));
+
     // Send welcome email (don't block on this)
     sendWelcomeEmail(
       result.user.email,

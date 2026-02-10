@@ -11,7 +11,8 @@ import {
   Shield,
   Menu,
   X,
-  ChevronDown
+  ChevronDown,
+  UserPlus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -24,6 +25,7 @@ interface NavItem {
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { name: 'Merchants', href: '/admin/merchants', icon: Building2 },
+  { name: 'Leads', href: '/admin/leads', icon: UserPlus },
   { name: 'Support Tickets', href: '/admin/tickets', icon: Ticket },
 ];
 

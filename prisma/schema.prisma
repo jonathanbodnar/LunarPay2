@@ -918,3 +918,21 @@ model TicketMessage {
   @@index([ticketId])
   @@map("ticket_messages")
 }
+
+// ============================================
+// LEADS
+// ============================================
+
+model Lead {
+  id              Int       @id @default(autoincrement())
+  email           String    @db.VarChar(254)
+  source          String?   @db.VarChar(100) // 'website', 'register_page', etc.
+  converted       Boolean   @default(false) // true if they completed registration
+  convertedAt     DateTime? @map("converted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  @@index([email])
+  @@index([createdAt(sort: Desc)])
+  @@map("leads")
+}

@@ -45,6 +45,17 @@ function RegisterForm() {
     }
   }, [emailParam, firstNameParam, lastNameParam, phoneParam, businessNameParam]);
 
+  // Auto-save email as a lead when arriving with an email param
+  useEffect(() => {
+    if (emailParam) {
+      fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailParam, source: 'website' }),
+      }).catch(() => {}); // fire and forget
+    }
+  }, [emailParam]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
