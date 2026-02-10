@@ -29,27 +29,47 @@ export interface AdminJWTPayload {
 
 /**
  * Verify super admin credentials
+ * Supports two modes:
+ * 1. ADMIN_PASSWORD_HASH - bcrypt hash (more secure, but $ chars can be mangled by some hosts)
+ * 2. ADMIN_PASSWORD - plain text fallback (simpler to configure)
  */
 export async function verifySuperAdminCredentials(email: string, password: string): Promise<boolean> {
   const adminEmail = getAdminEmail();
   const adminPasswordHash = getAdminPasswordHash();
+  const adminPasswordPlain = process.env.ADMIN_PASSWORD;
   
-  if (!adminEmail || !adminPasswordHash) {
-    console.error('[ADMIN AUTH] Admin credentials not configured. ADMIN_EMAIL:', !!adminEmail, 'ADMIN_PASSWORD_HASH:', !!adminPasswordHash);
+  if (!adminEmail) {
+    console.error('[ADMIN AUTH] ADMIN_EMAIL not configured');
+    return false;
+  }
+  
+  if (!adminPasswordHash && !adminPasswordPlain) {
+    console.error('[ADMIN AUTH] Neither ADMIN_PASSWORD_HASH nor ADMIN_PASSWORD is configured');
     return false;
   }
   
   if (email !== adminEmail) {
-    console.error('[ADMIN AUTH] Email mismatch. Expected:', adminEmail, 'Got:', email);
+    console.error('[ADMIN AUTH] Email mismatch');
     return false;
   }
   
-  // Compare password against stored hash
-  const isValid = await bcrypt.compare(password, adminPasswordHash);
-  if (!isValid) {
-    console.error('[ADMIN AUTH] Password hash comparison failed');
+  // Try bcrypt hash first if it looks valid (starts with $2)
+  if (adminPasswordHash && adminPasswordHash.startsWith('$2')) {
+    const isValid = await bcrypt.compare(password, adminPasswordHash);
+    if (isValid) return true;
+    console.error('[ADMIN AUTH] Bcrypt hash comparison failed');
   }
-  return isValid;
+  
+  // Fallback to plain text comparison
+  if (adminPasswordPlain && password === adminPasswordPlain) {
+    return true;
+  }
+  
+  if (adminPasswordPlain) {
+    console.error('[ADMIN AUTH] Plain text password comparison failed');
+  }
+  
+  return false;
 }
 
 /**
