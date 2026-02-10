@@ -252,6 +252,20 @@ export async function POST(request: Request) {
       },
     });
 
+    // Send onboarding completion event to Zapier (don't block on this)
+    fetch('https://hooks.zapier.com/hooks/catch/25882699/ueiwms2/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessName: dbaName || legalName,
+        email,
+        firstName: signFirstName,
+        lastName: signLastName,
+        organizationId,
+        onboardedAt: new Date().toISOString(),
+      }),
+    }).catch(err => console.error('Failed to send Zapier onboarding webhook:', err));
+
     return NextResponse.json({
       status: true,
       appLink: result.result?.data?.app_link,

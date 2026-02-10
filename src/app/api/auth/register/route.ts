@@ -88,6 +88,19 @@ export async function POST(request: Request) {
 
         await setAuthCookie(token);
 
+        // Send registration event to Zapier (don't block on this)
+        fetch('https://hooks.zapier.com/hooks/catch/25882699/ueiw384/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessName: validatedData.businessName,
+            email: validatedData.email,
+            firstName: validatedData.firstName,
+            lastName: validatedData.lastName,
+            registeredAt: new Date().toISOString(),
+          }),
+        }).catch(err => console.error('Failed to send Zapier registration webhook:', err));
+
         return NextResponse.json(
           {
             user: {
@@ -200,6 +213,19 @@ export async function POST(request: Request) {
       result.user.email,
       result.user.firstName || 'there'
     ).catch(err => console.error('Failed to send welcome email:', err));
+
+    // Send registration event to Zapier (don't block on this)
+    fetch('https://hooks.zapier.com/hooks/catch/25882699/ueiw384/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessName: validatedData.businessName,
+        email: validatedData.email,
+        firstName: validatedData.firstName,
+        lastName: validatedData.lastName,
+        registeredAt: new Date().toISOString(),
+      }),
+    }).catch(err => console.error('Failed to send Zapier registration webhook:', err));
 
     return NextResponse.json(
       {
