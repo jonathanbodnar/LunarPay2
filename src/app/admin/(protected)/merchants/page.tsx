@@ -20,7 +20,8 @@ import {
   FileText,
   Ban,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from 'lucide-react';
 
 interface Merchant {
@@ -47,8 +48,10 @@ export default function AdminMerchantsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [restrictModalOpen, setRestrictModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
   const [restrictReason, setRestrictReason] = useState('');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
@@ -121,6 +124,36 @@ export default function AdminMerchantsPage() {
     setSelectedMerchant(merchant);
     setRestrictReason('');
     setRestrictModalOpen(true);
+  };
+
+  const openDeleteModal = (merchant: Merchant) => {
+    setSelectedMerchant(merchant);
+    setDeleteConfirmText('');
+    setDeleteModalOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!selectedMerchant || deleteConfirmText !== 'DELETE') return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/admin/merchants/${selectedMerchant.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        setMerchants(merchants.filter(m => m.id !== selectedMerchant.id));
+        setDeleteModalOpen(false);
+        setSelectedMerchant(null);
+        setDeleteConfirmText('');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete merchant');
+      }
+    } catch (error) {
+      console.error('Failed to delete merchant:', error);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -356,7 +389,7 @@ export default function AdminMerchantsPage() {
                         </span>
                       </td>
                       <td className="p-4">
-                        <div className="flex justify-center">
+                        <div className="flex justify-center gap-2">
                           {merchant.restricted ? (
                             <Button
                               size="sm"
@@ -380,6 +413,15 @@ export default function AdminMerchantsPage() {
                               Restrict
                             </Button>
                           )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-400 border-red-400/50 hover:bg-red-500/20"
+                            onClick={() => openDeleteModal(merchant)}
+                            disabled={actionLoading}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -450,6 +492,72 @@ export default function AdminMerchantsPage() {
                   <>
                     <Ban className="h-4 w-4 mr-2" />
                     Restrict Account
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && selectedMerchant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+            onClick={() => setDeleteModalOpen(false)} 
+          />
+          <div className="relative bg-slate-800 border border-red-700 rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 bg-red-500/20 rounded-lg flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Delete Merchant</h3>
+                <p className="text-sm text-slate-400">{selectedMerchant.name}</p>
+              </div>
+            </div>
+            
+            <div className="bg-red-900/20 border border-red-800 rounded-lg p-3 mb-4">
+              <p className="text-red-300 text-sm font-medium">
+                This action is permanent and cannot be undone.
+              </p>
+              <p className="text-red-400 text-sm mt-1">
+                This will delete the merchant, their user account, all customers, transactions, subscriptions, invoices, payment links, products, and all other associated data.
+              </p>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Type <span className="font-mono text-red-400">DELETE</span> to confirm
+              </label>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
+              />
+            </div>
+            
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 border-slate-600"
+                onClick={() => setDeleteModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                onClick={handleDelete}
+                disabled={actionLoading || deleteConfirmText !== 'DELETE'}
+              >
+                {actionLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Permanently
                   </>
                 )}
               </Button>
