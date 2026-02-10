@@ -17,7 +17,7 @@ const APP_DOMAINS = [
 ];
 
 // Routes that don't require authentication
-const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal', '/invite', '/privacy', '/terms', '/fortiswebhooks'];
+const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal', '/invite', '/privacy', '/terms', '/fortiswebhooks', '/admin/login', '/restricted'];
 
 // Routes that are public APIs (invoices, payment links by hash)
 const publicApiRoutes = [
@@ -64,7 +64,9 @@ const publicApiRoutes = [
   '/api/portal', // Customer portal APIs
   '/api/fortis/webhooks',
   '/api/health',
-  '/api/cron'
+  '/api/cron',
+  '/api/leads',
+  '/api/admin/auth/login',
 ];
 
 export function middleware(request: NextRequest) {
