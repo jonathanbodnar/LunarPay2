@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
-import { 
-  verifySuperAdminCredentials, 
-  generateAdminToken, 
-  setAdminCookie 
+import {
+  verifySuperAdminCredentials,
+  generateAdminToken,
+  ADMIN_COOKIE_NAME,
 } from '@/lib/admin-auth';
+
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 60 * 60 * 24, // 24 hours
+  path: '/',
+};
 
 export async function POST(request: Request) {
   try {
@@ -16,13 +24,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Debug: log what env vars look like (redacted)
-    const envEmail = process.env.ADMIN_EMAIL;
-    const envHash = process.env.ADMIN_PASSWORD_HASH;
-    const envSecret = process.env.ADMIN_JWT_SECRET;
-    console.log('[ADMIN LOGIN] Env check - ADMIN_EMAIL:', envEmail, 'ADMIN_PASSWORD_HASH length:', envHash?.length, 'starts with:', envHash?.substring(0, 7), 'ADMIN_JWT_SECRET:', !!envSecret);
-    console.log('[ADMIN LOGIN] Attempting login with email:', email);
-
     const isValid = await verifySuperAdminCredentials(email, password);
     if (!isValid) {
       return NextResponse.json(
@@ -32,12 +33,12 @@ export async function POST(request: Request) {
     }
 
     const token = generateAdminToken(email);
-    await setAdminCookie(token);
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: 'Login successful',
     });
+    response.cookies.set(ADMIN_COOKIE_NAME, token, COOKIE_OPTIONS);
+    return response;
   } catch (error) {
     console.error('Admin login error:', error);
     return NextResponse.json(

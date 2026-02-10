@@ -66,7 +66,7 @@ const publicApiRoutes = [
   '/api/health',
   '/api/cron',
   '/api/leads',
-  '/api/admin/auth/login',
+  '/api/admin', // All admin APIs use admin cookie (requireAdmin); middleware must not require merchant token
 ];
 
 export function middleware(request: NextRequest) {

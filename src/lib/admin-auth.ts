@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import { sign, verify } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-const ADMIN_COOKIE_NAME = 'lunarpay_admin_token';
+export const ADMIN_COOKIE_NAME = 'lunarpay_admin_token';
 
 // Helper functions to get env vars at runtime (not module load time)
 function getAdminJwtSecret(): string | undefined {
