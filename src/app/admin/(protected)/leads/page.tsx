@@ -19,6 +19,11 @@ interface Lead {
   id: number;
   email: string;
   source: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmTerm: string | null;
+  utmContent: string | null;
   converted: boolean;
   convertedAt: string | null;
   createdAt: string;
@@ -194,6 +199,7 @@ export default function AdminLeadsPage() {
                 <tr className="border-b border-slate-700">
                   <th className="text-left p-4 text-sm font-medium text-slate-400">Email</th>
                   <th className="text-left p-4 text-sm font-medium text-slate-400">Source</th>
+                  <th className="text-left p-4 text-sm font-medium text-slate-400">UTM</th>
                   <th className="text-left p-4 text-sm font-medium text-slate-400">Status</th>
                   <th className="text-left p-4 text-sm font-medium text-slate-400">Captured</th>
                   <th className="text-left p-4 text-sm font-medium text-slate-400">Last Seen</th>
@@ -212,6 +218,43 @@ export default function AdminLeadsPage() {
                       </td>
                       <td className="p-4">
                         <span className="text-slate-400 text-sm capitalize">{lead.source || 'unknown'}</span>
+                      </td>
+                      <td className="p-4">
+                        {(lead.utmSource || lead.utmMedium || lead.utmCampaign) ? (
+                          <div className="space-y-0.5">
+                            {lead.utmSource && (
+                              <span className="inline-block px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded mr-1" title="utm_source">
+                                {lead.utmSource}
+                              </span>
+                            )}
+                            {lead.utmMedium && (
+                              <span className="inline-block px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded mr-1" title="utm_medium">
+                                {lead.utmMedium}
+                              </span>
+                            )}
+                            {lead.utmCampaign && (
+                              <span className="inline-block px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded" title="utm_campaign">
+                                {lead.utmCampaign}
+                              </span>
+                            )}
+                            {(lead.utmTerm || lead.utmContent) && (
+                              <div>
+                                {lead.utmTerm && (
+                                  <span className="inline-block px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded mr-1" title="utm_term">
+                                    {lead.utmTerm}
+                                  </span>
+                                )}
+                                {lead.utmContent && (
+                                  <span className="inline-block px-1.5 py-0.5 bg-orange-500/20 text-orange-400 text-xs rounded" title="utm_content">
+                                    {lead.utmContent}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 text-xs">—</span>
+                        )}
                       </td>
                       <td className="p-4">
                         {lead.converted ? (
@@ -257,7 +300,7 @@ export default function AdminLeadsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                    <td colSpan={7} className="p-8 text-center text-slate-400">
                       {search || filter !== 'all' ? 'No leads match your filters' : 'No leads captured yet'}
                     </td>
                   </tr>

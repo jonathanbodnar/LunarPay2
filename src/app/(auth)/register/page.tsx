@@ -20,6 +20,13 @@ function RegisterForm() {
   const phoneParam = searchParams.get('phone') || '';
   const businessNameParam = searchParams.get('businessName') || searchParams.get('business_name') || '';
   
+  // Capture UTM params from URL
+  const utmSource = searchParams.get('utm_source') || '';
+  const utmMedium = searchParams.get('utm_medium') || '';
+  const utmCampaign = searchParams.get('utm_campaign') || '';
+  const utmTerm = searchParams.get('utm_term') || '';
+  const utmContent = searchParams.get('utm_content') || '';
+  
   const [formData, setFormData] = useState({
     email: emailParam,
     password: '',
@@ -59,10 +66,16 @@ function RegisterForm() {
     const normalized = email.toLowerCase().trim();
     if (!normalized || !normalized.includes('@') || normalized === savedLeadEmail) return;
     setSavedLeadEmail(normalized);
+    const leadData: Record<string, string> = { email: normalized, source: 'register_page' };
+    if (utmSource) leadData.utm_source = utmSource;
+    if (utmMedium) leadData.utm_medium = utmMedium;
+    if (utmCampaign) leadData.utm_campaign = utmCampaign;
+    if (utmTerm) leadData.utm_term = utmTerm;
+    if (utmContent) leadData.utm_content = utmContent;
     fetch('/api/leads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: normalized, source: 'website' }),
+      body: JSON.stringify(leadData),
     }).catch(() => {}); // fire and forget
   };
 

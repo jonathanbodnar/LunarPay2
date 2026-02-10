@@ -927,6 +927,11 @@ model Lead {
   id              Int       @id @default(autoincrement())
   email           String    @db.VarChar(254)
   source          String?   @db.VarChar(100) // 'website', 'register_page', etc.
+  utmSource       String?   @map("utm_source") @db.VarChar(200)
+  utmMedium       String?   @map("utm_medium") @db.VarChar(200)
+  utmCampaign     String?   @map("utm_campaign") @db.VarChar(200)
+  utmTerm         String?   @map("utm_term") @db.VarChar(200)
+  utmContent      String?   @map("utm_content") @db.VarChar(200)
   converted       Boolean   @default(false) // true if they completed registration
   convertedAt     DateTime? @map("converted_at")
   createdAt       DateTime  @default(now()) @map("created_at")
@@ -934,5 +939,7 @@ model Lead {
   
   @@index([email])
   @@index([createdAt(sort: Desc)])
+  @@index([utmSource])
+  @@index([utmCampaign])
   @@map("leads")
 }
