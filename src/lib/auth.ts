@@ -114,6 +114,31 @@ export async function requireAuth(): Promise<JWTPayload> {
 }
 
 /**
+ * Get all organization IDs a user has access to (owned + team membership)
+ */
+export async function getUserOrgIds(userId: number): Promise<number[]> {
+  const { prisma } = await import('@/lib/prisma');
+
+  // Organizations the user owns
+  const ownedOrgs = await prisma.organization.findMany({
+    where: { userId },
+    select: { id: true },
+  });
+
+  // Organizations the user is a team member of
+  const teamOrgs = await prisma.teamMember.findMany({
+    where: { userId },
+    select: { organizationId: true },
+  });
+
+  const orgIdSet = new Set<number>();
+  ownedOrgs.forEach(o => orgIdSet.add(o.id));
+  teamOrgs.forEach(t => orgIdSet.add(t.organizationId));
+
+  return Array.from(orgIdSet);
+}
+
+/**
  * Generate cryptographically secure random token
  */
 export function generateRandomToken(length: number = 32): string {

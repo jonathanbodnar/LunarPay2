@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, getUserOrgIds } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
@@ -29,14 +29,10 @@ export async function GET(
       userEmail: currentUser.email,
     });
 
-    // First, get the user's organizations
-    const userOrganizations = await prisma.organization.findMany({
-      where: { userId: currentUser.userId },
-      select: { id: true },
-    });
-    const orgIds = userOrganizations.map(org => org.id);
+    // Get all orgs user has access to (owned + team member)
+    const orgIds = await getUserOrgIds(currentUser.userId);
 
-    console.log('[Customer API] User organizations:', orgIds);
+    console.log('[Customer API] User organizations (owned + team):', orgIds);
 
     // Build where clause - handle case where user has no orgs
     const whereClause: any = {
@@ -150,19 +146,15 @@ export async function PUT(
 
     const validatedData = updateCustomerSchema.parse(body);
 
-    // Get user's organizations
-    const userOrganizations = await prisma.organization.findMany({
-      where: { userId: currentUser.userId },
-      select: { id: true },
-    });
-    const orgIds = userOrganizations.map(org => org.id);
+    // Get all orgs user has access to (owned + team member)
+    const orgIdsUpdate = await getUserOrgIds(currentUser.userId);
 
     // Build where clause - handle case where user has no orgs
     const whereClauseUpdate: any = { id: customerId };
-    if (orgIds.length > 0) {
+    if (orgIdsUpdate.length > 0) {
       whereClauseUpdate.OR = [
         { userId: currentUser.userId },
-        { organizationId: { in: orgIds } },
+        { organizationId: { in: orgIdsUpdate } },
       ];
     } else {
       whereClauseUpdate.userId = currentUser.userId;
@@ -228,19 +220,15 @@ export async function DELETE(
     const { id } = await params;
     const customerId = parseInt(id);
 
-    // Get user's organizations
-    const userOrganizations = await prisma.organization.findMany({
-      where: { userId: currentUser.userId },
-      select: { id: true },
-    });
-    const orgIds = userOrganizations.map(org => org.id);
+    // Get all orgs user has access to (owned + team member)
+    const orgIdsDelete = await getUserOrgIds(currentUser.userId);
 
     // Build where clause
     const whereClauseDelete: any = { id: customerId };
-    if (orgIds.length > 0) {
+    if (orgIdsDelete.length > 0) {
       whereClauseDelete.OR = [
         { userId: currentUser.userId },
-        { organizationId: { in: orgIds } },
+        { organizationId: { in: orgIdsDelete } },
       ];
     } else {
       whereClauseDelete.userId = currentUser.userId;

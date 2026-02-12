@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, getUserOrgIds } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
@@ -23,12 +23,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const organizationId = searchParams.get('organizationId');
 
-    // Get user's organizations
-    const userOrganizations = await prisma.organization.findMany({
-      where: { userId: currentUser.userId },
-      select: { id: true },
-    });
-    const orgIds = userOrganizations.map(org => org.id);
+    // Get all orgs user has access to (owned + team member)
+    const orgIds = await getUserOrgIds(currentUser.userId);
 
     let where: any = {};
 
@@ -118,15 +114,9 @@ export async function POST(request: Request) {
 
     const validatedData = createCustomerSchema.parse(body);
 
-    // Verify organization ownership
-    const organization = await prisma.organization.findFirst({
-      where: {
-        id: validatedData.organizationId,
-        userId: currentUser.userId,
-      },
-    });
-
-    if (!organization) {
+    // Verify user has access to this organization (owner or team member)
+    const accessibleOrgIds = await getUserOrgIds(currentUser.userId);
+    if (!accessibleOrgIds.includes(validatedData.organizationId)) {
       return NextResponse.json(
         { error: 'Organization not found' },
         { status: 404 }
