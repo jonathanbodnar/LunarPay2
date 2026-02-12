@@ -117,7 +117,17 @@ export async function GET(
       organizationId: customer.organizationId,
     });
 
-    return NextResponse.json({ customer });
+    // Serialize BigInt transaction IDs to strings for JSON compatibility
+    const serializedCustomer = {
+      ...customer,
+      transactions: customer.transactions.map((tx: any) => ({
+        ...tx,
+        id: tx.id.toString(),
+        totalAmount: Number(tx.totalAmount) || 0,
+      })),
+    };
+
+    return NextResponse.json({ customer: serializedCustomer });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
       return NextResponse.json(
