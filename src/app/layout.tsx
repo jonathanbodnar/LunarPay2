@@ -32,6 +32,22 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Rumble Ad Tag */}
+        <Script
+          id="rumble-ratag"
+          src="https://a.ads.rmbl.ws/ratag?id=AV-45700"
+          strategy="afterInteractive"
+        />
+        <Script
+          id="rumble-ratag-init"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window._ratagData = window._ratagData || [];
+              function ratag() {_ratagData.push(arguments);}
+            `,
+          }}
+        />
         {/* Facebook Pixel Code */}
         <Script
           id="fb-pixel"

@@ -27,6 +27,9 @@ function RegisterForm() {
   const utmTerm = searchParams.get('utm_term') || '';
   const utmContent = searchParams.get('utm_content') || '';
   
+  // Capture Rumble click ID for conversion tracking
+  const raclid = searchParams.get('_raclid') || '';
+  
   const [formData, setFormData] = useState({
     email: emailParam,
     password: '',
@@ -125,11 +128,18 @@ function RegisterForm() {
         localStorage.setItem('lunarpay_token', data.token);
       }
 
-      // Track Lead conversion event
+      // Track Lead conversion event (Facebook)
       trackLead({ 
         email: formData.email, 
         businessName: formData.businessName 
       });
+
+      // Track Rumble conversion
+      if (typeof window !== 'undefined' && typeof (window as any).ratag === 'function') {
+        const rumbleOpts: Record<string, any> = { to: 3528 };
+        if (raclid) rumbleOpts.cid = raclid;
+        (window as any).ratag('conversion', rumbleOpts);
+      }
 
       // Redirect to getting started
       router.push('/getting-started');
