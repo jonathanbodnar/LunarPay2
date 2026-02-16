@@ -1,7 +1,7 @@
 // Facebook Pixel utility for LunarPay
-// Pixel ID: 1263082445552238
+// Pixel ID: 2154234441647564
 
-export const FB_PIXEL_ID = '1263082445552238';
+export const FB_PIXEL_ID = '2154234441647564';
 
 // Declare fbq for TypeScript
 declare global {
