@@ -57,8 +57,10 @@ export default function LoginPage() {
       
       setIsRedirecting(true);
       
+      // Redirect to getting-started if onboarding isn't complete, otherwise dashboard
+      const destination = data.onboardingComplete === false ? '/getting-started' : '/dashboard';
       setTimeout(() => {
-        window.location.replace('/dashboard');
+        window.location.replace(destination);
       }, 500);
     } catch (err) {
       console.error('[FRONTEND] Login error:', err);

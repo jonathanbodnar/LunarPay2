@@ -11,6 +11,7 @@ import {
   CheckCircle2, 
   Clock, 
   Mail, 
+  Phone,
   Trash2,
   ArrowUpRight
 } from 'lucide-react';
@@ -18,6 +19,7 @@ import {
 interface Lead {
   id: number;
   email: string;
+  phone: string | null;
   source: string | null;
   utmSource: string | null;
   utmMedium: string | null;
@@ -83,7 +85,8 @@ export default function AdminLeadsPage() {
   };
 
   const filteredLeads = leads.filter(l => {
-    const matchesSearch = search === '' || l.email.toLowerCase().includes(search.toLowerCase());
+    const q = search.toLowerCase();
+    const matchesSearch = search === '' || l.email.toLowerCase().includes(q) || (l.phone && l.phone.toLowerCase().includes(q));
     const matchesFilter = filter === 'all' ||
       (filter === 'converted' && l.converted) ||
       (filter === 'unconverted' && !l.converted);
@@ -173,7 +176,7 @@ export default function AdminLeadsPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Search by email..."
+            placeholder="Search by email or phone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
@@ -198,6 +201,7 @@ export default function AdminLeadsPage() {
               <thead>
                 <tr className="border-b border-slate-700">
                   <th className="text-left p-4 text-sm font-medium text-slate-400">Email</th>
+                  <th className="text-left p-4 text-sm font-medium text-slate-400">Phone</th>
                   <th className="text-left p-4 text-sm font-medium text-slate-400">Source</th>
                   <th className="text-left p-4 text-sm font-medium text-slate-400">UTM</th>
                   <th className="text-left p-4 text-sm font-medium text-slate-400">Status</th>
@@ -215,6 +219,16 @@ export default function AdminLeadsPage() {
                           <Mail className="h-4 w-4 text-slate-400" />
                           <span className="text-white font-medium">{lead.email}</span>
                         </div>
+                      </td>
+                      <td className="p-4">
+                        {lead.phone ? (
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4 text-slate-400" />
+                            <span className="text-white text-sm">{lead.phone}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 text-xs">—</span>
+                        )}
                       </td>
                       <td className="p-4">
                         <span className="text-slate-400 text-sm capitalize">{lead.source || 'unknown'}</span>
@@ -300,7 +314,7 @@ export default function AdminLeadsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
+                    <td colSpan={8} className="p-8 text-center text-slate-400">
                       {search || filter !== 'all' ? 'No leads match your filters' : 'No leads captured yet'}
                     </td>
                   </tr>

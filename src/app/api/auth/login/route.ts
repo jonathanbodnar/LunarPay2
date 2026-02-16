@@ -73,16 +73,24 @@ export async function POST(request: Request) {
       expiresIn
     );
 
-    // Get user's organizations (exclude internal token from response)
+    // Get user's organizations with Fortis onboarding status
     const organizations = await prisma.organization.findMany({
       where: { userId: user.id },
       select: {
         id: true,
         name: true,
         slug: true,
+        fortisOnboarding: {
+          select: { appStatus: true },
+        },
       },
       orderBy: { id: 'asc' },
     });
+
+    // Check if payment processing (step 2) is complete
+    const onboardingComplete = organizations.some(
+      (org) => org.fortisOnboarding?.appStatus === 'ACTIVE'
+    );
 
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
@@ -90,7 +98,8 @@ export async function POST(request: Request) {
     // Create response - token is set via httpOnly cookie only, not in response body
     const response = NextResponse.json({
       user: userWithoutPassword,
-      organizations,
+      organizations: organizations.map(({ fortisOnboarding, ...rest }) => rest),
+      onboardingComplete,
       token, // Keep for localStorage backup (some features may need it)
     });
 

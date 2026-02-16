@@ -40,7 +40,7 @@ function sanitizeUtm(value: unknown): string | undefined {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content } = body;
+    const { email, phone, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content } = body;
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return NextResponse.json(
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    const leadPhone = (phone && typeof phone === 'string') ? phone.trim().slice(0, 50) : undefined;
     const leadSource = source || 'website';
 
     // Parse UTM params
@@ -87,11 +88,12 @@ export async function POST(request: Request) {
       });
 
       if (existingLead) {
-        // Update with new UTM data if provided (later visit may have UTM)
+        // Update with new data if provided (later visit may have UTM or phone)
         await prisma.lead.update({
           where: { id: existingLead.id },
           data: {
             updatedAt: new Date(),
+            ...(leadPhone && !existingLead.phone ? { phone: leadPhone } : {}),
             ...(utmData.utmSource && !existingLead.utmSource ? { utmSource: utmData.utmSource } : {}),
             ...(utmData.utmMedium && !existingLead.utmMedium ? { utmMedium: utmData.utmMedium } : {}),
             ...(utmData.utmCampaign && !existingLead.utmCampaign ? { utmCampaign: utmData.utmCampaign } : {}),
@@ -106,6 +108,7 @@ export async function POST(request: Request) {
       await prisma.lead.create({
         data: {
           email: normalizedEmail,
+          phone: leadPhone,
           source: leadSource,
           ...utmData,
         },

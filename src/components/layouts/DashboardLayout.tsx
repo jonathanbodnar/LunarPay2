@@ -115,6 +115,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [userPermissions, setUserPermissions] = useState<UserPermissions | null>(null);
   const [filteredNav, setFilteredNav] = useState<NavItem[]>(navigation);
 
+  // Pages users are allowed to visit before completing onboarding step 2
+  const onboardingAllowedPaths = [
+    '/getting-started',
+    '/organizations',
+    '/settings/payment-setup',
+  ];
+
   useEffect(() => {
     fetchUserPermissions();
     checkSetupProgress();
@@ -187,13 +194,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setOrganizationName(orgs.organizations[0].name || '');
       }
 
+      const hasOrg = orgs.organizations?.length > 0;
+      const paymentActive = orgs.organizations?.[0]?.fortisOnboarding?.appStatus === 'ACTIVE';
+
       const steps = [
-        orgs.organizations?.length > 0,
+        hasOrg,
         customers.customers?.length > 0,
         products.products?.length > 0,
         invoices.invoices?.length > 0,
         false, // Branding - TODO: check if set
-        orgs.organizations?.[0]?.fortisOnboarding?.appStatus === 'ACTIVE',
+        paymentActive,
       ];
 
       const completed = steps.filter(Boolean).length;
@@ -202,6 +212,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         total: steps.length,
         isComplete: completed === steps.length,
       });
+
+      // If payment processing (step 2) is not complete, force user to getting-started
+      if (!paymentActive) {
+        const isOnAllowedPath = onboardingAllowedPaths.some(p => pathname === p || pathname?.startsWith(p + '/'));
+        if (!isOnAllowedPath) {
+          router.replace('/getting-started');
+        }
+      }
     } catch (error) {
       console.error('Failed to check setup progress:', error);
       // Don't break the layout if setup check fails

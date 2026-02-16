@@ -65,11 +65,17 @@ function RegisterForm() {
     }
   }, [emailParam]);
 
-  const saveLead = (email: string) => {
+  const [savedLeadPhone, setSavedLeadPhone] = useState('');
+
+  const saveLead = (email: string, phone?: string) => {
     const normalized = email.toLowerCase().trim();
-    if (!normalized || !normalized.includes('@') || normalized === savedLeadEmail) return;
+    if (!normalized || !normalized.includes('@')) return;
+    // Skip if same email+phone combo already saved
+    if (normalized === savedLeadEmail && (!phone || phone === savedLeadPhone)) return;
     setSavedLeadEmail(normalized);
+    if (phone) setSavedLeadPhone(phone);
     const leadData: Record<string, string> = { email: normalized, source: 'register_page' };
+    if (phone) leadData.phone = phone;
     if (utmSource) leadData.utm_source = utmSource;
     if (utmMedium) leadData.utm_medium = utmMedium;
     if (utmCampaign) leadData.utm_campaign = utmCampaign;
@@ -89,7 +95,14 @@ function RegisterForm() {
   // Capture email as lead when user leaves the email field
   const handleEmailBlur = () => {
     if (formData.email) {
-      saveLead(formData.email);
+      saveLead(formData.email, formData.phone || undefined);
+    }
+  };
+
+  // Capture phone when user leaves the phone field (updates existing lead)
+  const handlePhoneBlur = () => {
+    if (formData.email && formData.phone) {
+      saveLead(formData.email, formData.phone);
     }
   };
 
@@ -237,6 +250,7 @@ function RegisterForm() {
                 placeholder="+1 (555) 000-0000"
                 value={formData.phone}
                 onChange={handleChange}
+                onBlur={handlePhoneBlur}
                 required
                 disabled={loading}
               />
