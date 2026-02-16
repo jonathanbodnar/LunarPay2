@@ -1405,3 +1405,313 @@ export async function sendOnboardingEmail4(data: OnboardingEmailData): Promise<b
     html,
   });
 }
+
+
+// ============================================
+// LEAD NURTURING DRIP EMAIL SEQUENCE
+// For leads who signed up but haven't registered
+// ============================================
+
+interface LeadNurturingEmailData {
+  to: string;
+  firstName?: string;
+}
+
+const REGISTER_URL = `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com'}/register`;
+
+const leadNurturingTemplate = (content: string, preheader: string = '') => `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${preheader ? `<meta name="x-apple-disable-message-reformatting">` : ''}
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.7; color: #333; margin: 0; padding: 0; background: #f9fafb; }
+    .preheader { display: none; max-width: 0; max-height: 0; overflow: hidden; font-size: 1px; line-height: 1px; color: #f9fafb; }
+    .container { max-width: 580px; margin: 0 auto; padding: 40px 20px; }
+    .content { background: #ffffff; border-radius: 8px; padding: 40px; }
+    .button { display: inline-block; background: #000000; color: #ffffff !important; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 24px 0; }
+    .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #999; }
+    p { margin: 0 0 16px 0; }
+    ul { margin: 16px 0; padding-left: 20px; }
+    li { margin-bottom: 8px; }
+    strong { color: #111; }
+    h2 { margin: 0 0 20px 0; color: #111; font-size: 22px; }
+    .signature { margin-top: 32px; color: #666; }
+    .highlight { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 16px 20px; margin: 20px 0; border-radius: 0 6px 6px 0; }
+    .price { font-size: 24px; font-weight: 700; color: #111; }
+  </style>
+</head>
+<body>
+  ${preheader ? `<div class="preheader">${preheader}</div>` : ''}
+  <div class="container">
+    <div class="content">
+      ${content}
+    </div>
+    <div class="footer">
+      <p>&copy; ${new Date().getFullYear()} LunarPay. All rights reserved.</p>
+      <p style="margin-top: 8px;">Questions? Reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+// LEAD EMAIL 1: Immediate — The Hook + Pricing
+export async function sendLeadNurturingEmail1(data: LeadNurturingEmailData): Promise<boolean> {
+  const registerUrl = `${REGISTER_URL}?email=${encodeURIComponent(data.to)}`;
+
+  const html = leadNurturingTemplate(`
+    <h2>They shut down $135K/month overnight.</h2>
+
+    <p>Thanks for checking out LunarPay. Before you go any further, you should know why we exist.</p>
+
+    <p>In 2024, Stripe disabled the account for <strong>Libs of TikTok</strong> and froze their funds. No warning. No appeal. Just gone.</p>
+
+    <p>The same year, a Senate Commerce Committee investigation revealed that payment processors have been <strong>systematically removing conservative organizations</strong> from their platforms&mdash;following playbooks written by activist groups.</p>
+
+    <p>Gab lost <strong>80% of its subscription revenue</strong> overnight when Stripe pulled the plug. PayPal froze the Free Speech Union's accounts. Moms for Liberty had donations frozen mid-campaign.</p>
+
+    <p><strong>This isn't a conspiracy theory. It's a business model.</strong></p>
+
+    <p>LunarPay was built specifically so this can't happen to you.</p>
+
+    <div class="highlight">
+      <p style="margin-bottom: 8px;"><strong>Simple, transparent pricing:</strong></p>
+      <p class="price" style="margin-bottom: 4px;">Starting at 2.75% + 27&cent;</p>
+      <p style="margin: 0; color: #666; font-size: 14px;">No hidden fees. No surprise holds. No ideological audits.</p>
+    </div>
+
+    <p>We underwrite you <em>before</em> activation&mdash;not after you've built your revenue. That means once you're approved, <strong>you stay approved.</strong></p>
+
+    <div style="text-align: center;">
+      <a href="${registerUrl}" class="button">Create Your Free Account</a>
+    </div>
+
+    <p class="signature">&mdash; Jonathan Bodnar<br><span style="font-size: 13px;">Founder, LunarPay</span></p>
+  `, 'They shut down a $135K/month business with one email. Here\'s how to make sure it never happens to you.');
+
+  return sendEmail({
+    to: data.to,
+    subject: 'They froze $135K overnight. No warning.',
+    html,
+  });
+}
+
+// LEAD EMAIL 2: 24 hours — Jonathan's personal Stripe story
+export async function sendLeadNurturingEmail2(data: LeadNurturingEmailData): Promise<boolean> {
+  const registerUrl = `${REGISTER_URL}?email=${encodeURIComponent(data.to)}`;
+
+  const html = leadNurturingTemplate(`
+    <p>I need to tell you something personal.</p>
+
+    <p>A few years ago, I built a marketing company from zero to <strong>$135,000 in monthly recurring revenue</strong>. No investors. No shortcuts. Just 14 months of grinding.</p>
+
+    <p>Then one morning, I got a notification from Stripe:</p>
+
+    <p><strong>"Your account has been terminated."</strong></p>
+
+    <p>No warning.<br>
+    No explanation.<br>
+    No human to call.</p>
+
+    <p>Cards stopped charging. Revenue flatlined overnight. Payroll became a crisis.</p>
+
+    <p>It took <strong>three months</strong> to migrate cards to a new processor. By then, we'd lost more than half our customers. A real business&mdash;one that supported real families&mdash;collapsed because of one company's internal decision.</p>
+
+    <p>Stripe never told me why.</p>
+
+    <p>That moment changed everything for me. I realized something that should terrify every business owner:</p>
+
+    <p><strong>If you don't control your payment processing, you don't control your business.</strong></p>
+
+    <p>That's why I built LunarPay. Not as another payment processor&mdash;but as a <em>safe</em> one. One that reviews you first, approves you first, and doesn't pull the rug out later.</p>
+
+    <div style="text-align: center;">
+      <a href="${registerUrl}" class="button">Protect Your Revenue</a>
+    </div>
+
+    <p class="signature">&mdash; Jonathan</p>
+  `, 'I lost $135K/month because of one email from Stripe.');
+
+  return sendEmail({
+    to: data.to,
+    subject: 'The email that killed my business',
+    html,
+  });
+}
+
+// LEAD EMAIL 3: Day 3 — The deplatforming pattern (proof + fear)
+export async function sendLeadNurturingEmail3(data: LeadNurturingEmailData): Promise<boolean> {
+  const registerUrl = `${REGISTER_URL}?email=${encodeURIComponent(data.to)}`;
+
+  const html = leadNurturingTemplate(`
+    <p>This isn't about politics. It's about a pattern.</p>
+
+    <p>Here's a short list of organizations that have had their payment processing <strong>shut down, frozen, or revoked</strong> in the last few years:</p>
+
+    <ul>
+      <li><strong>Libs of TikTok</strong> &mdash; Stripe disabled their account and froze funds (2024)</li>
+      <li><strong>Moms for Liberty</strong> &mdash; PayPal froze donations mid-campaign (2022)</li>
+      <li><strong>The Free Speech Union</strong> &mdash; PayPal closed accounts without explanation (2022)</li>
+      <li><strong>Gab</strong> &mdash; Stripe pulled service; 80% revenue loss overnight (2018)</li>
+      <li><strong>Gays Against Groomers</strong> &mdash; Banned from PayPal <em>and</em> Venmo within minutes (2022)</li>
+      <li><strong>Indigenous Advance Ministries</strong> &mdash; Bank of America closed their account (2023)</li>
+      <li><strong>Gun accessory retailers</strong> &mdash; Stripe terminated for selling legal products (2023)</li>
+    </ul>
+
+    <p>These aren't fringe organizations. They're nonprofits, media companies, and small businesses selling <em>legal products</em> to <em>willing customers</em>.</p>
+
+    <p>The 2024 Senate Commerce Committee report confirmed what we already knew: <strong>big tech and big finance are coordinating to remove businesses they disagree with.</strong></p>
+
+    <p>The question isn't whether this could happen to you.</p>
+
+    <p><strong>The question is whether you'll have a backup plan when it does.</strong></p>
+
+    <div style="text-align: center;">
+      <a href="${registerUrl}" class="button">Get Approved Before You Need To</a>
+    </div>
+
+    <p class="signature">&mdash; Jonathan</p>
+  `, 'Stripe, PayPal, Venmo, Bank of America — the list keeps growing.');
+
+  return sendEmail({
+    to: data.to,
+    subject: 'The list of businesses they\'ve shut down',
+    html,
+  });
+}
+
+// LEAD EMAIL 4: Day 5 — How LunarPay is different (value + mechanism)
+export async function sendLeadNurturingEmail4(data: LeadNurturingEmailData): Promise<boolean> {
+  const registerUrl = `${REGISTER_URL}?email=${encodeURIComponent(data.to)}`;
+
+  const html = leadNurturingTemplate(`
+    <p>You might be wondering: "How is LunarPay actually different?"</p>
+
+    <p>Fair question. Here's the honest answer.</p>
+
+    <p>Most processors&mdash;Stripe, Square, PayPal&mdash;use a model called <strong>"instant onboarding."</strong> Sounds great, right?</p>
+
+    <p>Here's what it actually means:</p>
+
+    <ol style="margin: 16px 0; padding-left: 20px;">
+      <li style="margin-bottom: 8px;">They let you start processing immediately</li>
+      <li style="margin-bottom: 8px;">You build up revenue and customers</li>
+      <li style="margin-bottom: 8px;">They run underwriting <em>later</em>&mdash;quietly, in the background</li>
+      <li style="margin-bottom: 8px;">If you fail their review, they terminate you without warning</li>
+    </ol>
+
+    <p>By the time they shut you down, you're dependent. Your customers' cards are on file. Your recurring billing is running. Your payroll depends on it.</p>
+
+    <p><strong>LunarPay flips this model completely.</strong></p>
+
+    <p>We underwrite you <em>first</em>. Before your first dollar. That means:</p>
+
+    <ul>
+      <li><strong>No surprise shutdowns</strong> &mdash; you're pre-approved</li>
+      <li><strong>No ideological audits</strong> &mdash; we work with free-speech-aligned partners</li>
+      <li><strong>No frozen funds</strong> &mdash; your money is your money</li>
+      <li><strong>No mystery "risk reviews"</strong> &mdash; if there's ever an issue, we talk to you first</li>
+    </ul>
+
+    <p>Yes, it takes a few extra minutes upfront. But you'll never wake up to a "your account has been terminated" email.</p>
+
+    <p>That's the trade-off. And we think it's worth it.</p>
+
+    <div style="text-align: center;">
+      <a href="${registerUrl}" class="button">Start Your Application</a>
+    </div>
+
+    <p class="signature">&mdash; Jonathan</p>
+  `, 'Most processors let you in fast so they can kick you out quietly.');
+
+  return sendEmail({
+    to: data.to,
+    subject: 'Why "instant approval" is a trap',
+    html,
+  });
+}
+
+// LEAD EMAIL 5: Day 8 — Social proof + urgency
+export async function sendLeadNurturingEmail5(data: LeadNurturingEmailData): Promise<boolean> {
+  const registerUrl = `${REGISTER_URL}?email=${encodeURIComponent(data.to)}`;
+
+  const html = leadNurturingTemplate(`
+    <p>Quick question:</p>
+
+    <p><strong>If your payment processor shut you down tomorrow&mdash;no warning, no explanation&mdash;how long would it take you to recover?</strong></p>
+
+    <p>For most businesses, the answer is devastating:</p>
+
+    <ul>
+      <li>2&ndash;4 weeks to find a new processor willing to take you</li>
+      <li>1&ndash;3 months to migrate saved cards (if you even can)</li>
+      <li>30&ndash;60% customer churn during the transition</li>
+      <li>Payroll missed, vendors unpaid, momentum destroyed</li>
+    </ul>
+
+    <p>I know because I lived it. $135K/month to near-zero in one notification.</p>
+
+    <p>The businesses that survive aren't the ones who react fastest.<br>
+    <strong>They're the ones who planned ahead.</strong></p>
+
+    <p>LunarPay takes minutes to apply. The approval process is straightforward. And once you're in, you're in&mdash;no second-guessing, no political litmus tests, no silent reviews.</p>
+
+    <div class="highlight">
+      <p style="margin: 0;"><strong>It costs nothing to apply.</strong> Your account is free until you start processing. There's literally no reason not to have a backup plan.</p>
+    </div>
+
+    <div style="text-align: center;">
+      <a href="${registerUrl}" class="button">Secure Your Backup Plan</a>
+    </div>
+
+    <p class="signature">&mdash; Jonathan</p>
+  `, 'If they shut you down tomorrow, how long until you recover?');
+
+  return sendEmail({
+    to: data.to,
+    subject: 'What\'s your backup plan?',
+    html,
+  });
+}
+
+// LEAD EMAIL 6: Day 12 — Final push / breakup email
+export async function sendLeadNurturingEmail6(data: LeadNurturingEmailData): Promise<boolean> {
+  const registerUrl = `${REGISTER_URL}?email=${encodeURIComponent(data.to)}`;
+
+  const html = leadNurturingTemplate(`
+    <p>I'll keep this short.</p>
+
+    <p>You signed up because something about LunarPay caught your attention. Maybe you've been burned before. Maybe you're worried about the future. Maybe you just want options.</p>
+
+    <p>Whatever the reason&mdash;<strong>the window to act is always before you need to.</strong></p>
+
+    <p>Every business I've talked to that got deplatformed says the same thing:</p>
+
+    <blockquote style="border-left: 3px solid #ddd; margin: 20px 0; padding-left: 20px; color: #555; font-style: italic;">
+      "I thought it would never happen to me."
+    </blockquote>
+
+    <p>The American Family Association thought that. So did Libs of TikTok. So did I, when Stripe killed my company overnight.</p>
+
+    <p>I'm not going to email you again after this. But I want to leave you with one thought:</p>
+
+    <p><strong>The best time to fireproof your business is before the fire.</strong></p>
+
+    <p>LunarPay is here when you're ready. No pressure. No gimmicks. Just payment processing that won't cancel you.</p>
+
+    <div style="text-align: center;">
+      <a href="${registerUrl}" class="button">Finish Registration</a>
+    </div>
+
+    <p class="signature">&mdash; Jonathan Bodnar<br><span style="font-size: 13px;">Founder, LunarPay</span></p>
+  `, 'This is my last email. But I want to leave you with one thought.');
+
+  return sendEmail({
+    to: data.to,
+    subject: 'I thought it would never happen to me.',
+    html,
+  });
+}

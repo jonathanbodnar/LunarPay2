@@ -27,6 +27,17 @@ if [ -n "$ONBOARDING_EMAILS_URL" ]; then
   echo "$body" | head -c 1000
 fi
 
+# Job 3: Process Lead Nurturing Emails
+if [ -n "$LEAD_NURTURING_URL" ]; then
+  echo ""
+  echo "--- Processing Lead Nurturing Emails ---"
+  response=$(curl -s -w "\n%{http_code}" "$LEAD_NURTURING_URL")
+  http_code=$(echo "$response" | tail -n1)
+  body=$(echo "$response" | sed '$d')
+  echo "Response (HTTP $http_code):"
+  echo "$body" | head -c 1000
+fi
+
 echo ""
 echo "=========================================="
 echo "Completed at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
