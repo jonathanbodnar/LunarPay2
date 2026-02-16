@@ -10,16 +10,16 @@ export async function GET() {
   try {
     const organizations = await prisma.organization.findMany({
       where: {
-        churchName: { not: '' },
+        name: { not: '' },
         restricted: { not: true },
       },
-      select: { churchName: true },
+      select: { name: true },
     });
 
     // Filter out generic/test names
     const skipNames = ['my organization', 'test', 'demo', 'example'];
     const names = organizations
-      .map((o) => o.churchName?.trim())
+      .map((o) => o.name?.trim())
       .filter((name): name is string =>
         !!name && !skipNames.some((s) => name.toLowerCase().includes(s))
       );
