@@ -66,6 +66,7 @@ const publicApiRoutes = [
   '/api/health',
   '/api/cron',
   '/api/leads',
+  '/api/fee-schedule', // Public fee schedule PDF
   '/api/admin', // All admin APIs use admin cookie (requireAdmin); middleware must not require merchant token
 ];
 
