@@ -76,10 +76,21 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if we already have an MPA link stored (user started but didn't finish)
-    // Return the existing link instead of calling Fortis again (which would fail with duplicate client_app_id)
-    if (organization.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' && organization.fortisOnboarding?.mpaLink) {
-      console.log('[Fortis Onboard] Returning existing MPA link for org:', organizationId);
+    // If a Fortis application already exists for this org (any status with an mpaLink),
+    // return the existing link instead of calling Fortis again (which would fail with
+    // "Duplicate Client App ID"). This covers BANK_INFORMATION_SENT, PENDING, FORM_ERROR, etc.
+    if (organization.fortisOnboarding?.mpaLink) {
+      console.log('[Fortis Onboard] Returning existing MPA link for org:', organizationId, 'status:', organization.fortisOnboarding.appStatus);
+
+      // Update bank info in case the user changed it before re-submitting
+      await prisma.fortisOnboarding.update({
+        where: { organizationId },
+        data: {
+          accountHolderName: accountHolderName || undefined,
+          appStatus: 'BANK_INFORMATION_SENT',
+        },
+      });
+
       return NextResponse.json({
         status: true,
         appLink: organization.fortisOnboarding.mpaLink,
@@ -182,6 +193,38 @@ export async function POST(request: Request) {
 
     if (!result.status) {
       console.error('[Fortis Onboard] API Error:', JSON.stringify(result, null, 2));
+
+      // Check for "Duplicate Client App ID" -- means we already have an application at Fortis
+      const resultStr = JSON.stringify(result);
+      if (resultStr.includes('Duplicate Client App ID') || resultStr.includes('E05')) {
+        console.log('[Fortis Onboard] Duplicate detected, checking for existing record');
+        
+        // If we have an existing onboarding record with bank info saved, just move to BANK_INFORMATION_SENT
+        if (organization.fortisOnboarding) {
+          await prisma.fortisOnboarding.update({
+            where: { organizationId },
+            data: {
+              appStatus: 'BANK_INFORMATION_SENT',
+              processorResponse: JSON.stringify(result),
+            },
+          });
+
+          // If there's an mpa_link, return it
+          if (organization.fortisOnboarding.mpaLink) {
+            return NextResponse.json({
+              status: true,
+              appLink: organization.fortisOnboarding.mpaLink,
+              appStatus: 'BANK_INFORMATION_SENT',
+              message: 'Application already submitted. Returning existing link.',
+            });
+          }
+        }
+
+        return NextResponse.json(
+          { error: 'Your application has already been submitted to Fortis. Please check your email for the MPA verification link, or contact support if you need assistance.' },
+          { status: 400 }
+        );
+      }
       
       // Update onboarding record with error
       try {

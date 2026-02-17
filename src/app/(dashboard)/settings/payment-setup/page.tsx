@@ -387,63 +387,32 @@ export default function PaymentSetupPage() {
           </div>
 
           {/* Credit / Debit */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Credit & Debit Cards</span>
-              {/* Card brand icons */}
-              <div className="flex items-center gap-1.5">
-                {/* Visa */}
-                <svg viewBox="0 0 48 32" className="h-6 w-auto" fill="none">
-                  <rect width="48" height="32" rx="4" fill="#1A1F71"/>
-                  <path d="M19.5 21H17L18.9 11H21.4L19.5 21Z" fill="white"/>
-                  <path d="M28.7 11.2C28.2 11 27.3 10.8 26.2 10.8C23.7 10.8 21.9 12.1 21.9 14C21.9 15.4 23.1 16.2 24.1 16.7C25.1 17.2 25.4 17.5 25.4 17.9C25.4 18.6 24.5 18.9 23.7 18.9C22.6 18.9 22 18.7 21.1 18.3L20.7 18.1L20.3 20.6C21 20.9 22.1 21.2 23.3 21.2C26 21.2 27.7 19.9 27.7 17.9C27.7 16.8 27 15.9 25.5 15.2C24.6 14.7 24 14.4 24 14C24 13.6 24.4 13.2 25.3 13.2C26.1 13.2 26.7 13.4 27.1 13.5L27.4 13.7L28.7 11.2Z" fill="white"/>
-                  <path d="M32 11H30C29.4 11 29 11.2 28.7 11.8L25 21H27.7L28.2 19.5H31.5L31.8 21H34.2L32 11ZM29 17.5L30.2 13.9L30.9 17.5H29Z" fill="white"/>
-                  <path d="M16.6 11L14.1 17.9L13.8 16.5C13.3 15 11.9 13.3 10.3 12.5L12.6 21H15.3L19.3 11H16.6Z" fill="white"/>
-                  <path d="M12.9 11H8.8L8.8 11.2C12 12 14.1 13.9 14.8 16.2L14 11.8C13.9 11.2 13.5 11 12.9 11Z" fill="#F9A533"/>
-                </svg>
-                {/* Mastercard */}
-                <svg viewBox="0 0 48 32" className="h-6 w-auto" fill="none">
-                  <rect width="48" height="32" rx="4" fill="#252525"/>
-                  <circle cx="19" cy="16" r="8" fill="#EB001B"/>
-                  <circle cx="29" cy="16" r="8" fill="#F79E1B"/>
-                  <path d="M24 9.8C25.8 11.2 27 13.4 27 16C27 18.6 25.8 20.8 24 22.2C22.2 20.8 21 18.6 21 16C21 13.4 22.2 11.2 24 9.8Z" fill="#FF5F00"/>
-                </svg>
-                {/* Discover */}
-                <svg viewBox="0 0 48 32" className="h-6 w-auto" fill="none">
-                  <rect width="48" height="32" rx="4" fill="#fff" stroke="#E5E7EB"/>
-                  <path d="M0 0h48v16H0z" fill="#F47216" opacity="0.1"/>
-                  <circle cx="26" cy="16" r="6" fill="#F47216"/>
-                  <text x="8" y="18" fontFamily="Arial,sans-serif" fontWeight="bold" fontSize="8" fill="#1A1F36">D</text>
-                </svg>
-                {/* Amex */}
-                <svg viewBox="0 0 48 32" className="h-6 w-auto" fill="none">
-                  <rect width="48" height="32" rx="4" fill="#006FCF"/>
-                  <text x="24" y="18" textAnchor="middle" fontFamily="Arial,sans-serif" fontWeight="bold" fontSize="8" fill="white">AMEX</text>
-                </svg>
-              </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-3.5">
+            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Credit & Debit Cards</span>
+            {/* Card brand icons */}
+            <div className="flex items-center gap-1 mt-1.5 mb-2.5">
+              <svg viewBox="0 0 48 32" className="h-5 w-auto shrink-0" fill="none"><rect width="48" height="32" rx="4" fill="#1A1F71"/><path d="M19.5 21H17L18.9 11H21.4L19.5 21Z" fill="white"/><path d="M28.7 11.2C28.2 11 27.3 10.8 26.2 10.8C23.7 10.8 21.9 12.1 21.9 14C21.9 15.4 23.1 16.2 24.1 16.7C25.1 17.2 25.4 17.5 25.4 17.9C25.4 18.6 24.5 18.9 23.7 18.9C22.6 18.9 22 18.7 21.1 18.3L20.7 18.1L20.3 20.6C21 20.9 22.1 21.2 23.3 21.2C26 21.2 27.7 19.9 27.7 17.9C27.7 16.8 27 15.9 25.5 15.2C24.6 14.7 24 14.4 24 14C24 13.6 24.4 13.2 25.3 13.2C26.1 13.2 26.7 13.4 27.1 13.5L27.4 13.7L28.7 11.2Z" fill="white"/><path d="M32 11H30C29.4 11 29 11.2 28.7 11.8L25 21H27.7L28.2 19.5H31.5L31.8 21H34.2L32 11ZM29 17.5L30.2 13.9L30.9 17.5H29Z" fill="white"/><path d="M16.6 11L14.1 17.9L13.8 16.5C13.3 15 11.9 13.3 10.3 12.5L12.6 21H15.3L19.3 11H16.6Z" fill="white"/><path d="M12.9 11H8.8L8.8 11.2C12 12 14.1 13.9 14.8 16.2L14 11.8C13.9 11.2 13.5 11 12.9 11Z" fill="#F9A533"/></svg>
+              <svg viewBox="0 0 48 32" className="h-5 w-auto shrink-0" fill="none"><rect width="48" height="32" rx="4" fill="#252525"/><circle cx="19" cy="16" r="8" fill="#EB001B"/><circle cx="29" cy="16" r="8" fill="#F79E1B"/><path d="M24 9.8C25.8 11.2 27 13.4 27 16C27 18.6 25.8 20.8 24 22.2C22.2 20.8 21 18.6 21 16C21 13.4 22.2 11.2 24 9.8Z" fill="#FF5F00"/></svg>
+              <svg viewBox="0 0 48 32" className="h-5 w-auto shrink-0" fill="none"><rect width="48" height="32" rx="4" fill="#fff" stroke="#E5E7EB"/><circle cx="24" cy="16" r="7" fill="#F47216"/></svg>
+              <svg viewBox="0 0 48 32" className="h-5 w-auto shrink-0" fill="none"><rect width="48" height="32" rx="4" fill="#006FCF"/><path d="M10 13h5l1.5 3.5L18 13h5v10h-3.5v-6l-2 4h-2l-2-4v6H10V13z" fill="white"/></svg>
             </div>
             <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-bold text-gray-900">2.75%</span>
-              <span className="text-gray-400 text-lg font-medium">+</span>
-              <span className="text-3xl font-bold text-gray-900">27&cent;</span>
+              <span className="text-2xl font-bold text-gray-900">2.75%</span>
+              <span className="text-gray-400 font-medium">+</span>
+              <span className="text-2xl font-bold text-gray-900">27&cent;</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">per transaction</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">per transaction</p>
           </div>
 
           {/* ACH */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ACH / Bank Transfer</span>
-              <svg viewBox="0 0 24 24" className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M2 9l10-6 10 6M4 10v8m4-8v8m4-8v8m4-8v8m4-8v8M2 22h20M11 6h2"/>
-              </svg>
+          <div className="bg-white rounded-xl border border-gray-200 p-3.5">
+            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">ACH / Bank Transfer</span>
+            <div className="flex items-baseline gap-1 mt-2.5">
+              <span className="text-2xl font-bold text-gray-900">1%</span>
+              <span className="text-gray-400 font-medium">+</span>
+              <span className="text-2xl font-bold text-gray-900">50&cent;</span>
             </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-bold text-gray-900">1%</span>
-              <span className="text-gray-400 text-lg font-medium">+</span>
-              <span className="text-3xl font-bold text-gray-900">50&cent;</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">per transaction</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">per transaction</p>
           </div>
 
           {/* Additional fees */}
