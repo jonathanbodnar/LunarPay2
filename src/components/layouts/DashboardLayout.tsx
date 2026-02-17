@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import ChatWidget from '@/components/chat/ChatWidget';
 
 interface NavItem {
   name: string;
@@ -114,6 +115,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [organizationName, setOrganizationName] = useState<string>('');
   const [userPermissions, setUserPermissions] = useState<UserPermissions | null>(null);
   const [filteredNav, setFilteredNav] = useState<NavItem[]>(navigation);
+  const [userFirstName, setUserFirstName] = useState<string>('');
 
   // Pages users are allowed to visit before completing onboarding step 2
   const onboardingAllowedPaths = [
@@ -158,6 +160,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         };
         setUserPermissions(perms);
         setFilteredNav(getFilteredNavigation(perms));
+        if (data.user.firstName) setUserFirstName(data.user.firstName);
       }
     } catch (error) {
       console.error('Failed to fetch user permissions:', error);
@@ -442,6 +445,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <footer className="py-6 px-4 lg:px-8">
         </footer>
       </div>
+
+      <ChatWidget firstName={userFirstName} isGettingStartedPage={pathname === '/getting-started'} />
     </div>
   );
 }

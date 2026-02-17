@@ -12,7 +12,8 @@ import {
   Menu,
   X,
   ChevronDown,
-  UserPlus
+  UserPlus,
+  MessageCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -26,6 +27,7 @@ const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { name: 'Merchants', href: '/admin/merchants', icon: Building2 },
   { name: 'Leads', href: '/admin/leads', icon: UserPlus },
+  { name: 'Live Chat', href: '/admin/chat', icon: MessageCircle },
   { name: 'Support Tickets', href: '/admin/tickets', icon: Ticket },
 ];
 
@@ -34,9 +36,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [chatUnread, setChatUnread] = useState(0);
 
   useEffect(() => {
     checkAuth();
+  }, []);
+
+  useEffect(() => {
+    const fetchUnread = async () => {
+      try {
+        const r = await fetch('/api/admin/chat', { credentials: 'include' });
+        if (r.ok) {
+          const d = await r.json();
+          setChatUnread(d.conversations?.reduce((s: number, c: { unreadByAdmin: number }) => s + c.unreadByAdmin, 0) || 0);
+        }
+      } catch { /* silent */ }
+    };
+    fetchUnread();
+    const iv = setInterval(fetchUnread, 10000);
+    return () => clearInterval(iv);
   }, []);
 
   const checkAuth = async () => {
@@ -108,7 +126,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   onClick={() => setSidebarOpen(false)}
                 >
                   <item.icon className="h-5 w-5" />
-                  <span>{item.name}</span>
+                  <span className="flex-1">{item.name}</span>
+                  {item.name === 'Live Chat' && chatUnread > 0 && (
+                    <span className="w-5 h-5 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-medium">{chatUnread > 9 ? '9+' : chatUnread}</span>
+                  )}
                 </Link>
               ))}
             </nav>
@@ -139,7 +160,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }`}
               >
                 <item.icon className="h-5 w-5" />
-                <span>{item.name}</span>
+                <span className="flex-1">{item.name}</span>
+                {item.name === 'Live Chat' && chatUnread > 0 && (
+                  <span className="w-5 h-5 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-medium">{chatUnread > 9 ? '9+' : chatUnread}</span>
+                )}
               </Link>
             ))}
           </nav>

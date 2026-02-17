@@ -50,6 +50,7 @@ model User {
   organizations         Organization[]
   tickets               Ticket[]
   ticketMessages        TicketMessage[]
+  chatConversation      ChatConversation?
   
   @@map("users")
 }
@@ -951,4 +952,38 @@ model Lead {
   @@index([utmSource])
   @@index([utmCampaign])
   @@map("leads")
+}
+
+// ============================================
+// LIVE CHAT
+// ============================================
+
+model ChatConversation {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @map("user_id")
+  status          String    @default("active") @db.VarChar(20)
+  lastMessageAt   DateTime? @map("last_message_at")
+  unreadByAdmin   Int       @default(0) @map("unread_by_admin")
+  unreadByUser    Int       @default(0) @map("unread_by_user")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user            User      @relation(fields: [userId], references: [id])
+  messages        ChatMessage[]
+
+  @@unique([userId])
+  @@index([lastMessageAt(sort: Desc)])
+  @@map("chat_conversations")
+}
+
+model ChatMessage {
+  id              Int       @id @default(autoincrement())
+  conversationId  Int       @map("conversation_id")
+  senderType      String    @db.VarChar(20)
+  content         String    @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  conversation    ChatConversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@map("chat_messages")
 }
