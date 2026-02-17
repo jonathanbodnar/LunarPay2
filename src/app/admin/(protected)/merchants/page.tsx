@@ -22,7 +22,8 @@ import {
   Ban,
   ShieldCheck,
   AlertTriangle,
-  Trash2
+  Trash2,
+  LogIn
 } from 'lucide-react';
 
 interface Merchant {
@@ -156,6 +157,23 @@ export default function AdminMerchantsPage() {
       console.error('Failed to delete merchant:', error);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleLoginAs = async (merchant: Merchant) => {
+    try {
+      const res = await fetch(`/api/admin/merchants/${merchant.id}/login-as`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        window.open('/dashboard', '_blank');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to login as merchant');
+      }
+    } catch (error) {
+      console.error('Failed to login as merchant:', error);
     }
   };
 
@@ -470,6 +488,15 @@ export default function AdminMerchantsPage() {
                       </td>
                       <td className="p-4">
                         <div className="flex justify-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-blue-400 border-blue-400/50 hover:bg-blue-500/20"
+                            onClick={() => handleLoginAs(merchant)}
+                            title="Login as this merchant"
+                          >
+                            <LogIn className="h-4 w-4" />
+                          </Button>
                           {merchant.restricted ? (
                             <Button
                               size="sm"
