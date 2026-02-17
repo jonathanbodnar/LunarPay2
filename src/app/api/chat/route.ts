@@ -7,6 +7,7 @@ const ZAPIER_CHAT_WEBHOOK_URL = 'https://hooks.zapier.com/hooks/catch/25882699/u
 
 const sendMessageSchema = z.object({
   content: z.string().min(1, 'Message is required').max(2000),
+  autoMessage: z.string().optional(),
 });
 
 // GET /api/chat - Fetch user's conversation + messages
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { content } = validation.data;
+    const { content, autoMessage } = validation.data;
 
     let conversation = await prisma.chatConversation.findUnique({
       where: { userId: currentUser.userId },
@@ -85,6 +86,17 @@ export async function POST(request: Request) {
           unreadByAdmin: 1,
         },
       });
+
+      // Persist the auto-message from Jonathan as the first message in the conversation
+      if (autoMessage) {
+        await prisma.chatMessage.create({
+          data: {
+            conversationId: conversation.id,
+            senderType: 'admin',
+            content: autoMessage,
+          },
+        });
+      }
     } else {
       await prisma.chatConversation.update({
         where: { id: conversation.id },

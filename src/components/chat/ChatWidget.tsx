@@ -122,9 +122,13 @@ export default function ChatWidget({ firstName, isGettingStartedPage }: ChatWidg
     setInputValue('');
     setMessages((prev) => [...prev, { id: Date.now(), senderType: 'user', content, createdAt: new Date().toISOString() }]);
     try {
+      const payload: { content: string; autoMessage?: string } = { content };
+      if (!hasConversation && autoMessageShown) {
+        payload.autoMessage = autoMessage;
+      }
       const res = await fetch('/api/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', body: JSON.stringify({ content }),
+        credentials: 'include', body: JSON.stringify(payload),
       });
       if (res.ok) {
         setHasConversation(true);
