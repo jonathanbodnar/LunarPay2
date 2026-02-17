@@ -196,9 +196,13 @@ export async function POST(request: Request) {
         console.error('[Fortis Onboard] DB update error:', dbError);
       }
 
+      const errorMessage = typeof result.message === 'string' 
+        ? result.message 
+        : (result.message ? JSON.stringify(result.message) : 'Onboarding failed');
+
       return NextResponse.json(
         { 
-          error: result.message || 'Onboarding failed',
+          error: errorMessage,
           details: result,
         },
         { status: 400 }

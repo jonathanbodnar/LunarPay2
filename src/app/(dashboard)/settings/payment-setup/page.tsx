@@ -328,10 +328,21 @@ export default function PaymentSetupPage() {
         setCurrentStep(3);
         await fetchOrganizations();
       } else {
-        // Show more detailed error message
-        let errorMsg = data.error || 'Failed to submit to Fortis';
-        if (data.details?.result?.detail) {
-          errorMsg += `: ${data.details.result.detail}`;
+        // Safely extract error message (API may return objects instead of strings)
+        let errorMsg = 'Failed to submit to Fortis';
+        if (typeof data.error === 'string') {
+          errorMsg = data.error;
+        } else if (data.error?.message && typeof data.error.message === 'string') {
+          errorMsg = data.error.message;
+        }
+        // Append Fortis detail if available
+        const detail = data.details?.result?.detail;
+        if (detail) {
+          if (typeof detail === 'string') {
+            errorMsg += `: ${detail}`;
+          } else if (typeof detail === 'object') {
+            errorMsg += `: ${JSON.stringify(detail)}`;
+          }
         }
         console.error('Fortis submission error:', data);
         setError(errorMsg);
