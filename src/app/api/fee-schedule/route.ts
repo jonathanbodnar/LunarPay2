@@ -34,18 +34,37 @@ export async function GET() {
   // Top accent bar
   fillRect(0, 0, W, 4, blue);
 
-  // Logo text "LunarPay"
+  // ── Draw crescent moon logo icon ──
+  const ms = 1.3; // moon scale
+  const mx = M;   // moon x offset
+  const my = 22;   // moon y offset
+
+  // Outer circle (stroke only)
+  doc.setDrawColor(navy[0], navy[1], navy[2]);
+  doc.setLineWidth(2 * ms);
+  doc.setLineCap('round');
+  doc.circle(mx + 10 * ms, my + 8 * ms, 6 * ms, 'S');
+
+  // Inner filled circle (creates crescent by overlapping)
+  // First erase overlap with white, then fill navy
+  doc.setFillColor(255, 255, 255);
+  doc.circle(mx + 13 * ms, my + 5.5 * ms, 4.3 * ms, 'F');
+  doc.setFillColor(navy[0], navy[1], navy[2]);
+  doc.circle(mx + 13 * ms, my + 5.5 * ms, 4 * ms, 'F');
+
+  // Logo text "LunarPay" to the right of the icon
+  const textX = M + 24 * ms;
   let y = 40;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(22);
   setColor(navy);
-  doc.text('LunarPay', M, y);
+  doc.text('LunarPay', textX, y);
 
   // Tagline
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   setColor(gray);
-  doc.text('Modern Payment Processing', M, y + 14);
+  doc.text('Free-Speech Payment Processing', textX, y + 14);
 
   // Right-side contact
   doc.setFontSize(8.5);
