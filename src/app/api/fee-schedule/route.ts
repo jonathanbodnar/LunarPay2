@@ -1,5 +1,4 @@
 import { jsPDF } from 'jspdf';
-import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs';
 
@@ -9,15 +8,11 @@ export async function GET() {
   const H = doc.internal.pageSize.getHeight();  // 792
   const M = 50; // margin
 
-  // ─── Load logo SVG and convert to PNG for embedding ───
+  // ─── Load logo.png for embedding ───
   let logoDataUrl: string | null = null;
   try {
-    const logoPath = path.join(process.cwd(), 'public', 'logo-dark.svg');
-    const svgBuffer = fs.readFileSync(logoPath);
-    const pngBuffer = await sharp(svgBuffer, { density: 300 })
-      .resize({ width: 400 })
-      .png()
-      .toBuffer();
+    const logoPath = path.join(process.cwd(), 'public', 'logo.png');
+    const pngBuffer = fs.readFileSync(logoPath);
     logoDataUrl = 'data:image/png;base64,' + pngBuffer.toString('base64');
   } catch (err) {
     console.error('Failed to load logo for PDF:', err);
@@ -52,26 +47,19 @@ export async function GET() {
   fillRect(0, 0, W, 4, blue);
 
   // ── Logo ──
-  const logoH = 28; // logo height in PDF points
-  const logoW = logoH * (80 / 48); // maintain SVG aspect ratio (viewBox 80x48)
-  let y = 40;
+  const logoH = 26;
+  const logoW = logoH * (1050 / 392); // actual logo aspect ratio
+  let y = 38;
 
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', M, 16, logoW, logoH);
+    doc.addImage(logoDataUrl, 'PNG', M, 17, logoW, logoH);
   }
 
-  // "LunarPay" text to the right of the logo
-  const textX = M + logoW + 8;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
-  setColor(navy);
-  doc.text('LunarPay', textX, y);
-
-  // Tagline
+  // Tagline below logo
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   setColor(gray);
-  doc.text('Free-Speech Payment Processing', textX, y + 14);
+  doc.text('Free-Speech Payment Processing', M, y + 16);
 
   // Right-side contact
   doc.setFontSize(8.5);
