@@ -22,7 +22,8 @@ import {
   Mail,
   Shield,
   Percent,
-  Globe
+  Globe,
+  FileText
 } from 'lucide-react';
 import { trackPurchase } from '@/lib/fbpixel';
 
@@ -480,6 +481,17 @@ export default function PaymentSetupPage() {
               </p>
             </div>
           </div>
+
+          {/* Download PDF */}
+          <a
+            href="/api/fee-schedule"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Download Fee Schedule (PDF)
+          </a>
         </CardContent>
       </Card>
     </div>
