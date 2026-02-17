@@ -19,7 +19,10 @@ import {
   Lock,
   RefreshCw,
   Clock,
-  Mail
+  Mail,
+  Shield,
+  Percent,
+  Globe
 } from 'lucide-react';
 import { trackPurchase } from '@/lib/fbpixel';
 
@@ -356,6 +359,121 @@ export default function PaymentSetupPage() {
     }
   };
 
+  const FeeStructurePanel = () => (
+    <div className="space-y-4">
+      <Card className="border-blue-200 bg-gradient-to-b from-blue-50/80 to-white">
+        <CardContent className="pt-5 pb-5 space-y-5">
+          {/* Header */}
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 bg-blue-600 rounded-lg flex items-center justify-center">
+              <Percent className="h-4.5 w-4.5 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm text-gray-900">Simple, Flat-Rate Pricing</h3>
+              <p className="text-[11px] text-gray-500">No hidden fees. No surprises.</p>
+            </div>
+          </div>
+
+          {/* Credit / Debit */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Credit & Debit Cards</span>
+              {/* Card brand icons */}
+              <div className="flex items-center gap-1.5">
+                {/* Visa */}
+                <svg viewBox="0 0 48 32" className="h-6 w-auto" fill="none">
+                  <rect width="48" height="32" rx="4" fill="#1A1F71"/>
+                  <path d="M19.5 21H17L18.9 11H21.4L19.5 21Z" fill="white"/>
+                  <path d="M28.7 11.2C28.2 11 27.3 10.8 26.2 10.8C23.7 10.8 21.9 12.1 21.9 14C21.9 15.4 23.1 16.2 24.1 16.7C25.1 17.2 25.4 17.5 25.4 17.9C25.4 18.6 24.5 18.9 23.7 18.9C22.6 18.9 22 18.7 21.1 18.3L20.7 18.1L20.3 20.6C21 20.9 22.1 21.2 23.3 21.2C26 21.2 27.7 19.9 27.7 17.9C27.7 16.8 27 15.9 25.5 15.2C24.6 14.7 24 14.4 24 14C24 13.6 24.4 13.2 25.3 13.2C26.1 13.2 26.7 13.4 27.1 13.5L27.4 13.7L28.7 11.2Z" fill="white"/>
+                  <path d="M32 11H30C29.4 11 29 11.2 28.7 11.8L25 21H27.7L28.2 19.5H31.5L31.8 21H34.2L32 11ZM29 17.5L30.2 13.9L30.9 17.5H29Z" fill="white"/>
+                  <path d="M16.6 11L14.1 17.9L13.8 16.5C13.3 15 11.9 13.3 10.3 12.5L12.6 21H15.3L19.3 11H16.6Z" fill="white"/>
+                  <path d="M12.9 11H8.8L8.8 11.2C12 12 14.1 13.9 14.8 16.2L14 11.8C13.9 11.2 13.5 11 12.9 11Z" fill="#F9A533"/>
+                </svg>
+                {/* Mastercard */}
+                <svg viewBox="0 0 48 32" className="h-6 w-auto" fill="none">
+                  <rect width="48" height="32" rx="4" fill="#252525"/>
+                  <circle cx="19" cy="16" r="8" fill="#EB001B"/>
+                  <circle cx="29" cy="16" r="8" fill="#F79E1B"/>
+                  <path d="M24 9.8C25.8 11.2 27 13.4 27 16C27 18.6 25.8 20.8 24 22.2C22.2 20.8 21 18.6 21 16C21 13.4 22.2 11.2 24 9.8Z" fill="#FF5F00"/>
+                </svg>
+                {/* Discover */}
+                <svg viewBox="0 0 48 32" className="h-6 w-auto" fill="none">
+                  <rect width="48" height="32" rx="4" fill="#fff" stroke="#E5E7EB"/>
+                  <path d="M0 0h48v16H0z" fill="#F47216" opacity="0.1"/>
+                  <circle cx="26" cy="16" r="6" fill="#F47216"/>
+                  <text x="8" y="18" fontFamily="Arial,sans-serif" fontWeight="bold" fontSize="8" fill="#1A1F36">D</text>
+                </svg>
+                {/* Amex */}
+                <svg viewBox="0 0 48 32" className="h-6 w-auto" fill="none">
+                  <rect width="48" height="32" rx="4" fill="#006FCF"/>
+                  <text x="24" y="18" textAnchor="middle" fontFamily="Arial,sans-serif" fontWeight="bold" fontSize="8" fill="white">AMEX</text>
+                </svg>
+              </div>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl font-bold text-gray-900">2.75%</span>
+              <span className="text-gray-400 text-lg font-medium">+</span>
+              <span className="text-3xl font-bold text-gray-900">27&cent;</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">per transaction</p>
+          </div>
+
+          {/* ACH */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ACH / Bank Transfer</span>
+              <svg viewBox="0 0 24 24" className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M2 9l10-6 10 6M4 10v8m4-8v8m4-8v8m4-8v8m4-8v8M2 22h20M11 6h2"/>
+              </svg>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl font-bold text-gray-900">1%</span>
+              <span className="text-gray-400 text-lg font-medium">+</span>
+              <span className="text-3xl font-bold text-gray-900">50&cent;</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">per transaction</p>
+          </div>
+
+          {/* Additional fees */}
+          <div className="space-y-2.5">
+            <div className="flex items-start gap-2.5 bg-white rounded-lg border border-gray-200 p-3">
+              <Globe className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-gray-900">International Cards</p>
+                <p className="text-[11px] text-gray-500">+2% added to credit/debit rate</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5 bg-white rounded-lg border border-gray-200 p-3">
+              <RefreshCw className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-gray-900">Auto-Update Expired Cards</p>
+                <p className="text-[11px] text-gray-500">$10/mo + 30&cent; per update</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5 bg-white rounded-lg border border-gray-200 p-3">
+              <AlertCircle className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-gray-900">Chargeback Fee</p>
+                <p className="text-[11px] text-gray-500">$15 per occurrence</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Rate Lock Guarantee */}
+          <div className="bg-green-50 border border-green-200 rounded-xl p-3.5 flex items-start gap-2.5">
+            <Shield className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-green-800">Rate Lock Guarantee</p>
+              <p className="text-[11px] text-green-700 leading-relaxed">
+                We will never increase your rate or charge additional fees beyond what&apos;s listed here.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -365,7 +483,7 @@ export default function PaymentSetupPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-5xl">
       <div>
         <h1 className="text-2xl font-semibold">Payment Processing Setup</h1>
         <p className="mt-1 text-muted-foreground">
@@ -443,308 +561,326 @@ export default function PaymentSetupPage() {
 
       {/* Step 1: Merchant Info */}
       {currentStep === 1 && (
-        <form onSubmit={handleMerchantInfoSubmit}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                Merchant Information
-              </CardTitle>
-              <CardDescription>
-                Enter the primary contact and business address information.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>First Name *</Label>
-                  <Input
-                    required
-                    value={merchantInfo.signFirstName}
-                    onChange={(e) => setMerchantInfo({ ...merchantInfo, signFirstName: e.target.value })}
-                    placeholder="John"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Last Name *</Label>
-                  <Input
-                    required
-                    value={merchantInfo.signLastName}
-                    onChange={(e) => setMerchantInfo({ ...merchantInfo, signLastName: e.target.value })}
-                    placeholder="Doe"
-                  />
-                </div>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <form onSubmit={handleMerchantInfoSubmit}>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    Merchant Information
+                  </CardTitle>
+                  <CardDescription>
+                    Enter the primary contact and business address information.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>First Name *</Label>
+                      <Input
+                        required
+                        value={merchantInfo.signFirstName}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, signFirstName: e.target.value })}
+                        placeholder="John"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Last Name *</Label>
+                      <Input
+                        required
+                        value={merchantInfo.signLastName}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, signLastName: e.target.value })}
+                        placeholder="Doe"
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Phone Number *</Label>
-                  <Input
-                    required
-                    type="tel"
-                    value={merchantInfo.signPhoneNumber}
-                    onChange={(e) => setMerchantInfo({ ...merchantInfo, signPhoneNumber: e.target.value })}
-                    placeholder="(555) 123-4567"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Email *</Label>
-                  <Input
-                    required
-                    type="email"
-                    value={merchantInfo.email}
-                    onChange={(e) => setMerchantInfo({ ...merchantInfo, email: e.target.value })}
-                    placeholder="john@company.com"
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Phone Number *</Label>
+                      <Input
+                        required
+                        type="tel"
+                        value={merchantInfo.signPhoneNumber}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, signPhoneNumber: e.target.value })}
+                        placeholder="(555) 123-4567"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email *</Label>
+                      <Input
+                        required
+                        type="email"
+                        value={merchantInfo.email}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, email: e.target.value })}
+                        placeholder="john@company.com"
+                      />
+                    </div>
+                  </div>
 
-              <div className="border-t pt-4 mt-4">
-                <h4 className="text-sm font-medium mb-4">Business Information</h4>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="border-t pt-4 mt-4">
+                    <h4 className="text-sm font-medium mb-4">Business Information</h4>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>DBA Name (Doing Business As) *</Label>
+                          <Input
+                            required
+                            value={merchantInfo.dbaName}
+                            onChange={(e) => setMerchantInfo({ ...merchantInfo, dbaName: e.target.value })}
+                            placeholder="My Company Inc"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Legal Name *</Label>
+                          <Input
+                            required
+                            value={merchantInfo.legalName}
+                            onChange={(e) => setMerchantInfo({ ...merchantInfo, legalName: e.target.value })}
+                            placeholder="My Company Inc, LLC"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Website *</Label>
+                          <Input
+                            required
+                            type="url"
+                            value={merchantInfo.website}
+                            onChange={(e) => setMerchantInfo({ ...merchantInfo, website: e.target.value })}
+                            placeholder="https://www.mycompany.com"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Federal Tax ID (EIN)</Label>
+                          <Input
+                            value={merchantInfo.fedTaxId}
+                            onChange={(e) => setMerchantInfo({ ...merchantInfo, fedTaxId: e.target.value })}
+                            placeholder="XX-XXXXXXX"
+                            maxLength={10}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Business Type</Label>
+                          <select
+                            className="w-full h-10 px-3 rounded-lg border border-border bg-background"
+                            value={merchantInfo.ownershipType}
+                            onChange={(e) => setMerchantInfo({ ...merchantInfo, ownershipType: e.target.value })}
+                          >
+                            <option value="">Select type...</option>
+                            <option value="sole_proprietorship">Sole Proprietorship</option>
+                            <option value="llc">LLC</option>
+                            <option value="corporation">Corporation</option>
+                            <option value="partnership">Partnership</option>
+                            <option value="non_profit">Non-Profit</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Owner Title</Label>
+                          <Input
+                            value={merchantInfo.ownerTitle}
+                            onChange={(e) => setMerchantInfo({ ...merchantInfo, ownerTitle: e.target.value })}
+                            placeholder="Owner, CEO, President"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Ownership Percentage</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={merchantInfo.ownershipPercent}
+                            onChange={(e) => setMerchantInfo({ ...merchantInfo, ownershipPercent: e.target.value })}
+                            placeholder="100"
+                          />
+                          {parseInt(merchantInfo.ownershipPercent) < 100 && (
+                            <p className="text-xs text-amber-600">
+                              Additional owners will need to be added in the Fortis MPA form.
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Date of Birth</Label>
+                          <Input
+                            type="date"
+                            value={merchantInfo.dateOfBirth}
+                            onChange={(e) => setMerchantInfo({ ...merchantInfo, dateOfBirth: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4 mt-4">
+                    <h4 className="text-sm font-medium mb-4">Business Address</h4>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Street Address *</Label>
+                        <Input
+                          required
+                          value={merchantInfo.merchantAddressLine1}
+                          onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantAddressLine1: e.target.value })}
+                          placeholder="123 Main Street"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Suite / Unit</Label>
+                        <Input
+                          value={merchantInfo.merchantAddressLine2}
+                          onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantAddressLine2: e.target.value })}
+                          placeholder="Suite 100"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <Label>DBA Name (Doing Business As) *</Label>
+                      <Label>City *</Label>
                       <Input
                         required
-                        value={merchantInfo.dbaName}
-                        onChange={(e) => setMerchantInfo({ ...merchantInfo, dbaName: e.target.value })}
-                        placeholder="My Company Inc"
+                        value={merchantInfo.merchantCity}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantCity: e.target.value })}
+                        placeholder="New York"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Legal Name *</Label>
+                      <Label>State *</Label>
                       <Input
                         required
-                        value={merchantInfo.legalName}
-                        onChange={(e) => setMerchantInfo({ ...merchantInfo, legalName: e.target.value })}
-                        placeholder="My Company Inc, LLC"
+                        value={merchantInfo.merchantState}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantState: e.target.value })}
+                        placeholder="NY"
+                        maxLength={2}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>ZIP Code *</Label>
+                      <Input
+                        required
+                        value={merchantInfo.merchantPostalCode}
+                        onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantPostalCode: e.target.value })}
+                        placeholder="10001"
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Website *</Label>
-                      <Input
-                        required
-                        type="url"
-                        value={merchantInfo.website}
-                        onChange={(e) => setMerchantInfo({ ...merchantInfo, website: e.target.value })}
-                        placeholder="https://www.mycompany.com"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Federal Tax ID (EIN)</Label>
-                      <Input
-                        value={merchantInfo.fedTaxId}
-                        onChange={(e) => setMerchantInfo({ ...merchantInfo, fedTaxId: e.target.value })}
-                        placeholder="XX-XXXXXXX"
-                        maxLength={10}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Business Type</Label>
-                      <select
-                        className="w-full h-10 px-3 rounded-lg border border-border bg-background"
-                        value={merchantInfo.ownershipType}
-                        onChange={(e) => setMerchantInfo({ ...merchantInfo, ownershipType: e.target.value })}
-                      >
-                        <option value="">Select type...</option>
-                        <option value="sole_proprietorship">Sole Proprietorship</option>
-                        <option value="llc">LLC</option>
-                        <option value="corporation">Corporation</option>
-                        <option value="partnership">Partnership</option>
-                        <option value="non_profit">Non-Profit</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Owner Title</Label>
-                      <Input
-                        value={merchantInfo.ownerTitle}
-                        onChange={(e) => setMerchantInfo({ ...merchantInfo, ownerTitle: e.target.value })}
-                        placeholder="Owner, CEO, President"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Ownership Percentage</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        max="100"
-                        value={merchantInfo.ownershipPercent}
-                        onChange={(e) => setMerchantInfo({ ...merchantInfo, ownershipPercent: e.target.value })}
-                        placeholder="100"
-                      />
-                      {parseInt(merchantInfo.ownershipPercent) < 100 && (
-                        <p className="text-xs text-amber-600">
-                          Additional owners will need to be added in the Fortis MPA form.
-                        </p>
+
+                  <div className="flex justify-end pt-4">
+                    <Button type="submit" disabled={saving}>
+                      {saving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          Continue
+                          <ArrowRight className="h-4 w-4 ml-2" />
+                        </>
                       )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Date of Birth</Label>
-                      <Input
-                        type="date"
-                        value={merchantInfo.dateOfBirth}
-                        onChange={(e) => setMerchantInfo({ ...merchantInfo, dateOfBirth: e.target.value })}
-                      />
-                    </div>
+                    </Button>
                   </div>
-                </div>
-              </div>
-
-              <div className="border-t pt-4 mt-4">
-                <h4 className="text-sm font-medium mb-4">Business Address</h4>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Street Address *</Label>
-                    <Input
-                      required
-                      value={merchantInfo.merchantAddressLine1}
-                      onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantAddressLine1: e.target.value })}
-                      placeholder="123 Main Street"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Suite / Unit</Label>
-                    <Input
-                      value={merchantInfo.merchantAddressLine2}
-                      onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantAddressLine2: e.target.value })}
-                      placeholder="Suite 100"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>City *</Label>
-                  <Input
-                    required
-                    value={merchantInfo.merchantCity}
-                    onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantCity: e.target.value })}
-                    placeholder="New York"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>State *</Label>
-                  <Input
-                    required
-                    value={merchantInfo.merchantState}
-                    onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantState: e.target.value })}
-                    placeholder="NY"
-                    maxLength={2}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>ZIP Code *</Label>
-                  <Input
-                    required
-                    value={merchantInfo.merchantPostalCode}
-                    onChange={(e) => setMerchantInfo({ ...merchantInfo, merchantPostalCode: e.target.value })}
-                    placeholder="10001"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-4">
-                <Button type="submit" disabled={saving}>
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      Continue
-                      <ArrowRight className="h-4 w-4 ml-2" />
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </form>
+                </CardContent>
+              </Card>
+            </form>
+          </div>
+          <div className="lg:col-span-1">
+            <div className="lg:sticky lg:top-24">
+              <FeeStructurePanel />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Step 2: Bank Account */}
       {currentStep === 2 && (
-        <form onSubmit={handleBankInfoSubmit}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Bank Account Information
-              </CardTitle>
-              <CardDescription>
-                Enter your bank account details for receiving payments.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-                <Lock className="h-4 w-4" />
-                Your bank information is encrypted and stored securely.
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <form onSubmit={handleBankInfoSubmit}>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    Bank Account Information
+                  </CardTitle>
+                  <CardDescription>
+                    Enter your bank account details for receiving payments.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+                    <Lock className="h-4 w-4" />
+                    Your bank information is encrypted and stored securely.
+                  </div>
 
-              <div className="space-y-2">
-                <Label>Account Holder Name *</Label>
-                <Input
-                  required
-                  value={bankInfo.accountHolderName}
-                  onChange={(e) => setBankInfo({ ...bankInfo, accountHolderName: e.target.value })}
-                  placeholder="John Doe or Company Name"
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label>Account Holder Name *</Label>
+                    <Input
+                      required
+                      value={bankInfo.accountHolderName}
+                      onChange={(e) => setBankInfo({ ...bankInfo, accountHolderName: e.target.value })}
+                      placeholder="John Doe or Company Name"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Account Number *</Label>
-                  <Input
-                    required
-                    type="password"
-                    value={bankInfo.achAccountNumber}
-                    onChange={(e) => setBankInfo({ ...bankInfo, achAccountNumber: e.target.value })}
-                    placeholder="••••••••••"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Routing Number *</Label>
-                  <Input
-                    required
-                    value={bankInfo.achRoutingNumber}
-                    onChange={(e) => setBankInfo({ ...bankInfo, achRoutingNumber: e.target.value })}
-                    placeholder="123456789"
-                    maxLength={9}
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Account Number *</Label>
+                      <Input
+                        required
+                        type="password"
+                        value={bankInfo.achAccountNumber}
+                        onChange={(e) => setBankInfo({ ...bankInfo, achAccountNumber: e.target.value })}
+                        placeholder="••••••••••"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Routing Number *</Label>
+                      <Input
+                        required
+                        value={bankInfo.achRoutingNumber}
+                        onChange={(e) => setBankInfo({ ...bankInfo, achRoutingNumber: e.target.value })}
+                        placeholder="123456789"
+                        maxLength={9}
+                      />
+                    </div>
+                  </div>
 
-              <div className="flex justify-between pt-4">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(1)}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back
-                </Button>
-                <Button type="submit" disabled={saving}>
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      Review & Sign Application
-                      <ArrowRight className="h-4 w-4 ml-2" />
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </form>
+                  <div className="flex justify-between pt-4">
+                    <Button type="button" variant="outline" onClick={() => setCurrentStep(1)}>
+                      <ArrowLeft className="h-4 w-4 mr-2" />
+                      Back
+                    </Button>
+                    <Button type="submit" disabled={saving}>
+                      {saving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          Review & Sign Application
+                          <ArrowRight className="h-4 w-4 ml-2" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </form>
+          </div>
+          <div className="lg:col-span-1">
+            <div className="lg:sticky lg:top-24">
+              <FeeStructurePanel />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Step 3: Complete MPA / Active */}
