@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, MessageCircle, User, Mail, Calendar, Loader2 } from 'lucide-react';
+import { Send, MessageCircle, User, Mail, Calendar, Loader2, Check, CheckCheck } from 'lucide-react';
 
-interface ChatMessage { id: number; senderType: string; content: string; createdAt: string; }
+interface ChatMessage { id: number; senderType: string; content: string; createdAt: string; readAt: string | null; }
 interface ConvPreview {
   id: number; status: string; unreadByAdmin: number; lastMessageAt: string; createdAt: string;
   user: { id: number; firstName: string | null; lastName: string | null; email: string; createdOn: string };
@@ -71,7 +71,7 @@ export default function AdminChatPage() {
     const content = input.trim();
     if (!content || sending || !selectedId) return;
     setSending(true); setInput('');
-    setMessages((p) => [...p, { id: Date.now(), senderType: 'admin', content, createdAt: new Date().toISOString() }]);
+    setMessages((p) => [...p, { id: Date.now(), senderType: 'admin', content, createdAt: new Date().toISOString(), readAt: null }]);
     try {
       const r = await fetch(`/api/admin/chat/${selectedId}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -130,26 +130,38 @@ export default function AdminChatPage() {
                   </div>
                 )}
                 <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-                  {messages.map((m) => (
-                    <div key={m.id}>
-                      {m.senderType === 'admin' ? (
-                        <div className="flex justify-end">
-                          <div>
-                            <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-md"><p className="text-sm whitespace-pre-wrap">{m.content}</p></div>
-                            <div className="text-[10px] text-slate-500 text-right mt-1 mr-1">Admin &middot; {fmtTime(m.createdAt)}</div>
+                  {messages.map((m, i) => {
+                    const isLastAdminMsg = m.senderType === 'admin' && (i === messages.length - 1 || messages.slice(i + 1).every((x) => x.senderType !== 'admin'));
+                    return (
+                      <div key={m.id}>
+                        {m.senderType === 'admin' ? (
+                          <div className="flex justify-end">
+                            <div>
+                              <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-md"><p className="text-sm whitespace-pre-wrap">{m.content}</p></div>
+                              <div className="flex items-center justify-end gap-1 mt-1 mr-1">
+                                <span className="text-[10px] text-slate-500">{fmtTime(m.createdAt)}</span>
+                                {isLastAdminMsg && (
+                                  m.readAt ? (
+                                    <CheckCheck className="h-3 w-3 text-blue-400" />
+                                  ) : (
+                                    <Check className="h-3 w-3 text-slate-500" />
+                                  )
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-start gap-2">
-                          <div className="w-7 h-7 rounded-full bg-slate-600 text-slate-300 flex items-center justify-center text-xs font-medium shrink-0"><User className="h-3.5 w-3.5" /></div>
-                          <div>
-                            <div className="bg-slate-700 rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-md"><p className="text-sm text-slate-200 whitespace-pre-wrap">{m.content}</p></div>
-                            <div className="text-[10px] text-slate-500 mt-1 ml-1">{m.senderType === 'system' ? 'Auto' : 'User'} &middot; {fmtTime(m.createdAt)}</div>
+                        ) : (
+                          <div className="flex items-start gap-2">
+                            <div className="w-7 h-7 rounded-full bg-slate-600 text-slate-300 flex items-center justify-center text-xs font-medium shrink-0"><User className="h-3.5 w-3.5" /></div>
+                            <div>
+                              <div className="bg-slate-700 rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-md"><p className="text-sm text-slate-200 whitespace-pre-wrap">{m.content}</p></div>
+                              <div className="text-[10px] text-slate-500 mt-1 ml-1">{m.senderType === 'system' ? 'Auto' : 'User'} &middot; {fmtTime(m.createdAt)}</div>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                      </div>
+                    );
+                  })}
                   <div ref={endRef} />
                 </div>
                 <div className="px-5 py-3 border-t border-slate-700 bg-slate-800 shrink-0">

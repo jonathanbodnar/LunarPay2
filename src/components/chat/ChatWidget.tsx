@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Send, MessageCircle } from 'lucide-react';
+import { X, Send, MessageCircle, Check, CheckCheck } from 'lucide-react';
 import TypingIndicator from './TypingIndicator';
 
 interface ChatMessage {
@@ -9,6 +9,7 @@ interface ChatMessage {
   senderType: 'user' | 'admin' | 'system';
   content: string;
   createdAt: string;
+  readAt: string | null;
 }
 
 interface ChatWidgetProps {
@@ -111,7 +112,7 @@ export default function ChatWidget({ firstName, isGettingStartedPage }: ChatWidg
     setTimeout(() => {
       setShowTyping(false);
       setAutoMessageShown(true);
-      setMessages([{ id: -1, senderType: 'system', content: autoMessage, createdAt: new Date().toISOString() }]);
+      setMessages([{ id: -1, senderType: 'system', content: autoMessage, createdAt: new Date().toISOString(), readAt: null }]);
     }, 2000);
   };
 
@@ -120,7 +121,7 @@ export default function ChatWidget({ firstName, isGettingStartedPage }: ChatWidg
     if (!content || sending) return;
     setSending(true);
     setInputValue('');
-    setMessages((prev) => [...prev, { id: Date.now(), senderType: 'user', content, createdAt: new Date().toISOString() }]);
+    setMessages((prev) => [...prev, { id: Date.now(), senderType: 'user', content, createdAt: new Date().toISOString(), readAt: null }]);
     try {
       const payload: { content: string; autoMessage?: string } = { content };
       if (!hasConversation && autoMessageShown) {
@@ -169,31 +170,45 @@ export default function ChatWidget({ firstName, isGettingStartedPage }: ChatWidg
   if (widgetState === 'hidden') return null;
 
   // --- Shared message renderer ---
-  const renderMsg = (msg: ChatMessage, maxW = 'max-w-[260px]') => (
-    <div key={msg.id}>
-      {msg.senderType === 'user' ? (
-        <div className="flex justify-end">
-          <div>
-            <div className={`bg-black text-white rounded-2xl rounded-tr-sm px-4 py-2.5 ${maxW}`}>
-              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+  const renderMsg = (msg: ChatMessage, idx: number, arr: ChatMessage[], maxW = 'max-w-[260px]') => {
+    const isLastUserMsg = msg.senderType === 'user' && (idx === arr.length - 1 || arr.slice(idx + 1).every((m) => m.senderType !== 'user'));
+    return (
+      <div key={msg.id}>
+        {msg.senderType === 'user' ? (
+          <div className="flex justify-end">
+            <div>
+              <div className={`bg-black text-white rounded-2xl rounded-tr-sm px-4 py-2.5 ${maxW}`}>
+                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+              </div>
+              {widgetState === 'widget' && (
+                <div className="flex items-center justify-end gap-1 mt-1 mr-1">
+                  <span className="text-[10px] text-gray-400">{fmtTime(msg.createdAt)}</span>
+                  {isLastUserMsg && (
+                    msg.readAt ? (
+                      <CheckCheck className="h-3 w-3 text-blue-500" />
+                    ) : (
+                      <Check className="h-3 w-3 text-gray-400" />
+                    )
+                  )}
+                </div>
+              )}
             </div>
-            {widgetState === 'widget' && <div className="text-[10px] text-gray-400 text-right mt-1 mr-1">{fmtTime(msg.createdAt)}</div>}
           </div>
-        </div>
-      ) : (
-        <div className="flex items-start gap-2">
-          <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-sm font-medium shrink-0">J</div>
-          <div>
-            {widgetState === 'popup' && <div className="text-xs text-gray-500 mb-1 ml-1">Jonathan</div>}
-            <div className={`bg-white rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm border border-gray-100 ${maxW}`}>
-              <p className="text-sm text-gray-800 whitespace-pre-wrap">{msg.content}</p>
+        ) : (
+          <div className="flex items-start gap-2">
+            <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-sm font-medium shrink-0">J</div>
+            <div>
+              {widgetState === 'popup' && <div className="text-xs text-gray-500 mb-1 ml-1">Jonathan</div>}
+              <div className={`bg-white rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm border border-gray-100 ${maxW}`}>
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">{msg.content}</p>
+              </div>
+              {widgetState === 'widget' && <div className="text-[10px] text-gray-400 mt-1 ml-1">{fmtTime(msg.createdAt)}</div>}
             </div>
-            {widgetState === 'widget' && <div className="text-[10px] text-gray-400 mt-1 ml-1">{fmtTime(msg.createdAt)}</div>}
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
 
   // --- Input bar ---
   const inputBar = (
@@ -232,7 +247,7 @@ export default function ChatWidget({ firstName, isGettingStartedPage }: ChatWidg
                 <div className="bg-white rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm border border-gray-100"><TypingIndicator /></div>
               </div>
             )}
-            {autoMessageShown && messages.map((m) => renderMsg(m))}
+            {autoMessageShown && messages.map((m, i, arr) => renderMsg(m, i, arr))}
             <div ref={messagesEndRef} />
           </div>
           {inputBar}
@@ -255,7 +270,7 @@ export default function ChatWidget({ firstName, isGettingStartedPage }: ChatWidg
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50/50">
-        {messages.map((m) => renderMsg(m))}
+        {messages.map((m, i, arr) => renderMsg(m, i, arr))}
         <div ref={messagesEndRef} />
       </div>
       {inputBar}

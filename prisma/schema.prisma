@@ -980,6 +980,7 @@ model ChatMessage {
   conversationId  Int       @map("conversation_id")
   senderType      String    @db.VarChar(20)
   content         String    @db.Text
+  readAt          DateTime? @map("read_at")
   createdAt       DateTime  @default(now()) @map("created_at")
 
   conversation    ChatConversation @relation(fields: [conversationId], references: [id])

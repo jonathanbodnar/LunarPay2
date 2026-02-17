@@ -27,11 +27,30 @@ export async function GET() {
     }
 
     if (conversation.unreadByUser > 0) {
-      await prisma.chatConversation.update({
-        where: { id: conversation.id },
-        data: { unreadByUser: 0 },
-      });
+      await prisma.$transaction([
+        prisma.chatConversation.update({
+          where: { id: conversation.id },
+          data: { unreadByUser: 0 },
+        }),
+        // Mark all unread admin messages as read by the user
+        prisma.chatMessage.updateMany({
+          where: {
+            conversationId: conversation.id,
+            senderType: 'admin',
+            readAt: null,
+          },
+          data: { readAt: new Date() },
+        }),
+      ]);
     }
+
+    // Re-fetch messages with updated readAt
+    const freshMessages = conversation.unreadByUser > 0
+      ? (await prisma.chatMessage.findMany({
+          where: { conversationId: conversation.id },
+          orderBy: { createdAt: 'asc' },
+        }))
+      : conversation.messages;
 
     return NextResponse.json({
       conversation: {
@@ -40,11 +59,12 @@ export async function GET() {
         unreadByUser: 0,
         lastMessageAt: conversation.lastMessageAt,
       },
-      messages: conversation.messages.map((m) => ({
+      messages: freshMessages.map((m) => ({
         id: m.id,
         senderType: m.senderType,
         content: m.content,
         createdAt: m.createdAt,
+        readAt: m.readAt,
       })),
     });
   } catch (error) {
@@ -156,6 +176,7 @@ export async function POST(request: Request) {
         senderType: message.senderType,
         content: message.content,
         createdAt: message.createdAt,
+        readAt: message.readAt,
       },
     });
   } catch (error) {
