@@ -11,6 +11,7 @@ import {
   CheckCircle2, 
   Clock, 
   XCircle,
+  Circle,
   ExternalLink,
   Mail,
   Phone,
@@ -33,6 +34,8 @@ interface Merchant {
   state: string | null;
   createdAt: string;
   fortisStatus: string;
+  onboardingStatus: string;
+  onboardingDetail: string;
   totalProcessed: number;
   totalCustomers: number;
   totalInvoices: number;
@@ -165,35 +168,76 @@ export default function AdminMerchantsPage() {
     }).format(amount);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'ACTIVE':
+  const getStatusBadge = (merchant: Merchant) => {
+    const s = merchant.onboardingStatus;
+    switch (s) {
+      case 'FULLY_SETUP':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-500/20 text-green-400 text-xs rounded-full font-medium">
             <CheckCircle2 className="h-3 w-3" />
-            Active
+            Live & Processing
           </span>
         );
-      case 'PENDING':
-      case 'BANK_INFORMATION_SENT':
-      case 'APPLICATION_SUBMITTED':
+      case 'ACTIVE_INCOMPLETE':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded-full">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-500/15 text-green-300 text-xs rounded-full font-medium">
+            <CheckCircle2 className="h-3 w-3" />
+            Payment Active
+          </span>
+        );
+      case 'AWAITING_APPROVAL':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full font-medium">
             <Clock className="h-3 w-3" />
-            Pending
+            Awaiting Approval
           </span>
         );
-      case 'DECLINED':
+      case 'BANK_SUBMITTED':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/15 text-blue-300 text-xs rounded-full font-medium">
+            <Clock className="h-3 w-3" />
+            Submitting to Fortis
+          </span>
+        );
+      case 'FORM_ERROR':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-500/20 text-red-400 text-xs rounded-full font-medium">
             <XCircle className="h-3 w-3" />
-            Declined
+            Application Error
+          </span>
+        );
+      case 'NEEDS_BANK_INFO':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded-full font-medium">
+            <Clock className="h-3 w-3" />
+            Needs Bank Info
+          </span>
+        );
+      case 'NEEDS_MERCHANT_INFO':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-yellow-500/15 text-yellow-300 text-xs rounded-full font-medium">
+            <Clock className="h-3 w-3" />
+            Needs Merchant Info
+          </span>
+        );
+      case 'NEEDS_PAYMENT_SETUP':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-500/20 text-orange-400 text-xs rounded-full font-medium">
+            <Circle className="h-3 w-3" />
+            Needs Payment Setup
+          </span>
+        );
+      case 'JUST_REGISTERED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-500/20 text-slate-400 text-xs rounded-full font-medium">
+            <Circle className="h-3 w-3" />
+            Just Registered
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-500/20 text-slate-400 text-xs rounded-full">
-            Not Started
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-500/20 text-slate-400 text-xs rounded-full font-medium">
+            Unknown
           </span>
         );
     }
@@ -205,10 +249,13 @@ export default function AdminMerchantsPage() {
       m.email?.toLowerCase().includes(search.toLowerCase()) ||
       m.ownerEmail.toLowerCase().includes(search.toLowerCase());
     
+    const s = m.onboardingStatus;
     const matchesStatus = statusFilter === 'all' ||
-      (statusFilter === 'active' && m.fortisStatus === 'ACTIVE') ||
-      (statusFilter === 'pending' && ['PENDING', 'BANK_INFORMATION_SENT', 'APPLICATION_SUBMITTED'].includes(m.fortisStatus)) ||
-      (statusFilter === 'not_started' && !m.fortisStatus) ||
+      (statusFilter === 'live' && (s === 'FULLY_SETUP' || s === 'ACTIVE_INCOMPLETE')) ||
+      (statusFilter === 'awaiting' && (s === 'AWAITING_APPROVAL' || s === 'BANK_SUBMITTED')) ||
+      (statusFilter === 'onboarding' && (s === 'NEEDS_BANK_INFO' || s === 'NEEDS_MERCHANT_INFO' || s === 'NEEDS_PAYMENT_SETUP')) ||
+      (statusFilter === 'error' && s === 'FORM_ERROR') ||
+      (statusFilter === 'just_registered' && s === 'JUST_REGISTERED') ||
       (statusFilter === 'restricted' && m.restricted);
     
     return matchesSearch && matchesStatus;
@@ -246,15 +293,17 @@ export default function AdminMerchantsPage() {
           className="h-10 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white"
         >
           <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="pending">Pending</option>
-          <option value="not_started">Not Started</option>
+          <option value="live">Live & Processing</option>
+          <option value="awaiting">Awaiting Approval</option>
+          <option value="onboarding">In Onboarding</option>
+          <option value="error">Application Error</option>
+          <option value="just_registered">Just Registered</option>
           <option value="restricted">Restricted</option>
         </select>
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card className="bg-slate-800 border-slate-700">
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center gap-3">
@@ -263,9 +312,24 @@ export default function AdminMerchantsPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-white">
-                  {merchants.filter(m => m.fortisStatus === 'ACTIVE' && !m.restricted).length}
+                  {merchants.filter(m => (m.onboardingStatus === 'FULLY_SETUP' || m.onboardingStatus === 'ACTIVE_INCOMPLETE') && !m.restricted).length}
                 </p>
-                <p className="text-sm text-slate-400">Active Merchants</p>
+                <p className="text-sm text-slate-400">Live</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-800 border-slate-700">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                <Clock className="h-5 w-5 text-blue-500" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">
+                  {merchants.filter(m => m.onboardingStatus === 'AWAITING_APPROVAL' || m.onboardingStatus === 'BANK_SUBMITTED').length}
+                </p>
+                <p className="text-sm text-slate-400">Awaiting</p>
               </div>
             </div>
           </CardContent>
@@ -278,9 +342,24 @@ export default function AdminMerchantsPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-white">
-                  {merchants.filter(m => ['PENDING', 'BANK_INFORMATION_SENT', 'APPLICATION_SUBMITTED'].includes(m.fortisStatus)).length}
+                  {merchants.filter(m => ['NEEDS_BANK_INFO', 'NEEDS_MERCHANT_INFO', 'NEEDS_PAYMENT_SETUP'].includes(m.onboardingStatus)).length}
                 </p>
-                <p className="text-sm text-slate-400">Pending Applications</p>
+                <p className="text-sm text-slate-400">Onboarding</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-800 border-slate-700">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-slate-500/20 rounded-lg flex items-center justify-center">
+                <Circle className="h-5 w-5 text-slate-500" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">
+                  {merchants.filter(m => m.onboardingStatus === 'JUST_REGISTERED').length}
+                </p>
+                <p className="text-sm text-slate-400">New</p>
               </div>
             </div>
           </CardContent>
@@ -310,7 +389,7 @@ export default function AdminMerchantsPage() {
                 <p className="text-2xl font-bold text-white">
                   {formatCurrency(merchants.reduce((sum, m) => sum + m.totalProcessed, 0))}
                 </p>
-                <p className="text-sm text-slate-400">Total Processed</p>
+                <p className="text-sm text-slate-400">Processed</p>
               </div>
             </div>
           </CardContent>
@@ -365,8 +444,9 @@ export default function AdminMerchantsPage() {
                         </div>
                       </td>
                       <td className="p-4">
-                        <div className="flex flex-col gap-1">
-                          {getStatusBadge(merchant.fortisStatus)}
+                        <div className="flex flex-col gap-1.5">
+                          {getStatusBadge(merchant)}
+                          <p className="text-[11px] text-slate-500 leading-tight max-w-[200px]">{merchant.onboardingDetail}</p>
                           {merchant.restricted && (
                             <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full">
                               <Ban className="h-3 w-3" />
