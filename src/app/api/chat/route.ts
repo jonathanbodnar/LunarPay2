@@ -26,26 +26,34 @@ export async function GET() {
       return NextResponse.json({ conversation: null, messages: [] });
     }
 
-    if (conversation.unreadByUser > 0) {
+    // Mark all unread admin messages as read by the user
+    const hasUnreadAdminMsgs = conversation.messages.some(
+      (m) => m.senderType === 'admin' && !m.readAt
+    );
+
+    if (conversation.unreadByUser > 0 || hasUnreadAdminMsgs) {
       await prisma.$transaction([
-        prisma.chatConversation.update({
-          where: { id: conversation.id },
-          data: { unreadByUser: 0 },
-        }),
-        // Mark all unread admin messages as read by the user
-        prisma.chatMessage.updateMany({
-          where: {
-            conversationId: conversation.id,
-            senderType: 'admin',
-            readAt: null,
-          },
-          data: { readAt: new Date() },
-        }),
+        ...(conversation.unreadByUser > 0
+          ? [prisma.chatConversation.update({
+              where: { id: conversation.id },
+              data: { unreadByUser: 0 },
+            })]
+          : []),
+        ...(hasUnreadAdminMsgs
+          ? [prisma.chatMessage.updateMany({
+              where: {
+                conversationId: conversation.id,
+                senderType: 'admin',
+                readAt: null,
+              },
+              data: { readAt: new Date() },
+            })]
+          : []),
       ]);
     }
 
-    // Re-fetch messages with updated readAt
-    const freshMessages = conversation.unreadByUser > 0
+    // Re-fetch messages if any were updated
+    const freshMessages = hasUnreadAdminMsgs
       ? (await prisma.chatMessage.findMany({
           where: { conversationId: conversation.id },
           orderBy: { createdAt: 'asc' },
