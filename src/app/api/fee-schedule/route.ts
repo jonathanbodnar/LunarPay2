@@ -1,10 +1,27 @@
 import { jsPDF } from 'jspdf';
+import sharp from 'sharp';
+import path from 'path';
+import fs from 'fs';
 
 export async function GET() {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
   const W = doc.internal.pageSize.getWidth();   // 612
   const H = doc.internal.pageSize.getHeight();  // 792
   const M = 50; // margin
+
+  // ─── Load logo SVG and convert to PNG for embedding ───
+  let logoDataUrl: string | null = null;
+  try {
+    const logoPath = path.join(process.cwd(), 'public', 'logo-dark.svg');
+    const svgBuffer = fs.readFileSync(logoPath);
+    const pngBuffer = await sharp(svgBuffer, { density: 300 })
+      .resize({ width: 400 })
+      .png()
+      .toBuffer();
+    logoDataUrl = 'data:image/png;base64,' + pngBuffer.toString('base64');
+  } catch (err) {
+    console.error('Failed to load logo for PDF:', err);
+  }
 
   // ─── Colors ───
   const navy  = [10, 10, 40] as const;
@@ -34,27 +51,17 @@ export async function GET() {
   // Top accent bar
   fillRect(0, 0, W, 4, blue);
 
-  // ── Draw crescent moon logo icon ──
-  const ms = 1.3; // moon scale
-  const mx = M;   // moon x offset
-  const my = 22;   // moon y offset
-
-  // Outer circle (stroke only)
-  doc.setDrawColor(navy[0], navy[1], navy[2]);
-  doc.setLineWidth(2 * ms);
-  doc.setLineCap('round');
-  doc.circle(mx + 10 * ms, my + 8 * ms, 6 * ms, 'S');
-
-  // Inner filled circle (creates crescent by overlapping)
-  // First erase overlap with white, then fill navy
-  doc.setFillColor(255, 255, 255);
-  doc.circle(mx + 13 * ms, my + 5.5 * ms, 4.3 * ms, 'F');
-  doc.setFillColor(navy[0], navy[1], navy[2]);
-  doc.circle(mx + 13 * ms, my + 5.5 * ms, 4 * ms, 'F');
-
-  // Logo text "LunarPay" to the right of the icon
-  const textX = M + 24 * ms;
+  // ── Logo ──
+  const logoH = 28; // logo height in PDF points
+  const logoW = logoH * (80 / 48); // maintain SVG aspect ratio (viewBox 80x48)
   let y = 40;
+
+  if (logoDataUrl) {
+    doc.addImage(logoDataUrl, 'PNG', M, 16, logoW, logoH);
+  }
+
+  // "LunarPay" text to the right of the logo
+  const textX = M + logoW + 8;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(22);
   setColor(navy);
