@@ -2,6 +2,8 @@ import { jsPDF } from 'jspdf';
 import path from 'path';
 import fs from 'fs';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
   const W = doc.internal.pageSize.getWidth();   // 612
@@ -319,7 +321,7 @@ export async function GET() {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="LunarPay-Fee-Schedule.pdf"',
-      'Cache-Control': 'public, max-age=86400',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
     },
   });
 }
