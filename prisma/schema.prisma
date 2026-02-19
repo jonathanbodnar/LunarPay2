@@ -959,13 +959,15 @@ model Lead {
 // ============================================
 
 model ChatConversation {
-  id              Int       @id @default(autoincrement())
-  userId          Int       @map("user_id")
-  status          String    @default("active") @db.VarChar(20)
-  lastMessageAt   DateTime? @map("last_message_at")
-  unreadByAdmin   Int       @default(0) @map("unread_by_admin")
-  unreadByUser    Int       @default(0) @map("unread_by_user")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  id                    Int       @id @default(autoincrement())
+  userId                Int       @map("user_id")
+  status                String    @default("active") @db.VarChar(20)
+  lastMessageAt         DateTime? @map("last_message_at")
+  unreadByAdmin         Int       @default(0) @map("unread_by_admin")
+  unreadByUser          Int       @default(0) @map("unread_by_user")
+  followupEmailSentAt   DateTime? @map("followup_email_sent_at")
+  followupEmailToken    String?   @unique @map("followup_email_token") @db.VarChar(64)
+  createdAt             DateTime  @default(now()) @map("created_at")
 
   user            User      @relation(fields: [userId], references: [id])
   messages        ChatMessage[]

@@ -1677,6 +1677,75 @@ export async function sendLeadNurturingEmail5(data: LeadNurturingEmailData): Pro
   });
 }
 
+// ============================================
+// CHAT FOLLOWUP EMAIL (24h no reply)
+// ============================================
+
+interface ChatFollowupMessage {
+  senderType: string;
+  content: string;
+  createdAt: string | Date;
+}
+
+export async function sendChatFollowupEmail(data: {
+  to: string;
+  firstName: string;
+  messages: ChatFollowupMessage[];
+  replyToAddress: string;
+  dashboardUrl: string;
+}): Promise<boolean> {
+  const transcript = data.messages.map((m) => {
+    const time = new Date(m.createdAt).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+    const isAdmin = m.senderType === 'admin' || m.senderType === 'system';
+    const name = isAdmin ? 'Jonathan (LunarPay)' : 'You';
+    const bg = isAdmin ? '#f0f0f0' : '#000000';
+    const color = isAdmin ? '#333333' : '#ffffff';
+    const align = isAdmin ? 'left' : 'right';
+    const escaped = m.content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+
+    return `
+      <div style="text-align: ${align}; margin-bottom: 12px;">
+        <div style="font-size: 11px; color: #999; margin-bottom: 4px;">${name} &middot; ${time}</div>
+        <div style="display: inline-block; max-width: 80%; background: ${bg}; color: ${color}; padding: 10px 14px; border-radius: 12px; text-align: left; font-size: 14px; line-height: 1.5;">
+          ${escaped}
+        </div>
+      </div>`;
+  }).join('');
+
+  const html = baseTemplate(`
+    <div class="header">
+      <div class="logo">LunarPay</div>
+    </div>
+    <div class="content">
+      <h2 style="margin-top: 0;">You have an unread message</h2>
+      <p>Hey ${data.firstName} -- Jonathan from LunarPay sent you a message and hasn't heard back. Here's the conversation so far:</p>
+
+      <div style="background: #fafafa; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1px solid #eee;">
+        ${transcript}
+      </div>
+
+      <p><strong>You can reply directly to this email</strong> and your response will appear in the chat, or continue the conversation in your dashboard:</p>
+
+      <div style="text-align: center;">
+        <a href="${data.dashboardUrl}" class="button">Open Chat</a>
+      </div>
+
+      <p style="color: #999; font-size: 12px; margin-top: 24px; text-align: center; border-top: 1px solid #eee; padding-top: 16px;">
+        ---- Reply above this line to continue the conversation ----
+      </p>
+    </div>
+  `);
+
+  return sendEmail({
+    to: data.to,
+    subject: 'You have an unread message from Jonathan at LunarPay',
+    html,
+    replyTo: data.replyToAddress,
+  });
+}
+
 // LEAD EMAIL 6: Day 12 — Final push / breakup email
 export async function sendLeadNurturingEmail6(data: LeadNurturingEmailData): Promise<boolean> {
   const registerUrl = `${REGISTER_URL}?email=${encodeURIComponent(data.to)}`;

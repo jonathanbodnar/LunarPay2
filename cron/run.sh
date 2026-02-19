@@ -38,6 +38,17 @@ if [ -n "$LEAD_NURTURING_URL" ]; then
   echo "$body" | head -c 1000
 fi
 
+# Job 4: Chat Followup Emails (24h no-reply)
+if [ -n "$CHAT_FOLLOWUP_URL" ]; then
+  echo ""
+  echo "--- Processing Chat Followup Emails ---"
+  response=$(curl -s -w "\n%{http_code}" "$CHAT_FOLLOWUP_URL")
+  http_code=$(echo "$response" | tail -n1)
+  body=$(echo "$response" | sed '$d')
+  echo "Response (HTTP $http_code):"
+  echo "$body" | head -c 1000
+fi
+
 echo ""
 echo "=========================================="
 echo "Completed at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
