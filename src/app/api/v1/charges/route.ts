@@ -51,11 +51,10 @@ export async function POST(request: NextRequest) {
     // Charge the saved card using the wallet token
     const result = await fortisClient.processCreditCardSale({
       transaction_amount: amount, // already in cents
-      account_vault_id: source.fortisWalletId,
+      token_id: source.fortisWalletId,
       location_id: auth.fortisLocationId || undefined,
-      billing_name: source.nameHolder || `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || undefined,
-      billing_zip: customer.zip || undefined,
-      description: description || 'API charge',
+      client_customer_id: String(customerId),
+      transaction_c1: description || 'API charge',
     });
 
     if (!result.status) {
