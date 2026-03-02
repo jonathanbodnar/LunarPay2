@@ -116,7 +116,6 @@ export interface CreditCardSaleData {
   transaction_amount: number; // in cents
   token_id: string; // saved wallet/token ID
   location_id?: string; // merchant location ID
-  client_customer_id?: string;
   transaction_c1?: string; // custom field 1
   transaction_c2?: string; // custom field 2
 }

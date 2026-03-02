@@ -53,8 +53,8 @@ export async function POST(request: NextRequest) {
       transaction_amount: amount, // already in cents
       token_id: source.fortisWalletId,
       location_id: auth.fortisLocationId || undefined,
-      client_customer_id: String(customerId),
-      transaction_c1: description || 'API charge',
+      transaction_c1: description || undefined,
+      transaction_c2: String(customerId), // store customer ID in custom field
     });
 
     if (!result.status) {
