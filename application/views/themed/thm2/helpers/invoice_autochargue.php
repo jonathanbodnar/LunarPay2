@@ -1,1 +1,0 @@
-Charges the selected payment method immediately after invoice creation
