@@ -40,7 +40,7 @@ function extractReplyText(text: string): string {
     reply = reply.substring(0, sepIdx);
   } else {
     // Fallback: strip from first "On ... wrote:" pattern (Gmail style)
-    const gmailPattern = /\nOn .+wrote:\s*$/ms;
+    const gmailPattern = /\nOn [\s\S]+?wrote:\s*$/m;
     const gmailMatch = reply.search(gmailPattern);
     if (gmailMatch > 0) {
       reply = reply.substring(0, gmailMatch);
