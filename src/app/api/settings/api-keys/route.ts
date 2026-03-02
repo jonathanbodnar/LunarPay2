@@ -24,8 +24,8 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     return NextResponse.json({
-      publishableKey: user.publishable_key || null,           // full value — safe to expose
-      secretKey: user.secret_key ? maskKey(user.secret_key) : null, // masked — click reveal to see
+      publishableKey: user.publishable_key || null,
+      secretKey: user.secret_key || null,  // full value — endpoint is auth-protected
       hasKeys: !!(user.publishable_key && user.secret_key),
     });
   } catch (error) {
