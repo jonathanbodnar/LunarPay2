@@ -1,0 +1,39 @@
+/**
+ * POST /api/settings/api-keys/regenerate — Regenerate a specific key
+ * Body: { type: 'publishable' | 'secret' }
+ */
+
+import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { generateApiKey } from '@/lib/api-auth';
+
+export async function POST(request: Request) {
+  try {
+    const currentUser = await requireAuth();
+    const body = await request.json();
+    const type: 'publishable' | 'secret' = body.type;
+
+    if (type !== 'publishable' && type !== 'secret') {
+      return NextResponse.json({ error: 'type must be "publishable" or "secret"' }, { status: 400 });
+    }
+
+    const newKey = generateApiKey(type === 'publishable' ? 'lp_pk_' : 'lp_sk_');
+
+    await prisma.user.update({
+      where: { id: currentUser.userId },
+      data: type === 'publishable' ? { publishableKey: newKey } : { secretKey: newKey },
+    });
+
+    return NextResponse.json({
+      type,
+      key: type === 'publishable' ? newKey : newKey.slice(0, 12) + '...' + newKey.slice(-4),
+      ...(type === 'secret' ? { fullKey: newKey } : {}),
+    });
+  } catch (error) {
+    if ((error as Error).message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json({ error: 'Failed to regenerate key' }, { status: 500 });
+  }
+}

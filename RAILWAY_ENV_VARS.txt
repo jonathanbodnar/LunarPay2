@@ -1,0 +1,101 @@
+# ========================================
+# REQUIRED RAILWAY ENVIRONMENT VARIABLES
+# Copy these to Railway Dashboard
+# ========================================
+
+# === DATABASE (Supabase) ===
+DB_DRIVER=pgsql
+SUPABASE_HOST=db.ucjkwcpzqqqrvfrtkrhy.supabase.co
+SUPABASE_USER=postgres
+SUPABASE_PASSWORD=NKtQWFMQEP96nKQJ
+SUPABASE_DATABASE=postgres
+SUPABASE_PORT=5432
+
+# Also set these for backward compatibility (use same Supabase values)
+MARIADB_HOST=db.ucjkwcpzqqqrvfrtkrhy.supabase.co
+MARIADB_USER=postgres
+MARIADB_PASSWORD=NKtQWFMQEP96nKQJ
+MARIADB_DATABASE=postgres
+
+# === APPLICATION ===
+APP_BASE_URL=https://your-railway-app.railway.app/
+IS_DEVELOPER_MACHINE=false
+fortis_environment=dev
+
+# === ENCRYPTION PHRASES (Generate random strings) ===
+fortis_encrypt_phrase=your-random-encryption-key-here-change-me
+integrations_encrypt_phrase=another-random-key-change-me
+paysafe_encrypt_phrase=yet-another-random-key
+
+# === FORTIS SANDBOX (Required - Add your real credentials) ===
+fortis_developer_id_sandbox=your-developer-id
+fortis_onboarding_user_id_sandbox=your-user-id
+fortis_onboarding_user_api_key_sandbox=your-api-key
+fortis_user_id_sandbox=your-user-id
+fortis_user_api_key_sandbox=your-api-key
+fortis_location_id_sandbox=your-location-id
+
+# === FORTIS PRODUCTION (Optional for now) ===
+fortis_developer_id_production=your-prod-dev-id
+fortis_onboarding_user_id_production=your-prod-user-id
+fortis_onboarding_user_api_key_production=your-prod-api-key
+
+# === PAYSAFE (Optional) ===
+paysafe_partner_user_test=
+paysafe_partner_passsword_test=
+paysafe_partner_user_live=
+paysafe_partner_passsword_live=
+paysafe_environment=dev
+
+# === EMAIL (Optional but recommended) ===
+EMAILING_ENABLED=FALSE
+CODEIGNITER_SMTP_USER=
+CODEIGNITER_SMTP_PASS=
+MAILGUN_DOMAIN=
+MAILGUN_API_KEY=
+
+# === TWILIO/SMS (Optional) ===
+PROVIDER_MESSENGER_TEST=FALSE
+TWILIO_ACCOUNT_SID_LIVE=
+TWILIO_AUTH_TOKEN_LIVE=
+TWILIO_ACCOUNT_SID_TEST=
+TWILIO_AUTH_TOKEN_TEST=
+
+# === FEATURES (Set to FALSE if not using) ===
+EPICPAY_ONBOARD_FORM_TEST=FALSE
+SET_SAME_SITE_NONE=FALSE
+ZAPIER_ENABLED=FALSE
+APPCUES_ENABLED=FALSE
+RECAPTCHA_ENABLED=FALSE
+FORCE_HIDE_INTERCOM=TRUE
+
+# === OAUTH INTEGRATIONS (Optional) ===
+STRIPE_OAUTH_CLIENT_ID=
+STRIPE_OAUTH_SECRET=
+FRESHBOOKS_OAUTH_CLIENT_ID=
+FRESHBOOKS_OAUTH_SECRET=
+QUICKBOOKS_OAUTH_CLIENT_ID=
+QUICKBOOKS_OAUTH_SECRET=
+
+# === PLANNING CENTER (Optional) ===
+PLANNINGCENTER_REDIRECT_URL=integrations/planningcenter/oauthcomplete
+PLANNINGCENTER_TOKEN_URL=
+PLANNINGCENTER_CLIENT_ID=
+PLANNINGCENTER_SECRET=
+
+# === GOOD BARBER (Optional) ===
+GOODBARBER_COOKIES=
+GOODBARBER_RESELLER_USERNAME=
+GOODBARBER_RESELLER_PASSWORD=
+GOODBARBER_APP_WITH_ORGNX=FALSE
+
+# === RECAPTCHA (Optional) ===
+RECAPTCHA_SECRET_KEY=
+RECAPTCHA_PUBLIC_KEY=
+RECAPTCHA_THRESHOLD=0.6
+
+# === OTHER APIS (Optional) ===
+GOOGLE_CODE_API=
+ZAPIER_POLLING_KPIS_USER=
+ZAPIER_POLLING_KPIS_PASS=
+

@@ -1,0 +1,182 @@
+<div class="email_invoice email_background_color" style="[BackColor]padding:35px 10px; font-size:15px; justify-content: center; font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Ubuntu, sans-serif; border-radius: 10px;">
+
+<table width="100%">
+  <tr>
+    <td align='center'>
+      <div style="box-shadow: 0 0 2rem 0 rgba(136,152,170,.15); position: relative; display: flex; flex-direction: column; min-width: 0; word-wrap: break-word; background-color: #fff; background-clip: border-box; border-radius: 0.2rem; flex: 0 0 auto; width: 500px; border: 0 solid;justify-content: center;">
+        <table width="100%" style="margin-top: 26px">
+          <tr>
+            <td style="padding: 10px;" valign="top">
+                <div style="border-radius: 1rem 1rem 0 0; z-index: 1 !important; position: relative !important; margin: 1rem 1rem 10px; padding: 0;border-bottom:0px !important">
+                  <img style="max-height: 50px; display: [hasLogo];" class="email_invoice_logo" src="[logoUrl]"  />
+                  <span class="email_header_title" style="text-decoration: none; color: #999999; line-height: 14px;border-bottom:1px solid white; font-weight: 500; font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Ubuntu, sans-serif;" >
+                      Invoice From [CompanyName]
+                  </span>
+                  <h5 class="email_total" style="color: #000; margin-bottom: 0 !important; text-transform: capitalize !important; line-height: 1.375; font-weight: 600; margin-top: 0px;">$[Total]</h5>
+                  <span class="email_due_date" style="text-decoration: none; color: #999999; line-height: 14px;border-bottom:1px solid white; font-weight: 500; font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Ubuntu, sans-serif;" >
+                      Due [DueDate]
+                  </span>
+                  <hr style="margin-top: 5px !important; margin-bottom: 0;">
+                </div>
+                <!--<div style="font-family: Open Sans,sans-serif; flex: 1 1 auto; padding: .5rem 1.5rem 1.5rem;"> 
+                  <p style="color: #7A7A7A;margin-bottom: 1.5rem !important; line-height: 1.625; font-weight: 400; margin-top: 0;">
+                    To: [CustomerName] 
+                  </p>
+                  <p style="color: #7A7A7A;line-height: 1.625; font-weight: 400; margin-top: 0; margin-bottom: 1rem;">
+                    From: [OrgName] 
+                  </p>
+                </div>-->
+              </td>
+              <td style="padding: 20px; display: flex; justify-content: flex-end; margin-right: 1rem;" valign="center">
+                  <div id="email_icon_invoice" style="[ForeColor]" class="theme_foreground_color" >
+                      <!--SVG is not supported in many email clients.-->
+                      <svg width="45px" aria-hidden="true" focusable="false" data-prefix="fas" data-icon="file-invoice"
+                           class="svg-inline--fa fa-file-invoice fa-w-12" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512">
+                          <path fill="currentColorx"
+                                d="M288 256H96v64h192v-64zm89-151L279.1 7c-4.5-4.5-10.6-7-17-7H256v128h128v-6.1c0-6.3-2.5-12.4-7-16.9zm-153 31V0H24C10.7 0 0 10.7 0 24v464c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H248c-13.2 0-24-10.8-24-24zM64 72c0-4.42 3.58-8 8-8h80c4.42 0 8 3.58 8 8v16c0 4.42-3.58 8-8 8H72c-4.42 0-8-3.58-8-8V72zm0 64c0-4.42 3.58-8 8-8h80c4.42 0 8 3.58 8 8v16c0 4.42-3.58 8-8 8H72c-4.42 0-8-3.58-8-8v-16zm256 304c0 4.42-3.58 8-8 8h-80c-4.42 0-8-3.58-8-8v-16c0-4.42 3.58-8 8-8h80c4.42 0 8 3.58 8 8v16zm0-200v96c0 8.84-7.16 16-16 16H80c-8.84 0-16-7.16-16-16v-96c0-8.84 7.16-16 16-16h224c8.84 0 16 7.16 16 16z"></path>
+                      </svg>
+                  </div>
+              </td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <table cellpadding=0 cellspacing=0 style="width:100%;margin: 10px 20px 20px 25px;">
+                <tr>
+                  <td>
+                  <span style="color: #7A7A7A;margin-bottom: 1.5rem !important; line-height: 1.625; font-weight: 400; margin-top: 0;">
+                    <span style="display: inline-block; width: 120px;">Business name</span><span class="email_business_name" style="color:#1A1A1A">[BusinessName]</span>
+                  </span>
+                  </td>
+              </tr>
+                <tr>
+                    <td>
+                      <span style="color: #7A7A7A;margin-bottom: 1.5rem !important; line-height: 1.625; font-weight: 400; margin-top: 0;">
+                        <span style="display: inline-block; width: 120px;">Customer name</span><span class="email_customer" style="color:#1A1A1A">[CustomerName] </span>
+                      </span>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td>
+                        <span style="color: #7A7A7A;line-height: 1.625; font-weight: 400; margin-top: 0; margin-bottom: 1rem;">
+                            <span style="display: inline-block; width: 120px;"><span style="display: inline-block; width: 50px;">From</span></span><span class="email_organization" style="color:#1A1A1A">[OrgName] </span>
+                        </span>
+                    </td>
+                </tr>
+                  <tr>
+                      <td>
+                      <span style="color: #7A7A7A;margin-bottom: 1.5rem !important; line-height: 1.625; font-weight: 400; margin-top: 0;">
+                        <span style="display: inline-block; width: 120px;">Memo</span><span class="email_memo" style="color:#1A1A1A">[Memo]</span>
+                      </span>
+                      </td>
+                  </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" style="padding: 10px;" valign="top">
+              <div style="width: 100%; vertical-align: middle; padding-bottom: 20px; box-sizing: border-box; -webkit-box-flex: 0; -webkit-flex: 0 1 auto; -ms-flex: 0 1 auto; flex: 0 1 auto; min-width: 0; max-width: 100%;" align="center">
+                    <a class="theme_color text_theme_color" href="[PaymentLink]" role="button" aria-pressed="true" style="[ThemeColor][AutoTextColor]text-decoration: none; width: 70%; margin-bottom: 1rem; letter-spacing: -.025rem; text-transform: none; box-shadow: 0 4px 6px rgba(50,50,93,.1),0 1px 3px rgba(0,0,0,.08); display: inline-block; font-weight: 700; line-height: 1.5; text-align: center; vertical-align: middle; cursor: pointer; user-select: none; border-radius: 0.3rem !important; transition: all .15s ease-in; padding: .625rem 1.25rem; border: 1px solid transparent;">Pay  Invoice</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </td> 
+  </tr>
+  <tr>
+    <td align='center' style="padding-top: 40px">
+        <div style="box-shadow: 0 0 2rem 0 rgba(136,152,170,.15); position: relative; display: flex; flex-direction: column; min-width: 0; word-wrap: break-word; background-color: #fff; background-clip: border-box; border-radius: 0.2rem; flex: 0 0 auto; width: 500px; border: 0 solid;justify-content: center;">
+            <table width="100%">
+                <tr>
+                  <td style="padding: 10px; padding-bottom: 0;" valign="top">
+                    <div style="color: #7A7A7A;border-radius: 1rem 1rem 0 0; border-bottom-width: 0px; z-index: 1 !important; position: relative !important; margin: 1rem 1rem 10px; padding: 0;">
+                      <span>
+                          <strong>Invoice <span class="email_reference">[Reference]</span></strong>
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                    <td style="padding: 0px 10px; " valign="top">
+                        <div style="flex: 1 1 auto; padding: .5rem 1.5rem 0;"> 
+                            <table class="email_products" cellpadding="5" cellspacing="5" style="--bs-table-bg: transparent; --bs-table-accent-bg: transparent; --bs-table-striped-color: #67748e; --bs-table-striped-bg: rgba(0,0,0,.05); --bs-table-active-color: #67748e; --bs-table-active-bg: rgba(0,0,0,.1); --bs-table-hover-color: #67748e; --bs-table-hover-bg: rgba(0,0,0,.075); width: 100%; margin-bottom: 0px !important; color: #67748e; vertical-align: top; border: #e9ecef;">
+                                [products]
+                            </table>
+                        </div>
+                    </td>
+                </tr>
+                <tr style="[noCoverFee]" class="no-cover-fee-container">
+                  <td style="padding: 2px 16px 0px 14px" valign="top">
+                    <div style="border-radius: 1rem 1rem 0 0; border-bottom-width: 0px; z-index: 1 !important; position: relative !important; padding: 10px 30px;">
+                      <span style="color: #000; font-weight: bold;">
+                        Total 
+                      </span>
+                      <span class="email_total" style="float: right; font-weight: bold;" >$[Total]</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr style="[coverFee]" class="cover-fee-container">
+                  <td style="padding: 0px 14px" valign="top">
+                    <div style="border-radius: 1rem 1rem 0 0;border-bottom-width: 0px;z-index: 1 !important;position: relative !important;margin: 0.5rem 1.5rem; padding: 0;text-align: right;">
+                      <span style="color: #000; padding:0 10px">
+                        <b>Total</b>
+                      </span>
+                    </div>
+                    <div style="border-radius: 1rem 1rem 0 0; border-bottom-width: 0px; z-index: 1 !important; position: relative !important; margin: 0rem 1.5rem 0; padding: 0;">
+                      <span style="color: #000;">
+                        Regular card <span class="email_total_regular" style="float: right; padding:0 10px; font-weight: bold;" >$[TotalRegular]</span>
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+                <tr style="[coverFee]" class="cover-fee-container">
+                  <td style="padding: 0px 14px" valign="top">
+                    <div style="border-radius: 1rem 1rem 0 0; border-bottom-width: 0px; z-index: 1 !important; position: relative !important; margin: 0.2rem 1.5rem 0; padding: 0;">
+                      <span style="color: #000; ">
+                        Amex <span class="email_total_amex" style="float: right; padding:0 10px;" >$[TotalAmex]</span>
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+                <tr style="[coverFee]" class="cover-fee-container">
+                  <td style="padding: 0px 14px" valign="top">
+                    <div style="border-radius: 1rem 1rem 0 0; border-bottom-width: 0px; z-index: 1 !important; position: relative !important; margin: 0.2rem 1.5rem 0; padding: 0;">
+                      <span style="color: #000;">
+                        Ach <span class="email_total_ach" style="float: right; padding:0 10px" >$[TotalAch]</span>
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+                <tr style="[coverFee]" class="cover-fee-container">
+                  <td style="padding: 0px 14px" valign="top">
+                    <div style=" margin-top:20px; font-size:12px; font-style: italic; border-radius: 1rem 1rem 0 0; border-bottom-width: 0px; z-index: 1 !important; position: relative !important; margin: .5rem 1.5rem 0; padding: 0;">
+                      <b>Processing fee information:</b><br>
+
+                     The processing fee and the final amount depend on your<br>
+                     payment method and will be confirmed before checkout.
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 0px 14px" valign="top">
+                    <div style="border-radius: 1rem 1rem 0 0; border-bottom-width: 0px; z-index: 1 !important; position: relative !important; margin: 1rem 1rem 10px; padding: 0;">
+                      <span style="color: #000;">
+                        <a href="[link_pdf]" target="_blank">Invoice Pdf</a>
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                    <td>
+                        <div>
+                            <span style="color: #999999; line-height: 14px;display: block;text-align: center;margin-bottom: 8px;">Invoicing brought to you by <a target="_BLANK" href="https://[CompanySite]">[CompanySite]</a></span>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+      </td>
+  </tr>
+</table>
+</div>

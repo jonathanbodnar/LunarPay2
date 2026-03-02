@@ -1,0 +1,17 @@
+#Name       : Set invoices as Due
+#Description: Trigger script to look for invoices that need to be set as Due
+#Recurrence : Every day each 4 hours
+0 */4 * * * curl --silent -H "Authorization: Bearer e47e5e4147d1c6f701056025c862e71433db2b56c1fa7371" http://localhost/cron/invoices/set_due
+# --------------------------------------------------------------------------------------------- #
+#Name       : Fire webhooks
+#Description: Trigger script for webhooks fire
+#Recurrence: Every 4 hours starting from 00:00 (i.e., 00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
+0 */4 * * * curl --silent -H "Authorization: Bearer e47e5e4147d1c6f701056025c862e71433db2b56c1fa7371" http://localhost/fortiscron/fire_subscriptions_webhook
+# --------------------------------------------------------------------------------------------- #
+#Name       : Process payments from subscriptions (Fortis)
+#Description: Trigger script for processing recurring payments
+#Recurrence: Every day 09:00PM
+0 9 * * * curl --silent -H "Authorization: Bearer e47e5e4147d1c6f701056025c862e71433db2b56c1fa7371" http://localhost/fortiscron/process_recurrent_transactions
+
+# --------------------------------------------------------------------------------------------- #
+

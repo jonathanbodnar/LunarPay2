@@ -31,6 +31,8 @@ model User {
   
   // API & Team management
   apiKey                String?   @unique @map("api_key") @db.VarChar(255)
+  publishableKey        String?   @unique @map("publishable_key") @db.VarChar(255)
+  secretKey             String?   @unique @map("secret_key") @db.VarChar(255)
   role                  String?   @db.VarChar(50) // admin, member, viewer
   parentId              Int?      @map("parent_id") // For team hierarchy
   permissions           String?   @db.Text // JSON array of permissions

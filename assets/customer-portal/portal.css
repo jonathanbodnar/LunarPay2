@@ -1,0 +1,216 @@
+
+
+body, .form-control {
+    background-color: white;
+}
+.brand {
+    text-align: center; 
+}
+
+.right-container {    
+    min-height: 550px;
+    padding:45px;
+    padding-top: 35px;            
+    /*-moz-box-shadow: -6px 3px 13px -10px #cbcbcb;
+    webkit-box-shadow: -6px 3px 13px -10px #cbcbcb;
+    box-shadow: -6px 3px 13px -10px #cbcbcb;
+    */
+}
+
+.container-lg {
+    margin-top: 15px!important;                         
+    padding: 25px
+}
+@media (max-width: 780px) {
+    .container-lg {
+        margin-top: 14px!important;
+        padding-top: 0px!important
+    }
+
+    .right-container {
+        padding:16px;
+        box-shadow: none;
+    }
+
+}
+
+.fa-smaller {
+    font-size: 0.74em
+}
+
+/*theme-color*/
+.btn-primary, .btn-primary:hover, .btn-primary:not(:disabled):not(.disabled).active:focus, .btn-primary:not(:disabled):not(.disabled):active:focus,
+.btn-primary:not(:disabled):not(.disabled).active, .btn-primary:not(:disabled):not(.disabled):active, .show>.btn-primary.dropdown-toggle
+.btn-primary.focus, .btn-primary:focus{
+    background-color: whitesmoke;
+    color:black;
+    border-color: #c6d4e3;
+    box-shadow: none
+}
+
+/*divider with text*/
+hr.hr-text::before {
+    content: attr(data-content);
+    display: inline-block;
+    background-color: #fff;
+    padding: 0 8px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-weight: 600;
+    color: #1A1A1A;
+}
+hr.hr-text {
+    position: relative;
+    border: none;
+    height: 1px;
+    background: lightgray;
+} 
+/* --- --- */
+
+/*selector tabs*/
+.payment-selector table {
+    margin-top: 0px !important;
+    width: 100%;
+    margin: auto;
+    table-layout: fixed;
+}
+
+.payment-form{
+    max-width: 355px;
+    margin: auto;
+}
+
+.payment-selector td {
+    text-align: center;            
+    padding: 4px;
+}
+.payment-selector .option-container {
+    /* border: solid 1px lightgray; */
+    border-radius: 3px;
+    padding: 8px 0px 4px 0px;
+    font-weight: 400; 
+    cursor: pointer;
+}
+
+.payment-selector .is-selected {
+    box-shadow: 0 0.5rem 0.5rem 0.1em #d7d7d7;
+    color: black;
+    background-color: white;
+    border: solid 1px #787878;
+}
+
+.product-name {
+    font-weight: 600;
+}
+
+.product_name , .product_price {
+    font-weight: 600;
+}
+
+.product_qty {
+    font-weight: 600;
+    color: #999999;
+}
+
+#cardNumber{
+    height: 44px;
+    border-bottom-left-radius: unset;
+    border-bottom-right-radius: unset;
+    padding: .375rem .75rem !important;
+}
+
+#cardExpiry{
+    height: 44px;
+    border-radius: unset;
+    border-top: unset;
+    padding: .375rem .75rem !important;
+}
+
+#cardCvc{
+    height: 44px;
+    border-radius: unset;
+    border-top: unset;
+    border-left: unset;
+    padding: .375rem .75rem !important;
+}
+
+.payment_input{
+    height: 35px;
+    color: #1A1A1A !important;
+    background: transparent !important;
+}
+
+.payment_input::placeholder{
+    color: #bbbbc2!important;
+    font-weight: 300;
+}
+
+#cardZip{
+    border-top: unset;
+    border-top-left-radius: unset;
+    border-top-right-radius: unset;
+}
+
+.bank_first_name{
+    border-bottom-left-radius: unset;
+    border-bottom-right-radius: unset;
+}
+
+.bank_zip{
+    border-top: unset;
+    border-top-left-radius: unset;
+    border-top-right-radius: unset;
+}
+
+.bank_medium_input{
+    border-top: unset;
+    border-radius: unset;
+}
+
+.alert-validation{
+    color: #b60000;
+}
+
+.save_data{
+    transform: scale(1.5);
+    top: 3px;
+    left: 22px;
+}
+.digital_content{
+    color: #999999 !important;
+    text-decoration: underline;
+}
+#my_subscriptions {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+}
+#download_receipt{
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+}
+.right-footer{
+    position: absolute;
+    bottom: -20px;
+    width: calc(100% - 76px);
+    padding: 0 45px;
+    font-size: 14px;
+}
+label.text-muted {
+    font-weight: 600;
+    color: #1A1A1A !important;
+    font-size: 14px;
+}
+.h4 {
+    font-weight: 600 !important;
+    color: #525f7f !important;
+}
+/*override h1 ~ h6*/
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+    font-weight: 400;    
+}
+

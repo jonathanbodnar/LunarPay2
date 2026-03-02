@@ -1,0 +1,41 @@
+<!-- HTML for static distribution bundle build -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Swagger UI</title>
+    <link rel="stylesheet" type="text/css" href="./swagger-ui.css" />
+    <link rel="stylesheet" type="text/css" href="index.css" />
+    <link rel="icon" type="image/png" href="./favicon-32x32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="./favicon-16x16.png" sizes="16x16" />
+    <style>
+      .swagger-ui .topbar-wrapper .link img {
+        display: none !important;
+      }
+    
+      .swagger-ui .topbar-wrapper .link::before {
+        content: '';
+        display: inline-block;
+        background-image: url('https://app.lunarpay.com/assets/thm2/images/brand/logo.png?ver=1.0&invert=0.7&format=png');
+        background-size: contain;
+        background-repeat: no-repeat;
+        width: 70px;  
+        height: 40px;
+        margin-top:10px;
+        padding:0px;
+        filter: invert(1); /* fully invert the colors */
+      }
+
+      .topbar-wrapper svg {
+        display: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="./swagger-ui-bundle.js" charset="UTF-8"> </script>
+    <script src="./swagger-ui-standalone-preset.js" charset="UTF-8"> </script>
+    <script src="./swagger-initializer.js" charset="UTF-8"> </script>
+  </body>
+</html>

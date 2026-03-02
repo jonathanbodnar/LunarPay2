@@ -74,6 +74,7 @@ const navigation: NavItem[] = [
       { name: 'Integrations', href: '/settings/integrations', permission: 'manage_settings' },
       { name: 'Team', href: '/settings/team', permission: 'manage_team' },
       { name: 'Notifications', href: '/settings/notifications', permission: 'manage_settings' },
+      { name: 'Developer API', href: '/settings/developer', permission: 'manage_settings' },
     ]
   },
 ];

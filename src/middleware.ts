@@ -68,6 +68,7 @@ const publicApiRoutes = [
   '/api/leads',
   '/api/fee-schedule', // Public fee schedule PDF
   '/api/webhooks', // External webhooks (SendGrid Inbound Parse, etc.)
+  '/api/v1', // Public merchant API (uses API key auth, not session cookies)
   '/api/admin', // All admin APIs use admin cookie (requireAdmin); middleware must not require merchant token
 ];
 

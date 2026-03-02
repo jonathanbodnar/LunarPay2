@@ -1,0 +1,494 @@
+openapi: 3.0.0
+info:
+  title: Lunarpay - Merchant API
+  version: 1.0.0
+  description: |
+    
+    Welcome to the LunarPay Merchant API. This API allows you to integrate payment processing, subscription management, and customer operations into your applications.
+        
+    ### Authentication & Security
+
+    - Configure your api key and secret from the dashboard under <em>Settings &gt; Integrations</em>
+    
+    - Each request to a protected endpoint must include an Authorization header using Basic Authentication. The credentials are a Base64-encoded string in the format api_key:api_secret
+        
+    ### Webhooks Integration
+    
+    LunarPay uses webhooks to notify your application about important subscription status changes in real-time. This ensures your system stays synchronized with subscription lifecycle events.
+    
+    - <span>See <a href="./index.merchant.webhooks.html">Webhooks Docs</a> for more info.</span>
+
+    ### Test Card Numbers
+    
+     <p>Visa Personal | 4111111111111111 </p>
+     <p>MasterCard Personal | 5454545454545454 </p>
+     <p>Discover | 6011000995500000 </p>
+     <p>Amex | 371449635398431 </p>
+servers:
+  - url: /merchant/api/v1
+    description: Merchant API v1
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: API credentials using Basic Authentication    
+  schemas:
+    SubscriptionData:
+      type: object
+      properties:
+        customer_id:
+          type: integer
+          description: Customer ID
+        subscription_id:
+          type: integer
+          description: Subscription ID
+        plan_type:
+          type: string
+          description: Plan type (e.g., basic, pro, enterprise, premium)
+          example: "pro"
+        billing_cycle:
+          type: string
+          description: Billing frequency
+          enum: [daily, weekly, monthly, 3_months, 6_months, yearly, custom]
+        status:
+          type: string
+          description: Subscription status
+          enum: [A, D]
+        c_status:
+          type: string
+          description: Calculated subscription status
+          enum: [active, on_trial, cancelled, unpaid]
+        amount:
+          type: number
+          format: float
+          description: Subscription amount in USD
+        next_payment_on:
+          type: string
+          format: date
+          description: Next payment date
+        ends_at:
+          type: string
+          format: date
+          description: Subscription end date
+        trial_ends_at:
+          type: string
+          format: date
+          description: Trial end date
+        trial_status:
+          type: string
+          description: Trial status
+          enum: [not_applicable, active, ended]
+        access_period_status:
+          type: string
+          description: Access period status
+          enum: [not_applicable, active, ended]
+        created_as_trial:
+          type: boolean
+          description: Whether subscription was created as trial
+        start_on:
+          type: string
+          format: date
+          description: Subscription start date
+        customer_email:
+          type: string
+          format: email
+          description: Customer email address
+        customer_name:
+          type: string
+          description: Customer full name
+        payment_method:
+          type: string
+          description: Payment method used
+        last_digits:
+          type: string
+          description: Last digits of payment method
+        product:
+          type: object
+          description: Product information
+        created_at:
+          type: string
+          format: date-time
+          description: Subscription creation date
+        updated_at:
+          type: string
+          format: date-time
+          description: Subscription last update date
+        cancelled_at:
+          type: string
+          format: date-time
+          description: Subscription cancellation date
+        urls:
+          type: object
+          properties:
+            customer_portal:
+              type: string
+              format: uri
+              description: Customer portal URL
+    CustomerData:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Customer ID
+        email:
+          type: string
+          format: email
+          description: Customer email address
+        first_name:
+          type: string
+          description: Customer first name
+        last_name:
+          type: string
+          description: Customer last name
+        org_id:
+          type: integer
+          description: Organization ID
+        client_id:
+          type: integer
+          description: Client ID
+        created_from:
+          type: string
+          description: Source of customer creation
+        metadata:
+          type: object
+          description: Additional customer metadata
+        created_at:
+          type: string
+          format: date-time
+          description: Customer creation date
+        updated_at:
+          type: string
+          format: date-time
+          description: Customer last update date
+    SessionData:
+      type: object
+      properties:
+        post_request:
+          type: string
+          format: uri
+          description: URL to post token for validation
+        token_link:
+          type: string
+          description: JWT token for session
+        redirect_url:
+          type: string
+          format: uri
+          description: URL to redirect after session creation
+security:
+  - basicAuth: []
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check endpoint
+      description: Returns a simple health check response
+      responses:
+        '200':
+          description: Health check successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Health check successful"
+        '405':
+          description: Method not allowed
+  /auth/index:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user information
+      description: Returns information about the authenticated user
+      responses:
+        '200':
+          description: User information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    type: object
+                    description: User information
+        '401':
+          description: Unauthorized
+        '405':
+          description: Method not allowed
+  /customer/create:
+    post:
+      tags:
+        - Customers
+      summary: Create a new customer
+      description: Create a new customer for the authenticated merchant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - org_id
+                - email
+                - first_name
+                - last_name
+              properties:
+                org_id:
+                  type: integer
+                  description: Organization ID
+                email:
+                  type: string
+                  format: email
+                  description: Customer email address
+                first_name:
+                  type: string
+                  description: Customer first name
+                last_name:
+                  type: string
+                  description: Customer last name
+                metadata:
+                  type: object
+                  description: Additional customer metadata
+            example:
+              org_id: 123
+              email: customer@example.com
+              first_name: John
+              last_name: Doe
+              metadata:
+                source: api
+                notes: Customer created via API
+      responses:
+        '200':
+          description: Customer created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    $ref: '#/components/schemas/CustomerData'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '405':
+          description: Method not allowed
+        '422':
+          description: Validation error
+  /customer/by_email:
+    get:
+      tags:
+        - Customers
+      summary: Get customer by email
+      description: Retrieve customer information by email address and organization
+      parameters:
+        - name: org_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Organization ID
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+          description: Customer email address
+      responses:
+        '200':
+          description: Customer found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    $ref: '#/components/schemas/CustomerData'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Customer not found
+        '405':
+          description: Method not allowed
+  /customer/by_id/{id}:
+    get:
+      tags:
+        - Customers
+      summary: Get customer by ID
+      description: Retrieve customer information by customer ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Customer ID
+      responses:
+        '200':
+          description: Customer found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    $ref: '#/components/schemas/CustomerData'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Customer not found
+        '405':
+          description: Method not allowed
+  /customer/generate_session:
+    post:
+      tags:
+        - Customers
+      summary: Generate customer session
+      description: >
+      
+        Creates a session for a customer, returning a redirect link to access payment pages without requiring login.
+
+        The `hash` parameter required for this flow can be obtained from the Dashboard,
+        in the Payment Links section. e.g. 685caafd84b3b | `https://devapp.lunarpay.com/c/portal/payment_link/685caafd84b3b`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - org_id
+                - customer_id
+                - payment_link_hash
+              properties:
+                org_id:
+                  type: integer
+                  description: Organization ID
+                customer_id:
+                  type: integer
+                  description: Customer ID
+                payment_link_hash:
+                  type: string
+                  description: Hash of the payment link. This must be copied from the merchant dashboard.
+                success_callback:
+                  type: string
+                  format: uri
+                  description: Optional post-purchase redirect URL that takes priority over the payment link's configured post-purchase link. Must use HTTPS.
+            example:
+              org_id: 123
+              customer_id: 456
+              payment_link_hash: '684aebfc806aa'
+              success_callback: 'https://example.com/success'
+      responses:
+        '200':
+          description: Session generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    $ref: '#/components/schemas/SessionData'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '405':
+          description: Method not allowed
+        '422':
+          description: Validation error
+  /customer/validate_token_link:
+    post:
+      tags:
+        - Customers
+      summary: Validate token link
+      description: Validates a token link provided by the generate_session endpoint and initiates a storage session. It must be invoked via an HTTP POST request, typically triggered by a button within an HTML form. The form should contain hidden inputs for token_link and redirect_url, with values obtained from a preceding API response. The form’s action attribute must be set directly to this endpoint’s URL.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token_link
+                - redirect_url
+              properties:
+                token_link:
+                  type: string
+                  description: JWT token link
+                redirect_url:
+                  type: string
+                  description: URL to redirect after validation
+            example:
+              token_link: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+              redirect_url: https://example.com/payment
+      responses:
+        '200':
+          description: Token validated successfully
+        '400':
+          description: Bad request
+        '405':
+          description: Method not allowed
+        '422':
+          description: Validation error
+  /subscription/by_id/{id}:
+    get:
+      tags:
+        - Subscriptions
+      summary: Get subscription by ID
+      description: Retrieve subscription information by subscription ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Subscription ID
+      responses:
+        '200':
+          description: Subscription found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    $ref: '#/components/schemas/SubscriptionData'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Subscription not found
+        '405':
+          description: Method not allowed 
