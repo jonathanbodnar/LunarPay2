@@ -23,7 +23,8 @@ import {
   ShieldCheck,
   AlertTriangle,
   Trash2,
-  LogIn
+  LogIn,
+  Download
 } from 'lucide-react';
 
 interface Merchant {
@@ -57,6 +58,11 @@ export default function AdminMerchantsPage() {
   const [restrictReason, setRestrictReason] = useState('');
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importAuthUserId, setImportAuthUserId] = useState('');
+  const [importAuthApiKey, setImportAuthApiKey] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMerchants();
@@ -174,6 +180,26 @@ export default function AdminMerchantsPage() {
       }
     } catch (error) {
       console.error('Failed to login as merchant:', error);
+    }
+  };
+
+  const handleImportFortis = async () => {
+    if (!selectedMerchant || !importAuthUserId || !importAuthApiKey) return;
+    setImportLoading(true);
+    setImportResult(null);
+    try {
+      const res = await fetch(`/api/admin/merchants/${selectedMerchant.id}/import-fortis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ authUserId: importAuthUserId, authUserApiKey: importAuthApiKey }),
+      });
+      const data = await res.json();
+      setImportResult(data.message || data.error || 'Done');
+    } catch (error) {
+      setImportResult('Failed: ' + (error as Error).message);
+    } finally {
+      setImportLoading(false);
     }
   };
 
@@ -491,6 +517,15 @@ export default function AdminMerchantsPage() {
                           <Button
                             size="sm"
                             variant="outline"
+                            className="text-green-400 border-green-400/50 hover:bg-green-500/20"
+                            onClick={() => { setSelectedMerchant(merchant); setImportModalOpen(true); setImportResult(null); }}
+                            title="Import historical Fortis data"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
                             className="text-blue-400 border-blue-400/50 hover:bg-blue-500/20"
                             onClick={() => handleLoginAs(merchant)}
                             title="Login as this merchant"
@@ -602,6 +637,52 @@ export default function AdminMerchantsPage() {
                   </>
                 )}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Fortis Data Modal */}
+      {importModalOpen && selectedMerchant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setImportModalOpen(false); setImportResult(null); }} />
+          <div className="relative bg-slate-800 border border-slate-700 rounded-lg p-6 w-full max-w-md mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+                <Download className="h-5 w-5 text-green-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Import Fortis History</h3>
+                <p className="text-sm text-slate-400">{selectedMerchant.name}</p>
+              </div>
+            </div>
+            <p className="text-slate-300 text-sm mb-4">
+              Enter this merchant&apos;s Fortis API credentials to import their historical customers, transactions, and saved cards.
+            </p>
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Fortis User ID</label>
+                <Input value={importAuthUserId} onChange={(e) => setImportAuthUserId(e.target.value)} placeholder="auth_user_id from Fortis portal" className="bg-slate-900 border-slate-700 text-white" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Fortis API Key</label>
+                <Input value={importAuthApiKey} onChange={(e) => setImportAuthApiKey(e.target.value)} placeholder="auth_user_api_key from Fortis portal" className="bg-slate-900 border-slate-700 text-white" type="password" />
+              </div>
+            </div>
+            {importResult && (
+              <div className={`mb-4 p-3 rounded-lg text-sm ${importResult.startsWith('Failed') ? 'bg-red-900/20 border border-red-800 text-red-300' : 'bg-green-900/20 border border-green-800 text-green-300'}`}>
+                {importResult}
+              </div>
+            )}
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1 border-slate-600" onClick={() => { setImportModalOpen(false); setImportResult(null); }}>
+                {importResult ? 'Close' : 'Cancel'}
+              </Button>
+              {!importResult && (
+                <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={handleImportFortis} disabled={importLoading || !importAuthUserId || !importAuthApiKey}>
+                  {importLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Download className="h-4 w-4 mr-2" />Import Data</>}
+                </Button>
+              )}
             </div>
           </div>
         </div>
