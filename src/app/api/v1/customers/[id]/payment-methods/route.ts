@@ -75,11 +75,11 @@ export async function POST(
     const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
     const fortisClient = createFortisClient(env as 'sandbox' | 'production', auth.fortisUserId, auth.fortisApiKey);
 
-    // Process ticket with amount = 0 or 1 (just to save the card, not charge)
-    // We use a $0.01 auth to validate the card; refund immediately
+    // Fortis requires transaction_amount >= 1 cent even for card-save-only flows.
+    // Charge $0.01, save the card token, then immediately refund the penny.
     const ticketResult = await fortisClient.processTicketSale({
       ticket_id: ticketId,
-      transaction_amount: 0,
+      transaction_amount: 1, // 1 cent — minimum required by Fortis; refunded below
       save_account: true,
       transaction_c1: nameHolder || `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Card',
     });
@@ -91,6 +91,14 @@ export async function POST(
     // tokenId comes from ticketResult.tokenId or the transaction record
     const tx = ticketResult.transaction as Record<string, unknown> | undefined;
     const tokenId = ticketResult.tokenId || (tx?.token_id as string) || (tx?.account_vault_id as string) || (tx?.id as string);
+
+    // Immediately refund the $0.01 verification charge (fire-and-forget, non-blocking)
+    const verificationTxId = (tx?.id as string) || null;
+    if (verificationTxId) {
+      fortisClient.refundTransaction(verificationTxId, 1).catch((e) =>
+        console.error('[v1/payment-methods] Failed to void $0.01 verification charge:', e)
+      );
+    }
     const lastDigits = (tx?.last_four as string) || (tx?.account_number as string)?.slice(-4);
     const expMonth = (tx?.exp_month as string) || (tx?.exp_date as string)?.slice(0, 2);
     const expYear = (tx?.exp_year as string) || (tx?.exp_date as string)?.slice(2);
