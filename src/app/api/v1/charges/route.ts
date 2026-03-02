@@ -61,8 +61,7 @@ export async function POST(request: NextRequest) {
       return apiError(result.message || 'Charge failed', 402);
     }
 
-    const txData = result.result?.data || result.result;
-    const fortisTransactionId = txData?.id || null;
+    const fortisTransactionId = result.transaction?.id || null;
     const amountInDollars = amount / 100;
 
     // Record the transaction
@@ -82,7 +81,7 @@ export async function POST(request: NextRequest) {
         status: 'P',
         givingSource: 'api',
         fortisTransactionId,
-        requestResponse: JSON.stringify(txData),
+        requestResponse: JSON.stringify(result.transaction),
       },
     });
 

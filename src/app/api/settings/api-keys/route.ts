@@ -1,6 +1,6 @@
 /**
- * GET  /api/settings/api-keys            — Return current API keys (masked)
- * POST /api/settings/api-keys            — Generate keys if not yet created
+ * GET  /api/settings/api-keys  — Return current API keys (masked)
+ * POST /api/settings/api-keys  — Generate keys if not yet created
  */
 
 import { NextResponse } from 'next/server';
@@ -17,17 +17,16 @@ export async function GET() {
   try {
     const currentUser = await requireAuth();
 
-    const user = await prisma.user.findUnique({
-      where: { id: currentUser.userId },
-      select: { publishableKey: true, secretKey: true },
-    });
-
+    const rows = await prisma.$queryRaw<{ publishable_key: string | null; secret_key: string | null }[]>`
+      SELECT publishable_key, secret_key FROM users WHERE id = ${currentUser.userId}
+    `;
+    const user = rows[0];
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     return NextResponse.json({
-      publishableKey: user.publishableKey ? maskKey(user.publishableKey) : null,
-      secretKey: user.secretKey ? maskKey(user.secretKey) : null,
-      hasKeys: !!(user.publishableKey && user.secretKey),
+      publishableKey: user.publishable_key ? maskKey(user.publishable_key) : null,
+      secretKey: user.secret_key ? maskKey(user.secret_key) : null,
+      hasKeys: !!(user.publishable_key && user.secret_key),
     });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
@@ -41,31 +40,25 @@ export async function POST() {
   try {
     const currentUser = await requireAuth();
 
-    const user = await prisma.user.findUnique({
-      where: { id: currentUser.userId },
-      select: { publishableKey: true, secretKey: true },
-    });
-
+    const rows = await prisma.$queryRaw<{ publishable_key: string | null; secret_key: string | null }[]>`
+      SELECT publishable_key, secret_key FROM users WHERE id = ${currentUser.userId}
+    `;
+    const user = rows[0];
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-    // Only generate if not already set
-    const updates: { publishableKey?: string; secretKey?: string } = {};
-    if (!user.publishableKey) updates.publishableKey = generateApiKey('lp_pk_');
-    if (!user.secretKey) updates.secretKey = generateApiKey('lp_sk_');
+    const newPk = user.publishable_key ?? generateApiKey('lp_pk_');
+    const newSk = user.secret_key ?? generateApiKey('lp_sk_');
 
-    if (Object.keys(updates).length > 0) {
-      await prisma.user.update({ where: { id: currentUser.userId }, data: updates });
+    if (!user.publishable_key || !user.secret_key) {
+      await prisma.$executeRaw`
+        UPDATE users SET publishable_key = ${newPk}, secret_key = ${newSk} WHERE id = ${currentUser.userId}
+      `;
     }
 
-    const updated = await prisma.user.findUnique({
-      where: { id: currentUser.userId },
-      select: { publishableKey: true, secretKey: true },
-    });
-
     return NextResponse.json({
-      publishableKey: updated!.publishableKey!,
-      secretKey: maskKey(updated!.secretKey!),
-      generated: Object.keys(updates).length > 0,
+      publishableKey: newPk,
+      secretKey: maskKey(newSk),
+      generated: !user.publishable_key || !user.secret_key,
     });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {

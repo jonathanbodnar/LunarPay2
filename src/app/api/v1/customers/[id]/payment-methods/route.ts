@@ -81,21 +81,21 @@ export async function POST(
       ticket_id: ticketId,
       transaction_amount: 0,
       save_account: true,
-      save_account_title: nameHolder || `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Card',
-      account_holder_name: nameHolder || `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
+      transaction_c1: nameHolder || `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Card',
     });
 
     if (!ticketResult.status) {
       return apiError(ticketResult.message || 'Failed to save payment method', 400);
     }
 
-    const txData = ticketResult.result?.data || ticketResult.result;
-    const tokenId = txData?.token_id || txData?.account_vault_id || txData?.id;
-    const lastDigits = txData?.last_four || txData?.account_number?.slice(-4);
-    const expMonth = txData?.exp_month || txData?.exp_date?.slice(0, 2);
-    const expYear = txData?.exp_year || txData?.exp_date?.slice(2);
-    const fortisCustomerId = txData?.customer_id || txData?.billing_id || tokenId;
-    const sourceType = txData?.payment_method === 'ach' ? 'ach' : 'cc';
+    // tokenId comes from ticketResult.tokenId or the transaction record
+    const tx = ticketResult.transaction as Record<string, unknown> | undefined;
+    const tokenId = ticketResult.tokenId || (tx?.token_id as string) || (tx?.account_vault_id as string) || (tx?.id as string);
+    const lastDigits = (tx?.last_four as string) || (tx?.account_number as string)?.slice(-4);
+    const expMonth = (tx?.exp_month as string) || (tx?.exp_date as string)?.slice(0, 2);
+    const expYear = (tx?.exp_year as string) || (tx?.exp_date as string)?.slice(2);
+    const fortisCustomerId = (tx?.customer_id as string) || tokenId;
+    const sourceType = (tx?.payment_method as string) === 'ach' ? 'ach' : 'cc';
 
     if (!tokenId) {
       return apiError('Failed to retrieve token from payment processor', 502);

@@ -20,10 +20,11 @@ export async function POST(request: Request) {
 
     const newKey = generateApiKey(type === 'publishable' ? 'lp_pk_' : 'lp_sk_');
 
-    await prisma.user.update({
-      where: { id: currentUser.userId },
-      data: type === 'publishable' ? { publishableKey: newKey } : { secretKey: newKey },
-    });
+    if (type === 'publishable') {
+      await prisma.$executeRaw`UPDATE users SET publishable_key = ${newKey} WHERE id = ${currentUser.userId}`;
+    } else {
+      await prisma.$executeRaw`UPDATE users SET secret_key = ${newKey} WHERE id = ${currentUser.userId}`;
+    }
 
     return NextResponse.json({
       type,

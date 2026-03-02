@@ -44,10 +44,19 @@ export async function requirePublishableKey(request: NextRequest): Promise<ApiAu
 }
 
 async function resolveKey(key: string, type: 'secret' | 'publishable'): Promise<ApiAuthResult> {
-  const where = type === 'secret' ? { secretKey: key } : { publishableKey: key };
+  // Use raw query because publishable_key/secret_key columns were added after Prisma client generation
+  const col = type === 'secret' ? 'secret_key' : 'publishable_key';
+  const userRows = await prisma.$queryRawUnsafe<{ id: number }[]>(
+    `SELECT id FROM users WHERE ${col} = $1 AND active = true LIMIT 1`,
+    key
+  );
+  if (!userRows.length) {
+    throw new ApiAuthError('API key not found.', 401);
+  }
+  const userId = userRows[0].id;
 
-  const user = await prisma.user.findFirst({
-    where: { ...where, active: true },
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
     include: {
       organizations: {
         include: {
