@@ -194,7 +194,7 @@ export default function DeveloperSettingsPage() {
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
                     <Input
-                      value={secretKey ?? ''}
+                      value={newSecretKey || secretKey || ''}
                       type={showSecret ? 'text' : 'password'}
                       readOnly
                       className="font-mono text-sm pr-10"
@@ -206,6 +206,11 @@ export default function DeveloperSettingsPage() {
                       {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
+                  {(newSecretKey || showSecret) && (
+                    <Button size="icon" variant="outline" onClick={() => copyToClipboard(newSecretKey || secretKey || '', 'sk')}>
+                      {copied === 'sk' ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  )}
                   {confirmRegen === 'secret' ? (
                     <div className="flex gap-1">
                       <Button size="sm" variant="destructive" onClick={() => regenerateKey('secret')} disabled={!!regenerating}>

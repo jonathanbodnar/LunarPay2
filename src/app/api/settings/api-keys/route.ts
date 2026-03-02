@@ -24,8 +24,8 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     return NextResponse.json({
-      publishableKey: user.publishable_key ? maskKey(user.publishable_key) : null,
-      secretKey: user.secret_key ? maskKey(user.secret_key) : null,
+      publishableKey: user.publishable_key || null,           // full value — safe to expose
+      secretKey: user.secret_key ? maskKey(user.secret_key) : null, // masked — click reveal to see
       hasKeys: !!(user.publishable_key && user.secret_key),
     });
   } catch (error) {
@@ -57,7 +57,7 @@ export async function POST() {
 
     return NextResponse.json({
       publishableKey: newPk,
-      secretKey: maskKey(newSk),
+      secretKey: newSk,   // return full secret once on generation
       generated: !user.publishable_key || !user.secret_key,
     });
   } catch (error) {

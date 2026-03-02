@@ -28,8 +28,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       type,
-      key: type === 'publishable' ? newKey : newKey.slice(0, 12) + '...' + newKey.slice(-4),
-      ...(type === 'secret' ? { fullKey: newKey } : {}),
+      key: newKey,  // always return full key so it can be copied
     });
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
