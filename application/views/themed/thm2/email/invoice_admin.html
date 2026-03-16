@@ -1,0 +1,162 @@
+<!doctype html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, user-scalable=no">
+        <meta charset="utf-8">
+        <style>
+            @media only screen and (max-width:600px) {.st-br { padding-left:10px; padding-right:10px } p, ul li, ol li, a { font-size:16px; line-height:150% } h1 { font-size:30px; text-align:center; line-height:120% } h2 { font-size:26px; text-align:center; line-height:120% } h3 { font-size:20px; text-align:center; line-height:120% } }
+            a[x-apple-data-detectors] {
+                color:inherit;
+                text-decoration:none;
+                font-size:inherit;
+                font-family:inherit;
+                font-weight:inherit;
+                line-height:inherit;
+            }
+
+            body {
+                width:100%;                
+                font-family:roboto, "helvetica neue", helvetica, arial, sans-serif;				                
+            }
+
+            .container {
+                background-color: whitesmoke!important;                
+                padding:20px;
+            }
+
+            table {
+                border-collapse:collapse;
+                border-spacing:0px;
+            }
+            table td, html, body {                
+                Margin:0;
+            }
+
+            p, hr {
+                Margin:0;
+            }
+            h1, h2, h3, h4, h5 {
+                Margin:0;
+                line-height:120%;
+                font-family:tahoma, verdana, segoe, sans-serif;
+            }
+            a {
+                font-family:helvetica, roboto, "helvetica neue",  arial, sans-serif;
+                text-decoration:underline;
+            }
+
+            .text-left {
+                text-align: left!important;
+            }
+
+            .text-center {
+                text-align: center!important;
+            }
+
+            .text-right {
+                text-align: right!important;
+            }
+
+            .text-center {
+                text-align: center!important;
+            }
+
+            .fwbold {
+                font-weight: bold;
+            }
+
+            .wrapper{
+                margin: auto;
+                margin-top: 20px;
+                padding: 20px;
+                width:360px;				
+                background-color: white;
+                border-radius: 10px;
+            }
+
+            .details-table {
+                min-width: 100%;
+            }
+
+            .details-table tr td {
+                padding-top:10px
+            }
+
+            .product-table {
+                width:100%;
+                margin-top: -10px;
+                margin-bottom: 15px;                
+            }
+
+
+        </style> 
+    </head> 
+    <body> 
+        <div class="container">
+            <div class="wrapper"> 
+
+                <div class="text-center">
+                    <h4>Payment Notification</h4><br>
+
+                    Your customer [CustomerName] has paid<br>the invoice <span class="fwbold">[Reference]</span> for <span class="fwbold">$[Total]</span> 
+                </div>
+                <br>
+                <br>            
+                <h4>Details</h4>                
+
+                <table class="details-table" cellpadding="0" cellspacing="0">
+                    <tbody>
+                        <tr> 
+                            <td>Invoice</td> 
+                            <td class="fwbold text-right">[Reference]</td> 
+                        </tr>
+                        <tr> 
+                            <td>Transaction ID</td> 
+                            <td class="fwbold text-right">#[TransactionId]</td> 
+                        </tr>
+                        <tr> 
+                            <td>Business Name</td> 
+                            <td class="fwbold text-right">[BusinessName]</td> 
+                        </tr>
+                        <tr> 
+                            <td>Customer Name</td> 
+                            <td class="fwbold text-right">[CustomerName]</td> 
+                        </tr>                                        
+                        <tr> 
+                            <td>From</td> 
+                            <td class="text-right">[CompanyName]</td> 
+                        </tr>                                
+                        <tr> 
+                            <td colspan="2"><br><h4>Products</h4></td>                             
+                        </tr>                                                
+                        <tr> 
+                            <td colspan="2">[products]</td>                             
+                        </tr>
+                        <tr> 
+                            <td>Fee Covered</td> 
+                            <td class="fwbold text-right">[coverFee]</td> 
+                        </tr>                        
+                        <tr> 
+                            <td>Total</td> 
+                            <td class="fwbold text-right">$[Total]</td> 
+                        </tr>
+                        <tr> 
+                            <td>&nbsp;</td>                             
+                        </tr>        
+                        <tr> 
+                            <td>Payment Date</td> 
+                            <td class="text-right">[DatePaid]</td> 
+                        </tr>        
+                    </tbody>
+                </table> 
+
+                <br>
+                <p class="text-center"><a href="[link_pdf]" target="_blank">Invoice Pdf</a>
+                    <br>
+                    <br>
+            </div>              
+            <br>
+            <div class="text-center">Invoicing brought to you by <a target="_BLANK" href="https://[CompanySite]">[CompanySite]</a></div>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,122 @@
+<?php
+
+CONST CSRF_EXCLUDE_URIS = [
+    'acl/get_users_dt',
+    'acl/get_user',
+    'auth/login',
+    'acl/get_groups_list',
+    //Organizations
+    'organizations/get_organizations_dt',
+    'organizations/get_organizations_list',
+    'organizations/get_organization',
+    'organizations/get_organization_all',
+    'paysafe/get_organization_all',
+    'paysafe/send_backoffice_credentials',
+    'organizations/verify',
+    //SubOrganizations
+    'suborganizations/get_suborganizations_dt',
+    'suborganizations/get_suborganizations_list',
+    'suborganizations/get_suborganization',
+    //Funds
+    'funds/get_funds_dt',
+    'funds/get_funds_list',
+    'funds/get_tag_list',
+    'funds/get_fund',
+    'funds/get_fund_with_orgn_data',
+    //Donors
+    'donors/get_donors_dt',
+    'donors/get_donors_list',
+    'donors/get',
+    'donors/get_tags_list',
+    'donors/get_tags_list_pagination',    
+    'donors/get_donations_dt_customer',
+    //Donations
+    'donations/get_donations_dt',    
+    'batches/get_batch_donations_dt',
+    'donations/export_donations_csv',
+    'batches/get_dt',
+    'batches/get_tags_list_all',
+    //Subscriptions
+    'donations/get_subscriptions_dt',
+    //Widget
+    'widget/setup',
+    'widget/get_settings',
+    //epicpay
+    'epicpay/process_webhooks/orgn_approval',
+    'epicpay/process_webhooks/sub_trnx',
+    'payouts/get_dt',
+    //install
+    'install/get',
+    'install/wordpress_download',
+    //statements
+    'statements/get_dt',
+    'statements/get',
+    'statements/generate',
+    //widgetprofile API
+    'widget_profile/get',
+    'widget_profile/update',
+    'widget_profile/get_payment_sources',
+    'widget_profile/get_recurring_donations',
+    'widget_profile/get_donations',
+    'widget_profile/add_payment_source',
+    'widget_profile/remove_payment_source',
+    'widget_profile/get_subscriptions',
+    'widget_profile/stop_subscription',
+    'widget_profile/generate_ytd_statement',
+    //setting
+    'customize_text/get',
+    //twilio
+    'twilio_tasks/message_come_in_webhook',
+    //integrations
+    'integrations/planningcenter/startpush',
+    //Team
+    'team/get_dt',
+    'team/get_member',
+    //Messaging
+    'messaging/get_chats',
+    'messaging/get_chat_messages',
+    'communication/get_sms_chats',
+    'communication/get_sms_chat_messages',
+    //Pages
+    'pages/get_pages_dt',
+    'pages/get_page',
+    //Give Anywhere
+    'give_anywhere/get_give_anywhere_dt',
+    'give_anywhere/get_give_anywhere',
+    //Getting Started
+    'getting_started/get_organization',
+    'getting_started_fts/get_organization',
+    'paysafewebhooks/merchant_account_status_listener',
+    'paysafewebhooks/merchant_account_status_listener/[A-Za-z0-9]+',    
+    'fortiswebhooks/merchant_account_status_listener',
+    'fortiswebhooks/ach_transaction_listener/[A-Za-z0-9]+',
+    'fortiswebhooks/batch_listener/[A-Za-z0-9]+',
+    //invoices
+    'invoices/get_dt',
+    'invoices/get/.*+',
+    'invoices/send_to_customer/.*+',    
+    'invoices/cancel/.*+',    
+    //Products
+    'products/get_dt',
+    'products/get_tags_list_pagination',
+    'products/get_tags_list_pagination_one_time',
+    'wtoken/refresh',
+    //payment_links
+    'payment_links/get_dt',
+    //referals
+    'referrals/referals_get_dt',
+
+    //developers
+    'developers/generate_api_credentials',
+    'developers/save_webhook_config',
+    'developers/generate_bearer_token',
+    
+    //ADMIN AREA
+    //admin users
+    'admin/acl/get_users_dt',
+    'admin/acl/get_user',
+    'admin/acl/get_groups_list',
+    'admin/accounts/get_dt',
+    'admin/referrals/affiliates_get_dt',
+    'admin/organizations/get_todo'
+];

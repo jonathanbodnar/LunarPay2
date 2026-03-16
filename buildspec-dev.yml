@@ -1,0 +1,183 @@
+version: 0.2
+
+env:
+  parameter-store:
+    APP_BASE_URL: "/LunarPay/Dev/APP_BASE_URL"
+    MARIADB_ROOT_PASSWORD: "/LunarPay/Dev/MARIADB_ROOT_PASSWORD"
+    MARIADB_DATABASE: "/LunarPay/Dev/MARIADB_DATABASE"
+    MARIADB_USER: "/LunarPay/Dev/MARIADB_USER"
+    MARIADB_PASSWORD: "/LunarPay/Dev/MARIADB_PASSWORD"
+    MARIADB_HOST : "/LunarPay/Dev/MARIADB_HOST"
+    IS_DEVELOPER_MACHINE : "/LunarPay/Dev/IS_DEVELOPER_MACHINE"
+    EPICPAY_ONBOARD_FORM_TEST : "/LunarPay/Dev/EPICPAY_ONBOARD_FORM_TEST"
+    SET_SAME_SITE_NONE : "/LunarPay/Dev/SET_SAME_SITE_NONE"
+    ZAPIER_ENABLED : "/LunarPay/Dev/ZAPIER_ENABLED"
+    EMAILING_ENABLED : "/LunarPay/Dev/EMAILING_ENABLED"
+    CODEIGNITER_SMTP_USER : "/LunarPay/Dev/CODEIGNITER_SMTP_USER"
+    CODEIGNITER_SMTP_PASS : "/LunarPay/Dev/CODEIGNITER_SMTP_PASS"
+    MAILGUN_DOMAIN : "/LunarPay/Dev/MAILGUN_DOMAIN"
+    MAILGUN_API_KEY : "/LunarPay/Dev/MAILGUN_API_KEY"
+    PROVIDER_MESSENGER_TEST : "/LunarPay/Dev/PROVIDER_MESSENGER_TEST"
+    TWILIO_ACCOUNT_SID_LIVE : "/LunarPay/Dev/TWILIO_ACCOUNT_SID_LIVE"
+    TWILIO_AUTH_TOKEN_LIVE : "/LunarPay/Dev/TWILIO_AUTH_TOKEN_LIVE"
+    TWILIO_ACCOUNT_SID_TEST : "/LunarPay/Dev/TWILIO_ACCOUNT_SID_TEST"
+    TWILIO_AUTH_TOKEN_TEST : "/LunarPay/Dev/TWILIO_AUTH_TOKEN_TEST"
+    APPCUES_ENABLED : "/LunarPay/Dev/APPCUES_ENABLED"
+    GOODBARBER_COOKIES : "/LunarPay/Dev/GOODBARBER_COOKIES"
+    GOODBARBER_RESELLER_USERNAME : "/LunarPay/Dev/GOODBARBER_RESELLER_USERNAME"
+    GOODBARBER_RESELLER_PASSWORD : "/LunarPay/Dev/GOODBARBER_RESELLER_PASSWORD"
+    GOODBARBER_APP_WITH_ORGNX : "/LunarPay/Dev/GOODBARBER_APP_WITH_ORGNX"
+    RECAPTCHA_ENABLED : "/LunarPay/Dev/RECAPTCHA_ENABLED"
+    RECAPTCHA_SECRET_KEY : "/LunarPay/Dev/RECAPTCHA_SECRET_KEY"
+    RECAPTCHA_PUBLIC_KEY : "/LunarPay/Dev/RECAPTCHA_PUBLIC_KEY"
+    RECAPTCHA_THRESHOLD : "/LunarPay/Dev/RECAPTCHA_THRESHOLD"
+    PLANNINGCENTER_REDIRECT_URL : "/LunarPay/Dev/PLANNINGCENTER_REDIRECT_URL"
+    PLANNINGCENTER_TOKEN_URL : "/LunarPay/Dev/PLANNINGCENTER_TOKEN_URL"
+    PLANNINGCENTER_CLIENT_ID : "/LunarPay/Dev/PLANNINGCENTER_CLIENT_ID"
+    PLANNINGCENTER_SECRET : "/LunarPay/Dev/PLANNINGCENTER_SECRET"
+    FORCE_HIDE_INTERCOM : "/LunarPay/Dev/FORCE_HIDE_INTERCOM"
+    GOOGLE_CODE_API : "/LunarPay/Dev/GOOGLE_CODE_API"
+    ZAPIER_POLLING_KPIS_USER : "/LunarPay/Dev/ZAPIER_POLLING_KPIS_USER"
+    ZAPIER_POLLING_KPIS_PASS : "/LunarPay/Dev/ZAPIER_POLLING_KPIS_PASS"
+    STRIPE_OAUTH_CLIENT_ID : "/LunarPay/Dev/STRIPE_OAUTH_CLIENT_ID"
+    STRIPE_OAUTH_SECRET : "/LunarPay/Dev/STRIPE_OAUTH_SECRET"
+    FRESHBOOKS_OAUTH_CLIENT_ID : "/LunarPay/Dev/FRESHBOOKS_OAUTH_CLIENT_ID"
+    FRESHBOOKS_OAUTH_SECRET : "/LunarPay/Dev/FRESHBOOKS_OAUTH_SECRET"
+    QUICKBOOKS_OAUTH_CLIENT_ID : "/LunarPay/Dev/QUICKBOOKS_OAUTH_CLIENT_ID"
+    QUICKBOOKS_OAUTH_SECRET : "/LunarPay/Dev/QUICKBOOKS_OAUTH_SECRET"
+    fortis_environment : "/LunarPay/Dev/fortis_environment"
+    fortis_encrypt_phrase : "/LunarPay/Dev/fortis_encrypt_phrase"
+    fortis_developer_id_sandbox : "/LunarPay/Dev/fortis_developer_id_sandbox"
+    fortis_user_id_sandbox : "/LunarPay/Dev/fortis_user_id_sandbox"
+    fortis_user_api_key_sandbox : "/LunarPay/Dev/fortis_user_api_key_sandbox"
+    fortis_location_id_sandbox : "/LunarPay/Dev/fortis_location_id_sandbox"
+    fortis_developer_id_production : "/LunarPay/Dev/fortis_developer_id_production"
+    fortis_user_id_production : "/LunarPay/Dev/fortis_user_id_production"
+    fortis_user_api_key_production : "/LunarPay/Dev/fortis_user_api_key_production"
+    integrations_encrypt_phrase : "/LunarPay/Dev/integrations_encrypt_phrase"
+    paysafe_encrypt_phrase : "/LunarPay/Dev/paysafe_encrypt_phrase"
+    paysafe_partner_user_test : "/LunarPay/Dev/paysafe_partner_user_test"
+    paysafe_partner_passsword_test : "/LunarPay/Dev/paysafe_partner_passsword_test"
+    paysafe_partner_user_live : "/LunarPay/Dev/paysafe_partner_user_live"
+    paysafe_partner_passsword_live : "/LunarPay/Dev/paysafe_partner_passsword_live"
+    paysafe_environment : "/LunarPay/Dev/paysafe_environment"
+    fortis_onboarding_user_id_production : "/Lunar/Dev/fortis_onboarding_user_id_production"
+    fortis_onboarding_user_api_key_production : "/Lunar/Dev/fortis_onboarding_user_api_key_production"
+    fortis_onboarding_user_id_sandbox : "/LunarPay/Dev/fortis_onboarding_user_id_sandbox"
+    fortis_onboarding_user_api_key_sandbox : "/LunarPay/Dev/fortis_onboarding_user_api_key_sandbox"
+    fortis_transaction_webhook_basic_auth_username : "/Lunar/Dev/fortis_transaction_webhook_basic_auth_username"
+    fortis_transaction_webhook_basic_auth_password : "/Lunar/Dev/fortis_transaction_webhook_basic_auth_password"
+    STORAGE_DEFAULT_BUCKET : "/LunarPay/Dev/STORAGE_DEFAULT_BUCKET"
+    WASABI_ACCESS_KEY : "/LunarPay/Dev/WASABI_ACCESS_KEY"
+    WASABI_SECRET_KEY : "/LunarPay/Dev/WASABI_SECRET_KEY"
+    APP_ENCRYPTION_KEY : "/LunarPay/Dev/APP_ENCRYPTION_KEY"
+
+phases:
+  install:
+    commands:
+      - cat /etc/image-id
+      - sudo dnf install -y amazon-ecr-credential-helper
+      - mkdir -p /root/.docker
+      - >
+        echo '{ "credHelpers": { "public.ecr.aws": "ecr-login", "905418141383.dkr.ecr.us-east-1.amazonaws.com": "ecr-login" } }' > /root/.docker/config.json
+      - cat /root/.docker/config.json
+
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws --version
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+      - cat /root/.docker/config.json
+
+  build:
+    commands:
+      - docker login --username $DOCKER_USERNAME --password $DOCKER_PASSWORD
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - |
+        docker build --build-arg APP_BASE_URL=$APP_BASE_URL \
+                    --build-arg MARIADB_ROOT_PASSWORD=$MARIADB_ROOT_PASSWORD \
+                    --build-arg MARIADB_DATABASE=$MARIADB_DATABASE \
+                    --build-arg MARIADB_USER=$MARIADB_USER \
+                    --build-arg MARIADB_PASSWORD=$MARIADB_PASSWORD \
+                    --build-arg MARIADB_HOST=$MARIADB_HOST \
+                    --build-arg IS_DEVELOPER_MACHINE=$IS_DEVELOPER_MACHINE \
+                    --build-arg EPICPAY_ONBOARD_FORM_TEST=$EPICPAY_ONBOARD_FORM_TEST \
+                    --build-arg SET_SAME_SITE_NONE=$SET_SAME_SITE_NONE \
+                    --build-arg ZAPIER_ENABLED=$ZAPIER_ENABLED \
+                    --build-arg EMAILING_ENABLED=$EMAILING_ENABLED \
+                    --build-arg CODEIGNITER_SMTP_USER=$CODEIGNITER_SMTP_USER \
+                    --build-arg CODEIGNITER_SMTP_PASS=$CODEIGNITER_SMTP_PASS \
+                    --build-arg MAILGUN_DOMAIN=$MAILGUN_DOMAIN \
+                    --build-arg MAILGUN_API_KEY=$MAILGUN_API_KEY \
+                    --build-arg PROVIDER_MESSENGER_TEST=$PROVIDER_MESSENGER_TEST \
+                    --build-arg TWILIO_ACCOUNT_SID_LIVE=$TWILIO_ACCOUNT_SID_LIVE \
+                    --build-arg TWILIO_AUTH_TOKEN_LIVE=$TWILIO_AUTH_TOKEN_LIVE \
+                    --build-arg TWILIO_ACCOUNT_SID_TEST=$TWILIO_ACCOUNT_SID_TEST \
+                    --build-arg TWILIO_AUTH_TOKEN_TEST=$TWILIO_AUTH_TOKEN_TEST \
+                    --build-arg GOODBARBER_COOKIES=$GOODBARBER_COOKIES \
+                    --build-arg GOODBARBER_RESELLER_USERNAME=$GOODBARBER_RESELLER_USERNAME \
+                    --build-arg GOODBARBER_RESELLER_PASSWORD=$GOODBARBER_RESELLER_PASSWORD \
+                    --build-arg GOODBARBER_APP_WITH_ORGNX=$GOODBARBER_APP_WITH_ORGNX \
+                    --build-arg RECAPTCHA_ENABLED=$RECAPTCHA_ENABLED \
+                    --build-arg RECAPTCHA_SECRET_KEY=$RECAPTCHA_SECRET_KEY \
+                    --build-arg RECAPTCHA_PUBLIC_KEY=$RECAPTCHA_PUBLIC_KEY \
+                    --build-arg RECAPTCHA_THRESHOLD=$RECAPTCHA_THRESHOLD \
+                    --build-arg PLANNINGCENTER_REDIRECT_URL=$PLANNINGCENTER_REDIRECT_URL \
+                    --build-arg PLANNINGCENTER_TOKEN_URL=$PLANNINGCENTER_TOKEN_URL \
+                    --build-arg PLANNINGCENTER_CLIENT_ID=$PLANNINGCENTER_CLIENT_ID \
+                    --build-arg PLANNINGCENTER_SECRET=$PLANNINGCENTER_SECRET \
+                    --build-arg FORCE_HIDE_INTERCOM=$FORCE_HIDE_INTERCOM \
+                    --build-arg GOOGLE_CODE_API=$GOOGLE_CODE_API \
+                    --build-arg ZAPIER_POLLING_KPIS_USER=$ZAPIER_POLLING_KPIS_USER \
+                    --build-arg ZAPIER_POLLING_KPIS_PASS=$ZAPIER_POLLING_KPIS_PASS \
+                    --build-arg STRIPE_OAUTH_CLIENT_ID=$STRIPE_OAUTH_CLIENT_ID \
+                    --build-arg STRIPE_OAUTH_SECRET=$STRIPE_OAUTH_SECRET \
+                    --build-arg FRESHBOOKS_OAUTH_CLIENT_ID=$FRESHBOOKS_OAUTH_CLIENT_ID \
+                    --build-arg FRESHBOOKS_OAUTH_SECRET=$FRESHBOOKS_OAUTH_SECRET \
+                    --build-arg QUICKBOOKS_OAUTH_CLIENT_ID=$QUICKBOOKS_OAUTH_CLIENT_ID \
+                    --build-arg QUICKBOOKS_OAUTH_SECRET=$QUICKBOOKS_OAUTH_SECRET \
+                    --build-arg fortis_environment=$fortis_environment \
+                    --build-arg fortis_encrypt_phrase=$fortis_encrypt_phrase \
+                    --build-arg fortis_developer_id_sandbox=$fortis_developer_id_sandbox \
+                    --build-arg fortis_user_id_sandbox=$fortis_user_id_sandbox \
+                    --build-arg fortis_user_api_key_sandbox=$fortis_user_api_key_sandbox \
+                    --build-arg fortis_location_id_sandbox=$fortis_location_id_sandbox \
+                    --build-arg fortis_developer_id_production=$fortis_developer_id_production \
+                    --build-arg fortis_user_id_production=$fortis_user_id_production \
+                    --build-arg fortis_user_api_key_production=$fortis_user_api_key_production \
+                    --build-arg integrations_encrypt_phrase=$integrations_encrypt_phrase \
+                    --build-arg paysafe_encrypt_phrase=$paysafe_encrypt_phrase \
+                    --build-arg paysafe_partner_user_test=$paysafe_partner_user_test \
+                    --build-arg paysafe_partner_passsword_test=$paysafe_partner_passsword_test \
+                    --build-arg paysafe_partner_user_live=$paysafe_partner_user_live \
+                    --build-arg paysafe_partner_passsword_live=$paysafe_partner_passsword_live \
+                    --build-arg paysafe_environment=$paysafe_environment \
+                    --build-arg fortis_onboarding_user_id_production=$fortis_onboarding_user_id_production \
+                    --build-arg fortis_onboarding_user_api_key_production=$fortis_onboarding_user_api_key_production \
+                    --build-arg fortis_onboarding_user_id_sandbox=$fortis_onboarding_user_id_sandbox \
+                    --build-arg fortis_onboarding_user_api_key_sandbox=$fortis_onboarding_user_api_key_sandbox \
+                    --build-arg APPCUES_ENABLED=$APPCUES_ENABLED \
+                    --build-arg fortis_transaction_webhook_basic_auth_username=$fortis_transaction_webhook_basic_auth_username \
+                    --build-arg fortis_transaction_webhook_basic_auth_password=$fortis_transaction_webhook_basic_auth_password \
+                    --build-arg STORAGE_DEFAULT_BUCKET=$STORAGE_DEFAULT_BUCKET \
+                    --build-arg WASABI_ACCESS_KEY=$WASABI_ACCESS_KEY \
+                    --build-arg WASABI_SECRET_KEY=$WASABI_SECRET_KEY \
+                    --build-arg APP_ENCRYPTION_KEY=$APP_ENCRYPTION_KEY \
+                    -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing the Docker images...
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo Writing image definitions file...
+      - printf '[{"name":"lunarpay-app","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - echo Printing ecr log
+      - cat /root/.ecr/log/*
+
+artifacts:
+  files: imagedefinitions.json

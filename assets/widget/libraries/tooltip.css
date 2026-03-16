@@ -1,0 +1,73 @@
+.tooltip__expanded {
+    transform: rotateY(0deg);
+    display: auto;
+
+}
+.tooltip__hidden {
+    transform: rotateX(90deg);
+    display: block;
+    visibility: hidden;
+}
+
+.hired-tooltip {
+    cursor: pointer !important; /* do we always actually want this? */
+}
+
+.tooltip__expanded:after {
+    content: "";
+    position: absolute;
+    bottom: -10px;
+    border-width: 10px 10px 0;
+    border-style: solid;
+    border-color: #36373E transparent;
+    right: 50%;
+    /* reduce the damage in FF3.0 */
+    display: block;
+    width: 0;
+    visibility: visible;
+}
+
+.tooltip__expanded-bottom:after {
+    top: -8px;
+    right: calc(50% - 10px);
+    bottom: auto;
+    left: auto;
+    border-width: 0 10px 10px;
+    border-color: #36373E transparent;
+}
+
+.tooltip__expanded-right:after {
+    top: 25%;
+    left: -10px;
+    bottom: auto;
+    border-width: 10px 10px 10px 0;
+    border-color: transparent #36373E;
+}
+
+.tooltip__expanded-left:after {
+    top: 25%; /* controls vertical position */
+    right: -10px;
+    bottom: auto;
+    left: auto;
+    border-width: 10px 0 10px 10px;
+    border-color: transparent #36373E;
+}
+
+#hired_tooltip {
+    /* Important positioning styles */
+    transition: visibility 0s, opacity 0.5s linear;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 9001; /* Over 9000 */
+    pointer-events: none;
+    /* Style specific stuff - can be removed/altered */
+    transition: transform 0.1s ease-in-out;
+    padding: 0.8rem 0.6rem 0.55rem 0.6rem;
+    background-color: #36373E;
+    color: #fff;
+    border-radius: 0.5rem;    
+    font-family: 'sc-mont';
+    font-size: 0.83rem;
+    max-width: 150px;
+}

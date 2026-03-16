@@ -12,12 +12,13 @@ interface Product {
   price: number;
   isSubscription: boolean;
   subscriptionInterval?: string;
+  customerChoosesPrice?: boolean;
 }
 
 interface ProductSelectProps {
   organizationId: string;
   value: number | null;
-  onSelect: (product: { id: number; name: string; price: number }) => void;
+  onSelect: (product: { id: number; name: string; price: number; customerChoosesPrice?: boolean }) => void;
 }
 
 export function ProductSelect({ organizationId, value, onSelect }: ProductSelectProps) {
@@ -35,9 +36,11 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
     description: '',
     isSubscription: false,
     subscriptionInterval: 'monthly',
+    customerChoosesPrice: false,
   });
 
   const selectedProduct = products.find(p => p.id === value);
+  const selectedIsCustomPrice = selectedProduct?.customerChoosesPrice ?? false;
 
   useEffect(() => {
     if (organizationId) {
@@ -80,10 +83,11 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
         body: JSON.stringify({
           organizationId: parseInt(organizationId),
           name: newProduct.name,
-          price: parseFloat(newProduct.price),
+          price: newProduct.customerChoosesPrice ? 0 : parseFloat(newProduct.price),
           description: newProduct.description,
           isSubscription: newProduct.isSubscription,
           subscriptionInterval: newProduct.isSubscription ? newProduct.subscriptionInterval : null,
+          customerChoosesPrice: newProduct.customerChoosesPrice,
         }),
         credentials: 'include',
       });
@@ -99,6 +103,7 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
           id: createdProduct.id,
           name: createdProduct.name,
           price: createdProduct.price,
+          customerChoosesPrice: createdProduct.customerChoosesPrice,
         });
         setShowCreateModal(false);
         setSearchTerm('');
@@ -108,6 +113,7 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
           description: '',
           isSubscription: false,
           subscriptionInterval: 'monthly',
+          customerChoosesPrice: false,
         });
       } else {
         const errorData = await response.json();
@@ -151,7 +157,9 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
         >
           <span className={selectedProduct ? 'text-foreground' : 'text-muted-foreground'}>
             {selectedProduct 
-              ? `${selectedProduct.name} (${formatPrice(selectedProduct.price)})`
+              ? selectedIsCustomPrice
+                ? `${selectedProduct.name} (Customer sets price)`
+                : `${selectedProduct.name} (${formatPrice(selectedProduct.price)})`
               : 'Select product...'
             }
           </span>
@@ -198,6 +206,7 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
                         id: product.id,
                         name: product.name,
                         price: product.price,
+                        customerChoosesPrice: product.customerChoosesPrice,
                       });
                       setIsOpen(false);
                       setSearchTerm('');
@@ -208,7 +217,11 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-sm">{product.name}</span>
-                      <span className="text-sm text-muted-foreground">{formatPrice(product.price)}</span>
+                      {product.customerChoosesPrice ? (
+                        <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Customer sets price</span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">{formatPrice(product.price)}</span>
+                      )}
                     </div>
                     {product.isSubscription && (
                       <div className="text-xs text-muted-foreground mt-0.5">
@@ -243,18 +256,33 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
                 required
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Price *</label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={newProduct.price}
-                onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                placeholder="0.00"
-                required
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
+              <input
+                type="checkbox"
+                id="customerChoosesPrice"
+                checked={newProduct.customerChoosesPrice}
+                onChange={(e) => setNewProduct({ ...newProduct, customerChoosesPrice: e.target.checked, price: e.target.checked ? '' : newProduct.price })}
+                className="h-4 w-4 accent-blue-600"
               />
+              <label htmlFor="customerChoosesPrice" className="text-sm font-medium text-blue-800 cursor-pointer">
+                Customer chooses price
+              </label>
+              <span className="text-xs text-blue-600 ml-1">(customer enters amount at checkout)</span>
             </div>
+            {!newProduct.customerChoosesPrice && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Price *</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newProduct.price}
+                  onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                  placeholder="0.00"
+                  required={!newProduct.customerChoosesPrice}
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-sm font-medium">Description</label>
               <textarea
@@ -300,7 +328,7 @@ export function ProductSelect({ organizationId, value, onSelect }: ProductSelect
             </Button>
             <Button
               onClick={handleCreateProduct}
-              disabled={loading || !newProduct.name || !newProduct.price}
+              disabled={loading || !newProduct.name || (!newProduct.customerChoosesPrice && !newProduct.price)}
             >
               {loading ? 'Creating...' : 'Add Product'}
             </Button>

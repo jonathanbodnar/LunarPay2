@@ -17,6 +17,7 @@ const createProductSchema = z.object({
     amount: z.string(),
   })).nullable().optional(),
   showOnPortal: z.boolean().optional(),
+  customerChoosesPrice: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
         isSubscription: validatedData.isSubscription || false,
         subscriptionInterval: validatedData.subscriptionInterval || null,
         showOnPortal: validatedData.showOnPortal || false,
+        customerChoosesPrice: validatedData.customerChoosesPrice || false,
       },
     });
 

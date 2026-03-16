@@ -39,6 +39,7 @@ export async function GET(
                 subscriptionInterval: true,
                 subscriptionIntervalCount: true,
                 subscriptionTrialDays: true,
+                customerChoosesPrice: true,
               },
             },
           },

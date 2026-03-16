@@ -1,0 +1,1 @@
+If enabled, the product will be visible and purchasable in the customer portal.

@@ -1,0 +1,6 @@
+General is a folder where we put front end elements like modals, widgets etc...
+This is for accessing to a functionality from several locations of the dashboard
+without the need of duplicating code
+EXAMPLE:
+    - Add / Substract money, we created an unique modal for opening it from donations, funds, statements, or wherever we want.
+      We just need to put a button for opening the modal from donations, funds or statements views.

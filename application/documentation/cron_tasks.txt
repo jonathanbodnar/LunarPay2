@@ -1,0 +1,20 @@
+#Looking for invoices to set them as Due if they need to
+#Name       : Set invoices as Due
+#Recurrence : Every day at 01:10
+#Description: Trigger script to look for invoices that need to be set as Due
+#Using Curl instead Cli because of logs are not working when Cli, for now will work okay with Curl
+#Author     : Juan Gomez
+10 1 * * * curl --silent https://app.lunarpay.com/cron/invoices/set_due
+20 1 * * * curl --silent https://devapp.lunarpay.com/cron/invoices/set_due
+30 1 * * * curl --silent https://app.coachpay.io/cron/invoices/set_due
+40 1 * * * curl --silent https://devapp.coachpay.io/cron/invoices/set_due
+
+# --------------------------------------------------------------------------------------------- #
+#Every day 11:00PM
+#Name       : Payments from subscriptions (PAYSAFE)
+#Description: Load script for triggering payments from subscriptions
+#Author     : Juan Gomez
+0 23 * * * curl --silent https://app.lunarpay.com/paysafecron/process_recurrent_transactions/
+10 23 * * * curl --silent https://devapp.lunarpay.com/paysafecron/process_recurrent_transactions/
+20 23 * * * curl --silent https://app.coachpay.io/paysafecron/process_recurrent_transactions/
+30 23 * * * curl --silent https://devapp.coachpay.io/paysafecron/process_recurrent_transactions/

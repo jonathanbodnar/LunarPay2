@@ -32,6 +32,7 @@ interface PaymentLink {
       subscriptionInterval: string | null;
       subscriptionIntervalCount: number | null;
       subscriptionTrialDays: number | null;
+      customerChoosesPrice: boolean;
     };
     qty: number | null;
     unlimitedQty: boolean;
@@ -65,6 +66,8 @@ export default function PaymentLinkPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cart, setCart] = useState<Record<number, number>>({});
+  // Custom amounts for "customer chooses price" products (keyed by PaymentLinkProduct id)
+  const [customAmounts, setCustomAmounts] = useState<Record<number, string>>({});
   const [processing, setProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentError, setPaymentError] = useState('');
@@ -144,6 +147,10 @@ export default function PaymentLinkPage() {
     if (!paymentLink) return 0;
     return paymentLink.products.reduce((sum, item) => {
       const qty = cart[item.id] || 0;
+      if (item.product.customerChoosesPrice) {
+        const customAmt = parseFloat(customAmounts[item.id] || '0') || 0;
+        return sum + (customAmt * qty);
+      }
       return sum + (Number(item.product.price) * qty);
     }, 0);
   };
@@ -275,15 +282,16 @@ export default function PaymentLinkPage() {
         if (isAvailable) {
           const initialCart = { [product.id]: 1 };
           setCart(initialCart);
-          // Get token for this amount - pass cart AND payment link explicitly 
-          // since state updates are async and won't be ready immediately
-          await getPaymentToken(
-            data.paymentLink.organizationId, 
-            Number(product.product.price),
-            data.paymentLink.id,
-            initialCart,           // Pass cart explicitly
-            data.paymentLink       // Pass payment link explicitly - CRITICAL for subscription detection!
-          );
+          // For customer-chooses-price products, skip token fetch until amount is entered
+          if (!product.product.customerChoosesPrice) {
+            await getPaymentToken(
+              data.paymentLink.organizationId, 
+              Number(product.product.price),
+              data.paymentLink.id,
+              initialCart,
+              data.paymentLink
+            );
+          }
         }
       }
     } catch (err) {
@@ -400,21 +408,19 @@ export default function PaymentLinkPage() {
     }
   }, [paymentLink]);
 
-  // Recalculate token when cart changes
+  // Recalculate token when cart or custom amounts change
   useEffect(() => {
     if (!paymentLink) return;
     const total = calculateTotal();
     if (total > 0) {
-      // Debounce the token fetch
       const timeout = setTimeout(() => {
         setClientToken(null);
         setPayForm(null);
-        // Pass paymentLink explicitly to ensure subscription detection works
         getPaymentToken(paymentLink.organizationId, total, paymentLink.id, cart, paymentLink);
       }, 500);
       return () => clearTimeout(timeout);
     }
-  }, [cart, paymentLink]);
+  }, [cart, customAmounts, paymentLink]);
 
   const processPayment = async (fortisResponse: any) => {
     if (!paymentLink) return;
@@ -423,16 +429,21 @@ export default function PaymentLinkPage() {
       // Build products array with full subscription info
       const productsToProcess = paymentLink.products
         .filter(item => cart[item.id] > 0)
-        .map(item => ({
-          id: item.id,
-          productId: item.productId,
-          productPrice: Number(item.product.price),
-          qtyReq: cart[item.id],
-          subtotal: Number(item.product.price) * cart[item.id],
-          isSubscription: item.product.isSubscription,
-          subscriptionInterval: item.product.subscriptionInterval,
-          subscriptionIntervalCount: item.product.subscriptionIntervalCount,
-        }));
+        .map(item => {
+          const unitPrice = item.product.customerChoosesPrice
+            ? (parseFloat(customAmounts[item.id] || '0') || 0)
+            : Number(item.product.price);
+          return {
+            id: item.id,
+            productId: item.productId,
+            productPrice: unitPrice,
+            qtyReq: cart[item.id],
+            subtotal: unitPrice * cart[item.id],
+            isSubscription: item.product.isSubscription,
+            subscriptionInterval: item.product.subscriptionInterval,
+            subscriptionIntervalCount: item.product.subscriptionIntervalCount,
+          };
+        });
 
       // Check if any product is a subscription
       const hasSubscriptionProduct = productsToProcess.some(p => p.isSubscription);
@@ -592,7 +603,11 @@ export default function PaymentLinkPage() {
   }
 
   const total = calculateTotal();
-  const hasItems = Object.values(cart).some(qty => qty > 0);
+  // For customer-chooses-price products, also require a valid amount > 0
+  const hasItems = Object.values(cart).some(qty => qty > 0) &&
+    paymentLink.products
+      .filter(item => (cart[item.id] || 0) > 0 && item.product.customerChoosesPrice)
+      .every(item => (parseFloat(customAmounts[item.id] || '0') || 0) > 0);
   const selectedProducts = paymentLink.products.filter(item => cart[item.id] > 0);
   
   // Check if any selected product is a subscription
@@ -667,7 +682,7 @@ export default function PaymentLinkPage() {
             {/* Amount */}
             <div>
               <p className="text-4xl font-semibold text-gray-900 tracking-tight">
-                {hasItems ? formatCurrency(total) : '$0.00'}
+                {total > 0 ? formatCurrency(total) : '$0.00'}
                 {hasSubscription && subscriptionProduct && (
                   <span className="text-lg font-normal text-gray-500 ml-1">
                     {formatFrequency(subscriptionProduct.product.subscriptionInterval, subscriptionProduct.product.subscriptionIntervalCount)}
@@ -677,7 +692,7 @@ export default function PaymentLinkPage() {
               <p className="text-sm text-gray-500 mt-1">
                 {hasSubscription && subscriptionProduct?.product.subscriptionTrialDays 
                   ? `${subscriptionProduct.product.subscriptionTrialDays}-day free trial`
-                  : hasItems ? 'Due today' : 'Select items below'
+                  : total > 0 ? 'Due today' : 'Enter amount below'
                 }
               </p>
             </div>
@@ -717,11 +732,37 @@ export default function PaymentLinkPage() {
                             </span>
                           )}
                         </div>
-                        <span className="text-gray-900 font-medium">
-                          {formatCurrency(Number(item.product.price))}
-                          {quantity > 1 && <span className="text-gray-500 font-normal"> each</span>}
-                        </span>
+                        {!item.product.customerChoosesPrice && (
+                          <span className="text-gray-900 font-medium">
+                            {formatCurrency(Number(item.product.price))}
+                            {quantity > 1 && <span className="text-gray-500 font-normal"> each</span>}
+                          </span>
+                        )}
                       </div>
+
+                      {/* Customer chooses price input */}
+                      {item.product.customerChoosesPrice && (
+                        <div className="space-y-1">
+                          <label className="text-xs text-gray-500 font-medium">Enter amount</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
+                            <input
+                              type="number"
+                              min="1"
+                              step="0.01"
+                              value={customAmounts[item.id] ?? ''}
+                              onChange={(e) => {
+                                setCustomAmounts(prev => ({ ...prev, [item.id]: e.target.value }));
+                              }}
+                              className="w-full pl-7 pr-3 py-2.5 border-2 rounded-lg outline-none transition-colors text-lg font-semibold"
+                              style={{ borderColor: customAmounts[item.id] ? primaryColor : '#e5e7eb' }}
+                              onFocus={(e) => e.target.style.borderColor = primaryColor}
+                              onBlur={(e) => e.target.style.borderColor = customAmounts[item.id] ? primaryColor : '#e5e7eb'}
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Quantity selector for unlimited/multi-qty products */}
                       {(allowMultiple || isUnlimited) && (
@@ -776,7 +817,7 @@ export default function PaymentLinkPage() {
                       )}
                       
                       {/* Total for multiple items */}
-                      {quantity > 1 && (
+                      {quantity > 1 && !item.product.customerChoosesPrice && (
                         <div className="flex justify-between text-sm pt-3 mt-1 border-t border-gray-200">
                           <span className="text-gray-600">Total ({quantity} items)</span>
                           <span className="font-semibold" style={{ color: primaryColor }}>
@@ -811,41 +852,65 @@ export default function PaymentLinkPage() {
                             <p className="text-xs text-gray-500 line-clamp-1">{item.product.description}</p>
                           )}
                         </div>
-                        <p className="text-sm font-medium ml-2" style={{ color: primaryColor }}>
-                          {formatCurrency(Number(item.product.price))}
-                          {item.product.isSubscription && (
-                            <span className="text-gray-400 font-normal text-xs">
-                              {formatFrequency(item.product.subscriptionInterval, item.product.subscriptionIntervalCount)}
-                            </span>
-                          )}
-                        </p>
+                        {item.product.customerChoosesPrice ? (
+                          <span className="text-xs font-medium ml-2 text-gray-500">You choose</span>
+                        ) : (
+                          <p className="text-sm font-medium ml-2" style={{ color: primaryColor }}>
+                            {formatCurrency(Number(item.product.price))}
+                            {item.product.isSubscription && (
+                              <span className="text-gray-400 font-normal text-xs">
+                                {formatFrequency(item.product.subscriptionInterval, item.product.subscriptionIntervalCount)}
+                              </span>
+                            )}
+                          </p>
+                        )}
                       </div>
                       
                       {isAvailable ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className="h-7 w-7 rounded border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 text-gray-600"
-                            onClick={() => updateQuantity(item.id, -1)}
-                            disabled={quantity === 0}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          <span className="w-6 text-center text-sm font-medium">{quantity}</span>
-                          <button
-                            type="button"
-                            className="h-7 w-7 rounded border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 text-gray-600"
-                            onClick={() => updateQuantity(item.id, 1)}
-                            disabled={quantity >= maxQty}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                          {quantity > 0 && (
-                            <span className="ml-auto text-sm font-medium">
-                              {formatCurrency(Number(item.product.price) * quantity)}
-                            </span>
+                        <>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="h-7 w-7 rounded border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 text-gray-600"
+                              onClick={() => updateQuantity(item.id, -1)}
+                              disabled={quantity === 0}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="w-6 text-center text-sm font-medium">{quantity}</span>
+                            <button
+                              type="button"
+                              className="h-7 w-7 rounded border border-gray-300 flex items-center justify-center hover:bg-gray-100 disabled:opacity-50 text-gray-600"
+                              onClick={() => updateQuantity(item.id, 1)}
+                              disabled={quantity >= maxQty}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                            {quantity > 0 && !item.product.customerChoosesPrice && (
+                              <span className="ml-auto text-sm font-medium">
+                                {formatCurrency(Number(item.product.price) * quantity)}
+                              </span>
+                            )}
+                          </div>
+                          {/* Custom amount input for customer-chooses-price */}
+                          {quantity > 0 && item.product.customerChoosesPrice && (
+                            <div className="mt-2">
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-sm">$</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="0.01"
+                                  value={customAmounts[item.id] ?? ''}
+                                  onChange={(e) => setCustomAmounts(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                  className="w-full pl-7 pr-3 py-2 border rounded-lg outline-none text-sm font-semibold focus:ring-2"
+                                  style={{ borderColor: customAmounts[item.id] ? primaryColor : '#d1d5db' }}
+                                  placeholder="Enter amount"
+                                />
+                              </div>
+                            </div>
                           )}
-                        </div>
+                        </>
                       ) : (
                         <p className="text-xs text-red-500">Out of stock</p>
                       )}
@@ -885,7 +950,9 @@ export default function PaymentLinkPage() {
                 <div>
                   {!hasItems ? (
                     <div className="h-40 flex items-center justify-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                      <p className="text-gray-400 text-sm">Select items to continue</p>
+                      <p className="text-gray-400 text-sm">
+                        {Object.values(cart).some(q => q > 0) ? 'Enter an amount to continue' : 'Select items to continue'}
+                      </p>
                     </div>
                   ) : demoMode ? (
                     /* Demo Mode - Simple card fields for screenshots */
@@ -998,8 +1065,8 @@ export default function PaymentLinkPage() {
                 >
                   {processing 
                     ? 'Processing...' 
-                    : !hasItems 
-                      ? 'Select items to continue'
+                    : !hasItems
+                      ? Object.values(cart).some(q => q > 0) ? 'Enter an amount to continue' : 'Select items to continue'
                       : hasSubscription 
                         ? `Subscribe — ${formatCurrency(total)}` 
                         : `Pay ${formatCurrency(total)}`

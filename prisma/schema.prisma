@@ -472,6 +472,9 @@ model Product {
   // Customer Portal Visibility
   showOnPortal              Boolean   @default(false) @map("show_on_portal")
   
+  // Variable Pricing
+  customerChoosesPrice      Boolean   @default(false) @map("customer_chooses_price")
+  
   // Subscription Fields
   isSubscription            Boolean   @default(false) @map("is_subscription")
   subscriptionInterval      String?   @map("subscription_interval") @db.VarChar(20)

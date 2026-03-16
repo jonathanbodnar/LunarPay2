@@ -29,8 +29,9 @@ export default function NewPaymentLinkPage() {
     qty: number;
     price: number;
     unlimitedQty: boolean;
+    customerChoosesPrice: boolean;
   }>>([
-    { productId: null, productName: '', qty: 1, price: 0, unlimitedQty: false }
+    { productId: null, productName: '', qty: 1, price: 0, unlimitedQty: false, customerChoosesPrice: false }
   ]);
 
   const [webhookExpanded, setWebhookExpanded] = useState(false);
@@ -61,6 +62,7 @@ export default function NewPaymentLinkPage() {
       qty: 1,
       price: 0,
       unlimitedQty: false,
+      customerChoosesPrice: false,
     }]);
   };
 
@@ -74,19 +76,23 @@ export default function NewPaymentLinkPage() {
     setSelectedProducts(updated);
   };
 
-  const handleProductSelect = (index: number, product: { id: number; name: string; price: number }) => {
+  const handleProductSelect = (index: number, product: { id: number; name: string; price: number; customerChoosesPrice?: boolean }) => {
     const updated = [...selectedProducts];
     updated[index] = {
       ...updated[index],
       productId: product.id,
       productName: product.name,
       price: Number(product.price),
+      customerChoosesPrice: product.customerChoosesPrice ?? false,
     };
     setSelectedProducts(updated);
   };
 
   const calculateTotal = () => {
-    return selectedProducts.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    return selectedProducts.reduce((sum, item) => {
+      if (item.customerChoosesPrice) return sum; // Customer sets amount at checkout
+      return sum + (item.qty * item.price);
+    }, 0);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -275,13 +281,19 @@ export default function NewPaymentLinkPage() {
                   </div>
                   <div className="col-span-3">
                     <label className="text-xs text-muted-foreground">Price</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={item.price}
-                      onChange={(e) => updateProduct(index, 'price', parseFloat(e.target.value) || 0)}
-                    />
+                    {item.customerChoosesPrice ? (
+                      <div className="h-10 px-3 rounded-lg border border-border bg-blue-50 flex items-center text-xs font-medium text-blue-700">
+                        Customer sets price
+                      </div>
+                    ) : (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={item.price}
+                        onChange={(e) => updateProduct(index, 'price', parseFloat(e.target.value) || 0)}
+                      />
+                    )}
                   </div>
                   <div className="col-span-1">
                     <Button
@@ -300,7 +312,13 @@ export default function NewPaymentLinkPage() {
               <div className="border-t pt-4 mt-4">
                 <div className="flex justify-between items-center">
                   <span className="text-lg font-semibold">Total</span>
-                  <span className="text-2xl font-bold">${calculateTotal().toFixed(2)}</span>
+                  {selectedProducts.some(p => p.customerChoosesPrice && p.productId) ? (
+                    <span className="text-sm text-muted-foreground italic">
+                      {calculateTotal() > 0 ? `$${calculateTotal().toFixed(2)} + customer amount` : 'Customer sets amount'}
+                    </span>
+                  ) : (
+                    <span className="text-2xl font-bold">${calculateTotal().toFixed(2)}</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -375,7 +393,7 @@ export default function NewPaymentLinkPage() {
         <div className="flex gap-4">
           <Button
             type="submit"
-            disabled={loading || selectedProducts.every(p => !p.productName || p.price <= 0)}
+            disabled={loading || selectedProducts.every(p => !p.productName || (!p.customerChoosesPrice && p.price <= 0))}
           >
             {loading ? 'Creating...' : 'Create Payment Link'}
           </Button>
