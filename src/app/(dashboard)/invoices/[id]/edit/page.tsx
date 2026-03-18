@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { calculateProcessingFee } from '@/lib/utils';
 
 export default function EditInvoicePage() {
   const params = useParams();
@@ -76,7 +77,11 @@ export default function EditInvoicePage() {
   };
 
   const calculateTotal = () => {
-    return lineItems.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    const subtotal = lineItems.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    if (formData.coverFee && subtotal > 0) {
+      return subtotal + calculateProcessingFee(subtotal);
+    }
+    return subtotal;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -248,9 +253,14 @@ export default function EditInvoicePage() {
               <div className="border-t pt-4">
                 <div className="flex justify-between items-center">
                   <span className="text-lg font-semibold">Total</span>
-                  <span className="text-2xl font-bold text-blue-600">
-                    ${calculateTotal().toFixed(2)}
-                  </span>
+                  <div className="text-right">
+                    <span className="text-2xl font-bold text-blue-600">
+                      ${calculateTotal().toFixed(2)}
+                    </span>
+                    {formData.coverFee && (
+                      <p className="text-xs text-muted-foreground">Includes transaction fee</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

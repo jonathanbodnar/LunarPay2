@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
-import { calculateFee, formatCurrency, formatDate } from '@/lib/utils';
+import { calculatePlatformFee, formatCurrency, formatDate } from '@/lib/utils';
 import { logPaymentEvent } from '@/lib/payment-logger';
 import { sendPaymentConfirmation, sendMerchantPaymentNotification } from '@/lib/email';
 
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
 
     // Calculate amounts
     const amountInDollars = amount / 100;
-    const fee = calculateFee(amountInDollars, 0.023, 0.30);
+    const fee = calculatePlatformFee(amountInDollars);
     const netAmount = amountInDollars - fee;
 
     // Find or create donor - use multiple matching strategies to prevent duplicates

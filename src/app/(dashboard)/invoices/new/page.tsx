@@ -9,6 +9,7 @@ import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { CustomerSelect } from '@/components/forms/CustomerSelect';
 import { ProductSelect } from '@/components/forms/ProductSelect';
 import { QuantitySelect } from '@/components/forms/QuantitySelect';
+import { calculateProcessingFee } from '@/lib/utils';
 
 function NewInvoiceContent() {
   const router = useRouter();
@@ -82,15 +83,11 @@ function NewInvoiceContent() {
   };
 
   const calculateTotal = () => {
-    let total = lineItems.reduce((sum, item) => sum + (item.qty * item.price), 0);
-    if (formData.coverFee && total > 0) {
-      // Estimate fee (simplified - should match server calculation)
-      const feePercentage = 0.029; // 2.9%
-      const feeFixed = 0.30;
-      const estimatedFee = (total * feePercentage) + feeFixed;
-      total += estimatedFee;
+    const subtotal = lineItems.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    if (formData.coverFee && subtotal > 0) {
+      return subtotal + calculateProcessingFee(subtotal);
     }
-    return total;
+    return subtotal;
   };
 
   const handleSubmit = async (e: React.FormEvent, sendNow: boolean = false) => {

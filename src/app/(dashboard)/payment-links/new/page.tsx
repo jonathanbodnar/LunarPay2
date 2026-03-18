@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ArrowLeft, Plus, Trash2, Webhook, HelpCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { ProductSelect } from '@/components/forms/ProductSelect';
 import { QuantitySelect } from '@/components/forms/QuantitySelect';
+import { calculateProcessingFee } from '@/lib/utils';
 
 export default function NewPaymentLinkPage() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function NewPaymentLinkPage() {
     description: '',
     paymentMethods: 'both',
     status: 'active',
+    coverFee: false,
     webhookUrl: '',
   });
 
@@ -86,7 +88,11 @@ export default function NewPaymentLinkPage() {
   };
 
   const calculateTotal = () => {
-    return selectedProducts.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    const subtotal = selectedProducts.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    if (formData.coverFee && subtotal > 0) {
+      return subtotal + calculateProcessingFee(subtotal);
+    }
+    return subtotal;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,6 +122,7 @@ export default function NewPaymentLinkPage() {
         description: formData.description || undefined,
         paymentMethods: formData.paymentMethods,
         status: formData.status,
+        coverFee: formData.coverFee,
         webhookUrl: formData.webhookUrl || undefined,
         products: selectedProducts
           .filter(p => p.productId !== null)
@@ -297,10 +304,27 @@ export default function NewPaymentLinkPage() {
                 </div>
               ))}
 
-              <div className="border-t pt-4 mt-4">
+              <div className="border-t pt-4 mt-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="coverFee"
+                    checked={formData.coverFee}
+                    onChange={(e) => setFormData({ ...formData, coverFee: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                  <label htmlFor="coverFee" className="text-sm">
+                    Let customer cover transaction fee
+                  </label>
+                </div>
                 <div className="flex justify-between items-center">
                   <span className="text-lg font-semibold">Total</span>
-                  <span className="text-2xl font-bold">${calculateTotal().toFixed(2)}</span>
+                  <div className="text-right">
+                    <span className="text-2xl font-bold">${calculateTotal().toFixed(2)}</span>
+                    {formData.coverFee && (
+                      <p className="text-xs text-muted-foreground">Includes transaction fee</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

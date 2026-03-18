@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { FileText, Download, CreditCard, Landmark, Lock, CheckCircle } from 'lucide-react';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, calculateProcessingFee } from '@/lib/utils';
 import '@/types/global';
 import Image from 'next/image';
 
@@ -12,6 +12,7 @@ interface Invoice {
   status: string;
   totalAmount: number;
   paidAmount: number;
+  coverFee: boolean;
   dueDate: string | null;
   invoiceDate: string | null;
   reference: string | null;
@@ -259,10 +260,15 @@ export default function PublicInvoicePage() {
         setSavePaymentMethod(true);
       }
 
+      // Calculate amount due, adding processing fee if customer covers it
+      const rawAmountDue = data.invoice.totalAmount - data.invoice.paidAmount;
+      const processingFee = data.invoice.coverFee ? calculateProcessingFee(rawAmountDue) : 0;
+      const amountWithFee = rawAmountDue + processingFee;
+
       // Get transaction intention token - pass invoice data explicitly for subscription detection
       await getPaymentToken(
         data.invoice.organizationId, 
-        data.invoice.totalAmount - data.invoice.paidAmount, 
+        amountWithFee, 
         data.invoice.id,
         data.invoice // Pass invoice data explicitly since state update is async
       );
@@ -476,8 +482,9 @@ export default function PublicInvoicePage() {
     setClientToken(null);
     setPayForm(null);
     if (invoice) {
-      const amountDue = Number(invoice.totalAmount) - Number(invoice.paidAmount);
-      await getPaymentToken(invoice.organizationId, amountDue, invoice.id, invoice);
+      const rawAmountDue = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+      const processingFee = invoice.coverFee ? calculateProcessingFee(rawAmountDue) : 0;
+      await getPaymentToken(invoice.organizationId, rawAmountDue + processingFee, invoice.id, invoice);
     }
   };
 
@@ -505,7 +512,9 @@ export default function PublicInvoicePage() {
   }
 
   const isPaid = invoice.status === 'paid';
-  const amountDue = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+  const rawAmountDue = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+  const processingFee = invoice.coverFee ? calculateProcessingFee(rawAmountDue) : 0;
+  const amountDue = rawAmountDue + processingFee;
   
   // Check if any product is a subscription
   const hasSubscription = invoice.products.some(p => p.product?.isSubscription);
@@ -622,6 +631,20 @@ export default function PublicInvoicePage() {
                   <span className="text-gray-900 font-medium">{formatCurrency(Number(product.subtotal))}</span>
                 </div>
               ))}
+
+              {/* Processing fee line */}
+              {invoice.coverFee && processingFee > 0 && (
+                <>
+                  <div className="flex justify-between text-sm pt-3 border-t border-gray-100">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="text-gray-900 font-medium">{formatCurrency(rawAmountDue)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Processing fee</span>
+                    <span className="text-gray-900 font-medium">{formatCurrency(processingFee)}</span>
+                  </div>
+                </>
+              )}
               
               {/* Total */}
               <div className="flex justify-between pt-3 border-t border-gray-100">

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { CreditCard, Landmark, Lock, Minus, Plus, ShoppingCart, CheckCircle } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, calculateProcessingFee } from '@/lib/utils';
 import '@/types/global';
 import Image from 'next/image';
 
@@ -12,6 +12,7 @@ interface PaymentLink {
   name: string;
   description: string | null;
   status: string;
+  coverFee: boolean;
   paymentMethods: string | null;
   organizationId: number;
   organization: {
@@ -139,13 +140,20 @@ export default function PaymentLinkPage() {
     };
   }, [paymentLink, clientToken, fortisEnvironment]);
 
-  // Calculate total
-  const calculateTotal = () => {
+  const calculateSubtotal = () => {
     if (!paymentLink) return 0;
     return paymentLink.products.reduce((sum, item) => {
       const qty = cart[item.id] || 0;
       return sum + (Number(item.product.price) * qty);
     }, 0);
+  };
+
+  const calculateTotal = () => {
+    const subtotal = calculateSubtotal();
+    if (paymentLink?.coverFee && subtotal > 0) {
+      return subtotal + calculateProcessingFee(subtotal);
+    }
+    return subtotal;
   };
 
   // Initialize Fortis payment form when token and total are ready
@@ -591,7 +599,9 @@ export default function PaymentLinkPage() {
     );
   }
 
+  const subtotal = calculateSubtotal();
   const total = calculateTotal();
+  const processingFee = paymentLink.coverFee && subtotal > 0 ? calculateProcessingFee(subtotal) : 0;
   const hasItems = Object.values(cart).some(qty => qty > 0);
   const selectedProducts = paymentLink.products.filter(item => cart[item.id] > 0);
   
@@ -854,12 +864,26 @@ export default function PaymentLinkPage() {
                 })
               )}
               
-              {/* Total */}
+              {/* Fee breakdown and total */}
               {hasItems && (
-                <div className="flex justify-between pt-3 border-t border-gray-100">
-                  <span className="font-medium text-gray-900">Total</span>
-                  <span className="font-semibold text-gray-900">{formatCurrency(total)}</span>
-                </div>
+                <>
+                  {paymentLink.coverFee && processingFee > 0 && (
+                    <>
+                      <div className="flex justify-between text-sm pt-3 border-t border-gray-100">
+                        <span className="text-gray-600">Subtotal</span>
+                        <span className="text-gray-900 font-medium">{formatCurrency(subtotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Processing fee</span>
+                        <span className="text-gray-900 font-medium">{formatCurrency(processingFee)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className={`flex justify-between pt-3 ${!paymentLink.coverFee || processingFee <= 0 ? 'border-t border-gray-100' : ''}`}>
+                    <span className="font-medium text-gray-900">Total</span>
+                    <span className="font-semibold text-gray-900">{formatCurrency(total)}</span>
+                  </div>
+                </>
               )}
             </div>
           </div>

@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { calculateProcessingFee } from './utils';
 
 interface InvoiceData {
   id: number;
@@ -249,6 +250,9 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> 
   const totalsLabelX = 120;
   const totalsValueX = pageWidth - 20;
   
+  const processingFee = invoice.coverFee ? calculateProcessingFee(invoice.totalAmount) : 0;
+  const totalWithFee = invoice.totalAmount + processingFee;
+
   // Subtotal
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
@@ -258,6 +262,17 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> 
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(invoice.totalAmount), totalsValueX, finalY, { align: 'right' });
   
+  // Processing fee line
+  if (invoice.coverFee && processingFee > 0) {
+    finalY += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
+    doc.text('Processing fee', totalsLabelX, finalY);
+    doc.setTextColor(30, 30, 30);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatCurrency(processingFee), totalsValueX, finalY, { align: 'right' });
+  }
+
   // Draw line before Amount due
   finalY += 10;
   doc.setDrawColor(200, 200, 200);
@@ -270,7 +285,7 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Buffer> 
   doc.setTextColor(30, 30, 30);
   doc.text('Amount due', totalsLabelX, finalY);
   doc.setFontSize(12);
-  doc.text(formatCurrency(invoice.totalAmount), totalsValueX, finalY, { align: 'right' });
+  doc.text(formatCurrency(totalWithFee), totalsValueX, finalY, { align: 'right' });
   
   // ========== FOOTER ==========
   if (invoice.footer) {

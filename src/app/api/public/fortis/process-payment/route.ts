@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { calculateFee, formatCurrency, formatDate } from '@/lib/utils';
+import { calculatePlatformFee, formatCurrency, formatDate } from '@/lib/utils';
 import { logPaymentEvent } from '@/lib/payment-logger';
 import { sendPaymentConfirmation, sendMerchantPaymentNotification } from '@/lib/email';
 
@@ -86,7 +86,6 @@ export async function POST(request: Request) {
     // Validate transaction was successful
     // Fortis status codes: 101 = approved for CC, 131/132 = pending for ACH
     // Reason code 1000 = success/approved
-    // Also check for successful status strings
     const statusCodeNum = typeof status_code === 'string' ? parseInt(status_code, 10) : status_code;
     const reasonCodeNum = typeof reason_code_id === 'string' ? parseInt(reason_code_id, 10) : reason_code_id;
     
@@ -97,13 +96,12 @@ export async function POST(request: Request) {
     const isSuccessful = isCCApproved;
     const isPending = isACHPending;
     
-    // Also check for generic success indicators
+    // Fallback: check reason_code alone (1000 = approved) or explicit status strings.
+    // NOTE: A transaction ID alone does NOT mean success — Fortis returns IDs for declines too.
     const isGenericSuccess = 
-      (txData.status === 'approved' || txData.status === 'success' || txData.status === 'pending') ||
-      (reasonCodeNum === 1000) || // Reason code 1000 always means success
-      (fortisTransactionId && !txData.error); // Has transaction ID and no error
+      (reasonCodeNum === 1000) ||
+      (txData.status === 'approved' || txData.status === 'success');
 
-    // Only reject if we're sure it failed (no generic success and explicit failure)
     if (!isSuccessful && !isPending && !isGenericSuccess) {
       console.log('[Process Payment] Payment failed:', {
         isSuccessful,
@@ -164,7 +162,7 @@ export async function POST(request: Request) {
 
     // Calculate amounts
     const amountInDollars = transaction_amount / 100; // Fortis returns cents
-    const fee = calculateFee(amountInDollars, 0.023, 0.30); // 2.3% + $0.30
+    const fee = calculatePlatformFee(amountInDollars);
     const netAmount = amountInDollars - fee;
 
     // Find or create donor

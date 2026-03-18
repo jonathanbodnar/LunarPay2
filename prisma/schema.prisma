@@ -565,6 +565,7 @@ model PaymentLink {
   status          String    @db.VarChar(20) // active, inactive
   hash            String    @unique @db.VarChar(255)
   paymentMethods  String?   @map("payment_methods") @db.VarChar(20) // cc, ach, both
+  coverFee        Boolean   @default(false) @map("cover_fee")
   webhookUrl      String?   @map("webhook_url") @db.VarChar(500)
   createdAt       DateTime  @default(now()) @map("created_at")
   

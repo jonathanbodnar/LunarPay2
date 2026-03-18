@@ -33,10 +33,37 @@ export function formatDate(date: Date | string | null, format: 'short' | 'long' 
 }
 
 /**
+ * Total processing fee rate shown to customers when "cover fees" is enabled.
+ * Includes both Fortis and LunarPay cuts.
+ */
+export const PROCESSING_FEE_PERCENTAGE = 0.029; // 2.9%
+export const PROCESSING_FEE_FIXED = 0.30;       // $0.30
+
+/**
+ * LunarPay platform fee recorded per transaction (LunarPay's revenue cut).
+ */
+export const PLATFORM_FEE_PERCENTAGE = 0.023; // 2.3%
+export const PLATFORM_FEE_FIXED = 0.30;       // $0.30
+
+/**
  * Calculate fee based on percentage and fixed amount
  */
 export function calculateFee(amount: number, percentage: number, fixed: number): number {
   return Math.round((amount * percentage + fixed) * 100) / 100;
+}
+
+/**
+ * Calculate the total processing fee a customer pays when covering fees.
+ */
+export function calculateProcessingFee(subtotal: number): number {
+  return calculateFee(subtotal, PROCESSING_FEE_PERCENTAGE, PROCESSING_FEE_FIXED);
+}
+
+/**
+ * Calculate LunarPay's platform fee for a transaction.
+ */
+export function calculatePlatformFee(amount: number): number {
+  return calculateFee(amount, PLATFORM_FEE_PERCENTAGE, PLATFORM_FEE_FIXED);
 }
 
 /**
