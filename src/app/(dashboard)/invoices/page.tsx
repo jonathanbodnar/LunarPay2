@@ -13,13 +13,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, calculateProcessingFee } from '@/lib/utils';
 
 interface Invoice {
   id: number;
   status: string;
   totalAmount: number;
   paidAmount: number;
+  coverFee: boolean;
   dueDate: string | null;
   createdAt: string;
   reference: string | null;
@@ -161,7 +162,11 @@ export default function InvoicesPage() {
                   onClick={() => router.push(`/invoices/${invoice.id}`)}
                 >
                   <TableCell className="font-medium">
-                    {formatCurrency(Number(invoice.totalAmount))}
+                    {formatCurrency(
+                      invoice.coverFee
+                        ? Number(invoice.totalAmount) + calculateProcessingFee(Number(invoice.totalAmount))
+                        : Number(invoice.totalAmount)
+                    )}
                   </TableCell>
                   <TableCell>
                     {getStatusBadge(invoice.status)}

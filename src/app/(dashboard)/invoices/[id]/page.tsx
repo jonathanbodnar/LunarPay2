@@ -15,7 +15,7 @@ import {
   ChevronDown,
   Check
 } from 'lucide-react';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, calculateProcessingFee } from '@/lib/utils';
 
 export default function InvoiceDetailPage() {
   const params = useParams();
@@ -170,7 +170,10 @@ export default function InvoiceDetailPage() {
     );
   };
 
-  const amountDue = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+  const rawTotal = Number(invoice.totalAmount);
+  const processingFee = invoice.coverFee ? calculateProcessingFee(rawTotal) : 0;
+  const totalWithFee = rawTotal + processingFee;
+  const amountDue = totalWithFee - Number(invoice.paidAmount);
 
   return (
     <div className="space-y-6">
@@ -302,9 +305,21 @@ export default function InvoiceDetailPage() {
                     ))}
                   </tbody>
                   <tfoot className="bg-muted">
+                    {invoice.coverFee && processingFee > 0 && (
+                      <>
+                        <tr>
+                          <td colSpan={3} className="px-4 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                          <td className="px-4 py-2 text-right font-medium">{formatCurrency(rawTotal)}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={3} className="px-4 py-2 text-right text-sm text-muted-foreground">Processing fee</td>
+                          <td className="px-4 py-2 text-right font-medium">{formatCurrency(processingFee)}</td>
+                        </tr>
+                      </>
+                    )}
                     <tr>
                       <td colSpan={3} className="px-4 py-3 text-right font-medium">Total</td>
-                      <td className="px-4 py-3 text-right font-bold text-lg">{formatCurrency(Number(invoice.totalAmount))}</td>
+                      <td className="px-4 py-3 text-right font-bold text-lg">{formatCurrency(totalWithFee)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -337,8 +352,11 @@ export default function InvoiceDetailPage() {
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">TOTAL AMOUNT</p>
                 <p className="text-2xl font-bold">
-                  {formatCurrency(Number(invoice.totalAmount))}
+                  {formatCurrency(totalWithFee)}
                 </p>
+                {invoice.coverFee && processingFee > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">Includes {formatCurrency(processingFee)} processing fee</p>
+                )}
               </div>
 
               {Number(invoice.paidAmount) > 0 && (
