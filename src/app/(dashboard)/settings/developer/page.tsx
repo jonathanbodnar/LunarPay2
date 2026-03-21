@@ -95,6 +95,7 @@ export default function DeveloperSettingsPage() {
     { method: 'PATCH', path: '/api/v1/subscriptions/:id', desc: 'Update a subscription', auth: 'secret' },
     { method: 'DELETE', path: '/api/v1/subscriptions/:id', desc: 'Cancel a subscription', auth: 'secret' },
     { method: 'POST', path: '/api/v1/intentions', desc: 'Create a payment intention (Elements)', auth: 'publishable' },
+    { method: 'GET',  path: '/api/onboarding/mpa-embed?token=:token', desc: 'Get Fortis MPA embed link for onboarding', auth: 'public' },
   ];
 
   const methodColor = (m: string) => {
@@ -251,6 +252,41 @@ curl https://app.lunarpay.com/api/v1/customers \\
         </CardContent>
       </Card>
 
+      {/* Onboarding Embed */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Onboarding Embed</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            The Fortis merchant application form can be served as a standalone page. This is required because the Fortis iframe only works when hosted on <code className="bg-muted px-1 rounded text-foreground">app.lunarpay.com</code>.
+          </p>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Standalone Page</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`https://app.lunarpay.com/onboarding/{org_token}`}
+            </pre>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">API Endpoint</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`GET https://app.lunarpay.com/api/onboarding/mpa-embed?token={org_token}
+
+# Returns:
+{
+  "status": "BANK_INFORMATION_SENT",
+  "mpaLink": "https://fortis.example.com/...",
+  "organizationName": "Acme Corp",
+  "organizationLogo": "..."
+}`}
+            </pre>
+          </div>
+          <p className="text-xs">
+            The <code className="bg-muted px-1 rounded text-foreground">org_token</code> is the organization's unique token. No authentication is required — the token itself acts as the identifier.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Endpoints Reference */}
       <Card>
         <CardHeader>
@@ -266,8 +302,8 @@ curl https://app.lunarpay.com/api/v1/customers \\
                 </span>
                 <code className="text-xs font-mono text-foreground flex-1">{ep.path}</code>
                 <span className="text-xs text-muted-foreground hidden sm:block flex-1">{ep.desc}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${ep.auth === 'secret' ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'}`}>
-                  {ep.auth === 'secret' ? 'lp_sk_' : 'lp_pk_'}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${ep.auth === 'secret' ? 'bg-orange-50 text-orange-600' : ep.auth === 'public' ? 'bg-green-50 text-green-600' : 'bg-purple-50 text-purple-600'}`}>
+                  {ep.auth === 'secret' ? 'lp_sk_' : ep.auth === 'public' ? 'public' : 'lp_pk_'}
                 </span>
               </div>
             ))}
