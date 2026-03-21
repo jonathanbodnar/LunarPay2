@@ -95,6 +95,7 @@ export default function DeveloperSettingsPage() {
     { method: 'PATCH', path: '/api/v1/subscriptions/:id', desc: 'Update a subscription', auth: 'secret' },
     { method: 'DELETE', path: '/api/v1/subscriptions/:id', desc: 'Cancel a subscription', auth: 'secret' },
     { method: 'POST', path: '/api/v1/intentions', desc: 'Create a payment intention (Elements)', auth: 'publishable' },
+    { method: 'GET',  path: '/api/v1/onboarding/status', desc: 'Get merchant onboarding status', auth: 'secret' },
     { method: 'GET',  path: '/api/onboarding/mpa-embed?token=:token', desc: 'Get Fortis MPA embed link for onboarding', auth: 'public' },
   ];
 
@@ -252,24 +253,49 @@ curl https://app.lunarpay.com/api/v1/customers \\
         </CardContent>
       </Card>
 
-      {/* Onboarding Embed */}
+      {/* Onboarding */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Onboarding Embed</CardTitle>
+          <CardTitle className="text-base">Onboarding</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            The Fortis merchant application form can be served as a standalone page. This is required because the Fortis iframe only works when hosted on <code className="bg-muted px-1 rounded text-foreground">app.lunarpay.com</code>.
-          </p>
+        <CardContent className="space-y-4 text-sm text-muted-foreground">
           <div>
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Standalone Page</label>
-            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Check Merchant Status</label>
+            <p className="text-xs mt-1 mb-2">Poll this endpoint to check if your merchant account is approved and ready to process payments.</p>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto">
+{`GET https://app.lunarpay.com/api/v1/onboarding/status
+Authorization: Bearer lp_sk_your_secret_key
+
+# Returns:
+{
+  "organizationId": 42,
+  "organizationName": "Acme Corp",
+  "status": "ACTIVE",
+  "isActive": true,
+  "stepCompleted": 2,
+  "mpaLink": "https://...",
+  "mpaEmbedUrl": "https://app.lunarpay.com/onboarding/abc123",
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-02T00:00:00.000Z"
+}`}
+            </pre>
+            <p className="text-xs mt-2">
+              Status values: <code className="bg-muted px-1 rounded text-foreground">PENDING</code> → <code className="bg-muted px-1 rounded text-foreground">BANK_INFORMATION_SENT</code> → <code className="bg-muted px-1 rounded text-foreground">ACTIVE</code>
+            </p>
+          </div>
+          <hr />
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">MPA Embed Page</label>
+            <p className="text-xs mt-1 mb-2">The Fortis application form must be served from <code className="bg-muted px-1 rounded text-foreground">app.lunarpay.com</code> (iframe domain restriction). Use the <code className="bg-muted px-1 rounded text-foreground">mpaEmbedUrl</code> from the status endpoint, or construct it directly:</p>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto">
 {`https://app.lunarpay.com/onboarding/{org_token}`}
             </pre>
           </div>
+          <hr />
           <div>
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">API Endpoint</label>
-            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">MPA Embed API (Public)</label>
+            <p className="text-xs mt-1 mb-2">No authentication required — the org token acts as the identifier.</p>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto">
 {`GET https://app.lunarpay.com/api/onboarding/mpa-embed?token={org_token}
 
 # Returns:
@@ -281,9 +307,6 @@ curl https://app.lunarpay.com/api/v1/customers \\
 }`}
             </pre>
           </div>
-          <p className="text-xs">
-            The <code className="bg-muted px-1 rounded text-foreground">org_token</code> is the organization's unique token. No authentication is required — the token itself acts as the identifier.
-          </p>
         </CardContent>
       </Card>
 

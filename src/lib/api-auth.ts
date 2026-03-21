@@ -27,12 +27,12 @@ function extractApiKey(request: NextRequest): string | null {
   return request.headers.get('x-api-key');
 }
 
-export async function requireSecretKey(request: NextRequest): Promise<ApiAuthResult> {
+export async function requireSecretKey(request: NextRequest, opts?: { requireActive?: boolean }): Promise<ApiAuthResult> {
   const key = extractApiKey(request);
   if (!key || !key.startsWith('lp_sk_')) {
     throw new ApiAuthError('Invalid or missing secret API key. Use your lp_sk_... key.', 401);
   }
-  return resolveKey(key, 'secret');
+  return resolveKey(key, 'secret', opts);
 }
 
 export async function requirePublishableKey(request: NextRequest): Promise<ApiAuthResult> {
@@ -43,7 +43,8 @@ export async function requirePublishableKey(request: NextRequest): Promise<ApiAu
   return resolveKey(key, 'publishable');
 }
 
-async function resolveKey(key: string, type: 'secret' | 'publishable'): Promise<ApiAuthResult> {
+async function resolveKey(key: string, type: 'secret' | 'publishable', opts?: { requireActive?: boolean }): Promise<ApiAuthResult> {
+  const requireActive = opts?.requireActive ?? true;
   // Use raw query because publishable_key/secret_key columns were added after Prisma client generation
   const col = type === 'secret' ? 'secret_key' : 'publishable_key';
   const userRows = await prisma.$queryRawUnsafe<{ id: number }[]>(
@@ -84,23 +85,26 @@ async function resolveKey(key: string, type: 'secret' | 'publishable'): Promise<
   }
 
   const fortis = org.fortisOnboarding;
-  if (!fortis || fortis.appStatus !== 'ACTIVE') {
-    throw new ApiAuthError(
-      'Your account is not yet approved for payment processing. Complete onboarding first.',
-      403
-    );
-  }
 
-  if (!fortis.authUserId || !fortis.authUserApiKey) {
-    throw new ApiAuthError('Payment processor credentials not configured.', 503);
+  if (requireActive) {
+    if (!fortis || fortis.appStatus !== 'ACTIVE') {
+      throw new ApiAuthError(
+        'Your account is not yet approved for payment processing. Complete onboarding first.',
+        403
+      );
+    }
+
+    if (!fortis.authUserId || !fortis.authUserApiKey) {
+      throw new ApiAuthError('Payment processor credentials not configured.', 503);
+    }
   }
 
   return {
     userId: user.id,
     organizationId: org.id,
-    fortisUserId: fortis.authUserId,
-    fortisApiKey: fortis.authUserApiKey,
-    fortisLocationId: fortis.locationId,
+    fortisUserId: fortis?.authUserId ?? '',
+    fortisApiKey: fortis?.authUserApiKey ?? '',
+    fortisLocationId: fortis?.locationId ?? null,
   };
 }
 
