@@ -123,7 +123,7 @@ export async function POST(
       dba_name: data.dbaName,
       legal_name: data.legalName,
       template_code: templateCode,
-      website: data.website,
+      website: data.website || '',
       fed_tax_id: data.fedTaxId || undefined,
       ownership_type: data.ownershipType || undefined,
       location: {
