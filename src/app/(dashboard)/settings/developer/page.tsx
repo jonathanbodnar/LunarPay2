@@ -94,6 +94,10 @@ export default function DeveloperSettingsPage() {
     { method: 'GET',  path: '/api/v1/subscriptions', desc: 'List subscriptions', auth: 'secret' },
     { method: 'PATCH', path: '/api/v1/subscriptions/:id', desc: 'Update a subscription', auth: 'secret' },
     { method: 'DELETE', path: '/api/v1/subscriptions/:id', desc: 'Cancel a subscription', auth: 'secret' },
+    { method: 'POST', path: '/api/v1/payment-schedules', desc: 'Create a payment schedule', auth: 'secret' },
+    { method: 'GET',  path: '/api/v1/payment-schedules', desc: 'List payment schedules', auth: 'secret' },
+    { method: 'GET',  path: '/api/v1/payment-schedules/:id', desc: 'Get schedule details', auth: 'secret' },
+    { method: 'DELETE', path: '/api/v1/payment-schedules/:id', desc: 'Cancel a payment schedule', auth: 'secret' },
     { method: 'POST', path: '/api/v1/intentions', desc: 'Create a payment intention (Elements)', auth: 'publishable' },
     { method: 'GET',  path: '/api/v1/onboarding/status', desc: 'Get merchant onboarding status', auth: 'secret' },
     { method: 'GET',  path: '/api/onboarding/mpa-embed?token=:token', desc: 'Get Fortis MPA embed link for onboarding', auth: 'public' },
@@ -250,6 +254,64 @@ curl https://app.lunarpay.com/api/v1/customers \\
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <p className="text-xs">Your account must have completed payment setup (Step 2) before API charges are enabled.</p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Payment Schedules */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Payment Schedules</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm text-muted-foreground">
+          <p>
+            Schedule multiple payments with specific amounts and dates for a customer. Each payment is automatically charged on its due date.
+          </p>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Create a Schedule</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`POST https://app.lunarpay.com/api/v1/payment-schedules
+Authorization: Bearer lp_sk_your_secret_key
+Content-Type: application/json
+
+{
+  "customerId": 42,
+  "paymentMethodId": 7,
+  "description": "3-part payment plan",
+  "payments": [
+    { "amount": 50000, "date": "2026-04-01" },
+    { "amount": 30000, "date": "2026-05-15" },
+    { "amount": 20000, "date": "2026-06-30" }
+  ]
+}`}
+            </pre>
+            <p className="text-xs mt-2">Amounts are in cents. Dates are <code className="bg-muted px-1 rounded text-foreground">YYYY-MM-DD</code>. Up to 100 payments per schedule.</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Response</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`{
+  "data": {
+    "id": 1,
+    "customerId": 42,
+    "paymentMethodId": 7,
+    "status": "active",
+    "totalAmount": 100000,
+    "paidAmount": 0,
+    "paymentsTotal": 3,
+    "paymentsCompleted": 0,
+    "payments": [
+      { "id": 1, "amount": 50000, "date": "2026-04-01", "status": "pending" },
+      { "id": 2, "amount": 30000, "date": "2026-05-15", "status": "pending" },
+      { "id": 3, "amount": 20000, "date": "2026-06-30", "status": "pending" }
+    ]
+  }
+}`}
+            </pre>
+          </div>
+          <p className="text-xs">
+            Schedule statuses: <code className="bg-muted px-1 rounded text-foreground">active</code> → <code className="bg-muted px-1 rounded text-foreground">completed</code> | <code className="bg-muted px-1 rounded text-foreground">cancelled</code>.
+            Payment statuses: <code className="bg-muted px-1 rounded text-foreground">pending</code> → <code className="bg-muted px-1 rounded text-foreground">paid</code> | <code className="bg-muted px-1 rounded text-foreground">failed</code> | <code className="bg-muted px-1 rounded text-foreground">cancelled</code>.
+          </p>
         </CardContent>
       </Card>
 

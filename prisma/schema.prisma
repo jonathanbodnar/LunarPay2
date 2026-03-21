@@ -127,6 +127,7 @@ model Organization {
   transactions          Transaction[]
   fortisOnboarding      FortisOnboarding?
   tickets               Ticket[]
+  paymentSchedules      PaymentSchedule[]
   
   @@map("church_detail")
 }
@@ -274,6 +275,7 @@ model Donor {
   subscriptions         Subscription[]
   invoices              Invoice[]
   customerSessions      CustomerSession[]
+  paymentSchedules      PaymentSchedule[]
   
   @@map("account_donor")
 }
@@ -300,6 +302,7 @@ model Source {
   updatedAt             DateTime  @updatedAt @map("updated_at")
   
   donor                 Donor     @relation(fields: [donorId], references: [id])
+  paymentSchedules      PaymentSchedule[]
   
   @@map("epicpay_customer_sources")
 }
@@ -376,6 +379,7 @@ model Transaction {
   invoice               Invoice?     @relation(fields: [invoiceId], references: [id])
   organization          Organization @relation(fields: [organizationId], references: [id])
   transactionFunds      TransactionFund[]
+  scheduledPayments     ScheduledPayment[]
   
   @@map("epicpay_customer_transactions")
 }
@@ -955,6 +959,57 @@ model Lead {
   @@index([utmSource])
   @@index([utmCampaign])
   @@map("leads")
+}
+
+// ============================================
+// PAYMENT SCHEDULES
+// ============================================
+
+model PaymentSchedule {
+  id                  Int       @id @default(autoincrement())
+  organizationId      Int       @map("organization_id")
+  customerId          Int       @map("customer_id")
+  sourceId            Int       @map("source_id")
+  description         String?   @db.VarChar(255)
+  status              String    @default("active") @db.VarChar(20) // active, completed, cancelled
+  totalAmount         Decimal   @default(0) @map("total_amount") @db.Decimal(10, 2)
+  paidAmount          Decimal   @default(0) @map("paid_amount") @db.Decimal(10, 2)
+  paymentsTotal       Int       @default(0) @map("payments_total")
+  paymentsCompleted   Int       @default(0) @map("payments_completed")
+  paymentsFailed      Int       @default(0) @map("payments_failed")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  organization        Organization       @relation(fields: [organizationId], references: [id])
+  customer            Donor              @relation(fields: [customerId], references: [id])
+  source              Source             @relation(fields: [sourceId], references: [id])
+  payments            ScheduledPayment[]
+
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([status])
+  @@map("payment_schedules")
+}
+
+model ScheduledPayment {
+  id                  Int       @id @default(autoincrement())
+  scheduleId          Int       @map("schedule_id")
+  amount              Decimal   @db.Decimal(10, 2)
+  dueDate             DateTime  @map("due_date") @db.Date
+  status              String    @default("pending") @db.VarChar(20) // pending, paid, failed, cancelled
+  transactionId       BigInt?   @map("transaction_id")
+  fortisTransactionId String?   @map("fortis_transaction_id") @db.VarChar(255)
+  errorMessage        String?   @map("error_message") @db.Text
+  processedAt         DateTime? @map("processed_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  schedule            PaymentSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  transaction         Transaction?    @relation(fields: [transactionId], references: [id])
+
+  @@index([scheduleId])
+  @@index([dueDate, status])
+  @@map("scheduled_payments")
 }
 
 // ============================================
