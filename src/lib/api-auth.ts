@@ -108,6 +108,31 @@ async function resolveKey(key: string, type: 'secret' | 'publishable', opts?: { 
   };
 }
 
+export interface AgencyAuthResult {
+  agencyId: number;
+  agencyName: string;
+}
+
+export async function requireAgencyKey(request: NextRequest): Promise<AgencyAuthResult> {
+  const key = extractApiKey(request);
+  if (!key || !key.startsWith('lp_agency_')) {
+    throw new ApiAuthError('Invalid or missing agency API key. Use your lp_agency_... key.', 401);
+  }
+
+  const agency = await prisma.agency.findFirst({
+    where: { apiKey: key, isActive: true },
+  });
+
+  if (!agency) {
+    throw new ApiAuthError('Agency API key not found or inactive.', 401);
+  }
+
+  return {
+    agencyId: agency.id,
+    agencyName: agency.name,
+  };
+}
+
 export class ApiAuthError extends Error {
   constructor(
     public override message: string,
@@ -119,7 +144,7 @@ export class ApiAuthError extends Error {
 }
 
 /** Generate a random API key with a given prefix */
-export function generateApiKey(prefix: 'lp_sk_' | 'lp_pk_'): string {
+export function generateApiKey(prefix: 'lp_sk_' | 'lp_pk_' | 'lp_agency_'): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let result = prefix;
   for (let i = 0; i < 48; i++) {

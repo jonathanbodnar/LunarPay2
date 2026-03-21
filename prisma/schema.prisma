@@ -11,6 +11,26 @@ datasource db {
 }
 
 // ============================================
+// AGENCIES (Partner/Reseller accounts)
+// ============================================
+
+model Agency {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(255)
+  email       String    @db.VarChar(254)
+  apiKey      String    @unique @map("api_key") @db.VarChar(255)
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  merchants   User[]
+
+  @@index([apiKey])
+  @@index([isActive])
+  @@map("agencies")
+}
+
+// ============================================
 // USERS & AUTHENTICATION
 // ============================================
 
@@ -37,6 +57,9 @@ model User {
   parentId              Int?      @map("parent_id") // For team hierarchy
   permissions           String?   @db.Text // JSON array of permissions
   
+  // Agency linkage
+  agencyId              Int?      @map("agency_id")
+  
   // Password Reset
   resetToken            String?   @map("reset_token") @db.VarChar(255)
   resetTokenExpiry      DateTime? @map("reset_token_expiry")
@@ -49,6 +72,7 @@ model User {
   slackChannel          String?   @map("slack_channel")
   stateSlack            String?   @map("state_slack") @db.VarChar(50)
   
+  agency                Agency?   @relation(fields: [agencyId], references: [id])
   organizations         Organization[]
   tickets               Ticket[]
   ticketMessages        TicketMessage[]

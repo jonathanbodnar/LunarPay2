@@ -101,6 +101,10 @@ export default function DeveloperSettingsPage() {
     { method: 'POST', path: '/api/v1/intentions', desc: 'Create a payment intention (Elements)', auth: 'publishable' },
     { method: 'GET',  path: '/api/v1/onboarding/status', desc: 'Get merchant onboarding status', auth: 'secret' },
     { method: 'GET',  path: '/api/onboarding/mpa-embed?token=:token', desc: 'Get Fortis MPA embed link for onboarding', auth: 'public' },
+    { method: 'POST', path: '/api/v1/agency/merchants', desc: 'Register a new merchant', auth: 'agency' },
+    { method: 'GET',  path: '/api/v1/agency/merchants', desc: 'List agency merchants', auth: 'agency' },
+    { method: 'GET',  path: '/api/v1/agency/merchants/:id', desc: 'Get merchant details + keys', auth: 'agency' },
+    { method: 'POST', path: '/api/v1/agency/merchants/:id/onboard', desc: 'Submit merchant onboarding to Fortis', auth: 'agency' },
   ];
 
   const methodColor = (m: string) => {
@@ -315,6 +319,66 @@ Content-Type: application/json
         </CardContent>
       </Card>
 
+      {/* Agency API */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Agency API</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm text-muted-foreground">
+          <p>
+            Agency keys (<code className="bg-muted px-1 rounded text-foreground">lp_agency_...</code>) let you register and onboard merchants programmatically.
+            Each merchant gets their own <code className="bg-muted px-1 rounded text-foreground">lp_sk_</code> / <code className="bg-muted px-1 rounded text-foreground">lp_pk_</code> keys for payment processing.
+          </p>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">1. Register a Merchant</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`POST /api/v1/agency/merchants
+Authorization: Bearer lp_agency_your_key
+{
+  "email": "venue@example.com",
+  "password": "securepass123",
+  "firstName": "John",
+  "lastName": "Doe",
+  "phone": "555-0100",
+  "businessName": "Doe Wedding Venue"
+}`}
+            </pre>
+            <p className="text-xs mt-1">Returns <code className="bg-muted px-1 rounded text-foreground">merchantId</code>, <code className="bg-muted px-1 rounded text-foreground">publishableKey</code>, <code className="bg-muted px-1 rounded text-foreground">secretKey</code>, and <code className="bg-muted px-1 rounded text-foreground">orgToken</code>.</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">2. Submit Onboarding to Fortis</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`POST /api/v1/agency/merchants/:id/onboard
+Authorization: Bearer lp_agency_your_key
+{
+  "firstName": "John", "lastName": "Doe",
+  "phone": "555-0100", "email": "venue@example.com",
+  "dbaName": "Doe Wedding Venue",
+  "legalName": "Doe Venues LLC",
+  "addressLine1": "123 Main St",
+  "city": "Austin", "state": "TX", "postalCode": "78701",
+  "routingNumber": "021000021",
+  "accountNumber": "123456789",
+  "accountHolderName": "John Doe"
+}`}
+            </pre>
+            <p className="text-xs mt-1">Returns the <code className="bg-muted px-1 rounded text-foreground">mpaEmbedUrl</code> — redirect the merchant there to complete the Fortis MPA form.</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">3. Check Status / Get Keys</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`GET /api/v1/agency/merchants/:id
+Authorization: Bearer lp_agency_your_key
+
+# Returns merchant details, API keys, and onboarding status`}
+            </pre>
+          </div>
+          <p className="text-xs">
+            Flow: Register → Onboard → Merchant completes MPA → Fortis approves (24-48h) → <code className="bg-muted px-1 rounded text-foreground">isActive: true</code> → Merchant can process payments with their own keys.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Onboarding */}
       <Card>
         <CardHeader>
@@ -387,8 +451,8 @@ Authorization: Bearer lp_sk_your_secret_key
                 </span>
                 <code className="text-xs font-mono text-foreground flex-1">{ep.path}</code>
                 <span className="text-xs text-muted-foreground hidden sm:block flex-1">{ep.desc}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${ep.auth === 'secret' ? 'bg-orange-50 text-orange-600' : ep.auth === 'public' ? 'bg-green-50 text-green-600' : 'bg-purple-50 text-purple-600'}`}>
-                  {ep.auth === 'secret' ? 'lp_sk_' : ep.auth === 'public' ? 'public' : 'lp_pk_'}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${ep.auth === 'secret' ? 'bg-orange-50 text-orange-600' : ep.auth === 'agency' ? 'bg-cyan-50 text-cyan-600' : ep.auth === 'public' ? 'bg-green-50 text-green-600' : 'bg-purple-50 text-purple-600'}`}>
+                  {ep.auth === 'secret' ? 'lp_sk_' : ep.auth === 'agency' ? 'lp_agency_' : ep.auth === 'public' ? 'public' : 'lp_pk_'}
                 </span>
               </div>
             ))}
