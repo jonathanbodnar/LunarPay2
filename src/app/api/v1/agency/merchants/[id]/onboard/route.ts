@@ -125,7 +125,7 @@ export async function POST(
       template_code: templateCode,
       website: data.website || '',
       fed_tax_id: data.fedTaxId || undefined,
-      ownership_type: data.ownershipType || undefined,
+      ownership_type: (data.ownershipType as 'llc' | 'llp' | 'corporation' | 'sole_proprietorship' | 'partnership' | 'non_profit') || undefined,
       location: {
         address_line_1: data.addressLine1,
         address_line_2: data.addressLine2 || undefined,

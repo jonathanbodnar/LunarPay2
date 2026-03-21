@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const secretKey = generateApiKey('lp_sk_');
     const orgToken = generateRandomToken(32);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const user = await tx.user.create({
         data: {
           email,
@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
       prisma.user.count({ where }),
     ]);
 
-    const data = users.map(u => {
+    const data = users.map((u: any) => {
       const org = u.organizations[0];
       return {
         merchantId: u.id,
