@@ -105,6 +105,9 @@ export default function DeveloperSettingsPage() {
     { method: 'GET',  path: '/api/v1/agency/merchants', desc: 'List agency merchants', auth: 'agency' },
     { method: 'GET',  path: '/api/v1/agency/merchants/:id', desc: 'Get merchant details + keys', auth: 'agency' },
     { method: 'POST', path: '/api/v1/agency/merchants/:id/onboard', desc: 'Submit merchant onboarding to Fortis', auth: 'agency' },
+    { method: 'GET',  path: '/api/v1/agency/webhook', desc: 'Get current webhook configuration', auth: 'agency' },
+    { method: 'PUT',  path: '/api/v1/agency/webhook', desc: 'Set or update webhook URL', auth: 'agency' },
+    { method: 'DELETE', path: '/api/v1/agency/webhook', desc: 'Remove webhook', auth: 'agency' },
   ];
 
   const methodColor = (m: string) => {
@@ -373,8 +376,66 @@ Authorization: Bearer lp_agency_your_key
 # Returns merchant details, API keys, and onboarding status`}
             </pre>
           </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">4. Configure Webhooks</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`PUT /api/v1/agency/webhook
+Authorization: Bearer lp_agency_your_key
+{
+  "webhookUrl": "https://storypay.io/webhooks/lunarpay"
+}
+
+# Response — save the secret for signature verification:
+{
+  "data": {
+    "webhookUrl": "https://storypay.io/webhooks/lunarpay",
+    "webhookSecret": "whsec_abc123..."
+  }
+}`}
+            </pre>
+            <p className="text-xs mt-1">When a merchant is approved or denied by Fortis, LunarPay will <code className="bg-muted px-1 rounded text-foreground">POST</code> to your webhook URL.</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Webhook Payload</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`{
+  "event": "merchant.approved",  // or "merchant.denied"
+  "merchant": {
+    "id": 123,
+    "email": "venue@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "businessName": "Doe Wedding Venue",
+    "organizationId": 42
+  },
+  "onboarding": {
+    "status": "ACTIVE",
+    "previousStatus": "BANK_INFORMATION_SENT"
+  },
+  "keys": {                       // only on merchant.approved
+    "publishableKey": "lp_pk_...",
+    "secretKey": "lp_sk_..."
+  },
+  "timestamp": "2026-03-21T20:00:00.000Z"
+}`}
+            </pre>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Verifying Signatures</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`// Header: X-LunarPay-Signature
+const crypto = require('crypto');
+const expected = crypto
+  .createHmac('sha256', webhookSecret)
+  .update(rawBody)
+  .digest('hex');
+if (expected !== req.headers['x-lunarpay-signature']) {
+  return res.status(401).send('Invalid signature');
+}`}
+            </pre>
+          </div>
           <p className="text-xs">
-            Flow: Register → Onboard → Merchant completes MPA → Fortis approves (24-48h) → <code className="bg-muted px-1 rounded text-foreground">isActive: true</code> → Merchant can process payments with their own keys.
+            Flow: Register → Onboard → Merchant completes MPA → Fortis approves (24-48h) → <strong>Webhook fires</strong> → <code className="bg-muted px-1 rounded text-foreground">isActive: true</code> → Merchant can process payments with their own keys.
           </p>
         </CardContent>
       </Card>

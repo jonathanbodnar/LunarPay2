@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { FortisWebhookPayload } from '@/types/fortis';
 import { logWebhookReceived, logPaymentStatusUpdated } from '@/lib/payment-logger';
+import { notifyAgencyOfStatusChange } from '@/lib/agency-webhook';
 import crypto from 'crypto';
 
 // Webhook signature secret (should be configured in Fortis dashboard)
@@ -196,13 +197,17 @@ async function handleMerchantOnboardingWebhook(body: FortisWebhookPayload) {
       },
     });
 
-    // Log if location_id was not found (will need manual resolution)
     if (!locationId) {
       console.warn('[Fortis Webhook] WARNING: location_id not found in webhook for org:', organizationId);
     }
 
-    // TODO: Send email notification to merchant
-    // "Your account is ready for receiving payments!"
+    const previousStatus = organization.fortisOnboarding.appStatus;
+    notifyAgencyOfStatusChange(
+      organization.userId,
+      organizationId,
+      'ACTIVE',
+      previousStatus
+    ).catch(() => {});
 
     return NextResponse.json({
       status: true,

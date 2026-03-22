@@ -3,6 +3,7 @@ import { verifyToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { FortisClient } from '@/lib/fortis/client';
+import { notifyAgencyOfStatusChange } from '@/lib/agency-webhook';
 
 /**
  * Check Fortis application status
@@ -115,6 +116,14 @@ export async function GET(request: Request) {
         },
       });
 
+      const previousStatus = organization.fortisOnboarding.appStatus;
+      notifyAgencyOfStatusChange(
+        organization.userId,
+        parseInt(organizationId),
+        'ACTIVE',
+        previousStatus
+      ).catch(() => {});
+
       return NextResponse.json({
         status: true,
         appStatus: 'ACTIVE',
@@ -177,6 +186,14 @@ export async function GET(request: Request) {
               updatedAt: new Date(),
             },
           });
+
+          const prevStatus = organization.fortisOnboarding.appStatus;
+          notifyAgencyOfStatusChange(
+            organization.userId,
+            parseInt(organizationId),
+            'ACTIVE',
+            prevStatus
+          ).catch(() => {});
 
           return NextResponse.json({
             status: true,

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { FortisWebhookPayload } from '@/types/fortis';
 import { logWebhookReceived, logPaymentStatusUpdated } from '@/lib/payment-logger';
+import { notifyAgencyOfStatusChange } from '@/lib/agency-webhook';
 
 /**
  * Fortis Webhook Handler - Legacy URL
@@ -159,12 +160,19 @@ async function handleMerchantOnboardingWebhook(body: FortisWebhookPayload) {
       },
     });
 
-    // Log if location_id was not found
     if (!locationId) {
       console.warn('[Fortis Webhook] WARNING: location_id not found in webhook for org:', organizationId);
     }
 
     console.log('[Fortis Webhook] Successfully updated org', organizationId, 'to ACTIVE status');
+
+    const previousStatus = organization.fortisOnboarding.appStatus;
+    notifyAgencyOfStatusChange(
+      organization.userId,
+      organizationId,
+      'ACTIVE',
+      previousStatus
+    ).catch(() => {});
 
     return NextResponse.json({
       status: true,
