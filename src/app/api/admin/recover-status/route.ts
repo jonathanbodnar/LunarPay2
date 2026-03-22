@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const authorized =
     (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
     (cronAdminKey && adminKey === cronAdminKey) ||
-    oneTimeToken === 'recover_9f3k2x7m_20260322';
+    false; // one-time token removed
 
   if (!authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

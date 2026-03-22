@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
-import { FortisClient } from '@/lib/fortis/client';
+import { createFortisClient } from '@/lib/fortis/client';
 import { notifyAgencyOfStatusChange } from '@/lib/agency-webhook';
 
 /**
@@ -69,13 +69,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // Initialize Fortis client
-    const fortisClient = new FortisClient({
-      developerId: process.env.FORTIS_DEVELOPER_ID || '',
-      userId: process.env.FORTIS_USER_ID || '',
-      userApiKey: process.env.FORTIS_USER_API_KEY || '',
-      environment: (process.env.FORTIS_ENVIRONMENT as 'sandbox' | 'production') || 'sandbox',
-    });
+    const fortisClient = createFortisClient();
 
     // Check status from Fortis
     const result = await fortisClient.getOnboardingStatus(organizationId);
