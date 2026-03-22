@@ -11,8 +11,15 @@ import { notifyAgencyOfStatusChange } from '@/lib/agency-webhook';
 export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
+  const { searchParams } = new URL(request.url);
+  const adminKey = searchParams.get('admin_key');
+  const cronAdminKey = process.env.CRON_ADMIN_KEY;
 
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  const authorized =
+    (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
+    (cronAdminKey && adminKey === cronAdminKey);
+
+  if (!authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
