@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createFortisClient } from '@/lib/fortis/client';
+import { FortisClient, createFortisClient } from '@/lib/fortis/client';
 import { notifyAgencyOfStatusChange } from '@/lib/agency-webhook';
 
 /**
@@ -46,14 +46,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Already ACTIVE', status: org.fortisOnboarding.appStatus });
     }
 
-    const fortisClient = createFortisClient();
-    const result = await fortisClient.getOnboardingStatus(organizationId.toString());
+    // Try both client construction methods to handle different env var naming
+    let result: any = null;
+    let clientUsed = '';
 
-    if (!result.status || !result.data) {
+    // Method 1: Same as check-status endpoint (generic env vars)
+    try {
+      const client1 = new FortisClient({
+        developerId: process.env.FORTIS_DEVELOPER_ID || '',
+        userId: process.env.FORTIS_USER_ID || '',
+        userApiKey: process.env.FORTIS_USER_API_KEY || '',
+        environment: (process.env.FORTIS_ENVIRONMENT as 'sandbox' | 'production') || 'sandbox',
+      });
+      result = await client1.getOnboardingStatus(organizationId.toString());
+      clientUsed = 'generic';
+    } catch {}
+
+    // Method 2: Factory function (suffixed env vars)
+    if (!result?.status) {
+      try {
+        const client2 = createFortisClient();
+        result = await client2.getOnboardingStatus(organizationId.toString());
+        clientUsed = 'factory';
+      } catch {}
+    }
+
+    if (!result?.status || !result?.data) {
       return NextResponse.json({
         message: 'Fortis returned no data',
         fortisResult: result,
         currentStatus: org.fortisOnboarding.appStatus,
+        clientUsed,
+        envDebug: {
+          hasFortisDevId: !!process.env.FORTIS_DEVELOPER_ID,
+          hasFortisUserId: !!process.env.FORTIS_USER_ID,
+          hasFortisUserApiKey: !!process.env.FORTIS_USER_API_KEY,
+          hasFortisEnv: process.env.FORTIS_ENVIRONMENT || 'not set',
+          hasFortisDevIdProd: !!process.env.FORTIS_DEVELOPER_ID_PRODUCTION,
+          hasFortisDevIdSandbox: !!process.env.FORTIS_DEVELOPER_ID_SANDBOX,
+          hasLowerDevId: !!process.env.fortis_developer_id_production,
+          hasLowerUserId: !!process.env.fortis_onboarding_user_id_production,
+          fortisEnvLower: process.env.fortis_environment || 'not set',
+        },
       });
     }
 
