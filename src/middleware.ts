@@ -17,7 +17,7 @@ const APP_DOMAINS = [
 ];
 
 // Routes that don't require authentication
-const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal', '/invite', '/privacy', '/terms', '/fortiswebhooks', '/admin/login', '/restricted', '/developers'];
+const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/invoice', '/payment-link', '/portal', '/invite', '/privacy', '/terms', '/fortiswebhooks', '/admin/login', '/restricted', '/developers', '/pay'];
 
 // Routes that are public APIs (invoices, payment links by hash)
 const publicApiRoutes = [
@@ -70,6 +70,7 @@ const publicApiRoutes = [
   '/api/webhooks', // External webhooks (SendGrid Inbound Parse, etc.)
   '/api/v1', // Public merchant API (uses API key auth, not session cookies)
   '/api/onboarding/mpa-embed', // Public MPA embed endpoint (uses org token, not session)
+  '/api/checkout', // Checkout session internal API (secured by session token)
   '/api/admin', // All admin APIs use admin cookie (requireAdmin); middleware must not require merchant token
 ];
 

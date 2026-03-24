@@ -98,6 +98,9 @@ export default function DeveloperSettingsPage() {
     { method: 'GET',  path: '/api/v1/payment-schedules', desc: 'List payment schedules', auth: 'secret' },
     { method: 'GET',  path: '/api/v1/payment-schedules/:id', desc: 'Get schedule details', auth: 'secret' },
     { method: 'DELETE', path: '/api/v1/payment-schedules/:id', desc: 'Cancel a payment schedule', auth: 'secret' },
+    { method: 'POST', path: '/api/v1/checkout/sessions', desc: 'Create hosted checkout session', auth: 'secret' },
+    { method: 'GET',  path: '/api/v1/checkout/sessions', desc: 'List checkout sessions', auth: 'secret' },
+    { method: 'GET',  path: '/api/v1/checkout/sessions/:id', desc: 'Get checkout session status', auth: 'secret' },
     { method: 'POST', path: '/api/v1/intentions', desc: 'Create a payment intention (Elements)', auth: 'publishable' },
     { method: 'GET',  path: '/api/v1/onboarding/status', desc: 'Get merchant onboarding status', auth: 'secret' },
     { method: 'GET',  path: '/api/onboarding/mpa-embed?token=:token', desc: 'Get Fortis MPA embed link for onboarding', auth: 'public' },
@@ -260,6 +263,78 @@ curl https://app.lunarpay.com/api/v1/customers \\
           <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-100 rounded text-blue-800">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <p className="text-xs">Your account must have completed payment setup (Step 2) before API charges are enabled.</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Hosted Checkout Sessions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Hosted Checkout</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm text-muted-foreground">
+          <p>
+            Create a hosted payment page on <code className="bg-muted px-1 rounded">app.lunarpay.com</code> without embedding any payment form on your site.
+            No domain whitelisting needed — Fortis runs entirely on the LunarPay domain.
+          </p>
+          <p>
+            <strong className="text-foreground">Flow:</strong> Create a session → redirect customer to the returned URL → customer pays → gets redirected back to your <code className="bg-muted px-1 rounded">success_url</code> → poll session status.
+          </p>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">1. Create Checkout Session</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`POST /api/v1/checkout/sessions
+Authorization: Bearer lp_sk_your_secret_key
+Content-Type: application/json
+
+{
+  "amount": 49.99,
+  "description": "Wedding Venue Deposit",
+  "customer_email": "bride@example.com",
+  "customer_name": "Jane Smith",
+  "success_url": "https://yourdomain.com/payment/success",
+  "cancel_url": "https://yourdomain.com/payment/cancel",
+  "metadata": { "proposal_id": "abc123" },
+  "expires_in": 3600
+}`}
+            </pre>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Response</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`{
+  "id": 1,
+  "token": "cs_abc...",
+  "url": "https://app.lunarpay.com/pay/cs_abc...",
+  "status": "open",
+  "amount": 49.99,
+  "expires_at": "2026-03-16T19:00:00Z"
+}`}
+            </pre>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">2. Redirect Customer</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`// Redirect, popup, or iframe:
+window.location.href = session.url;
+
+// Or open as popup:
+window.open(session.url, '_blank', 'width=500,height=700');`}
+            </pre>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">3. Check Status</label>
+            <pre className="bg-muted rounded p-3 text-xs font-mono overflow-x-auto mt-1">
+{`GET /api/v1/checkout/sessions/:id
+Authorization: Bearer lp_sk_your_secret_key
+
+// Response includes: status (open/completed/expired),
+// transaction_id, fortis_transaction_id, paid_at`}
+            </pre>
+          </div>
+          <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-100 rounded text-blue-800">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            <p className="text-xs">After payment, the customer is redirected to your <code className="bg-muted px-1 rounded">success_url</code> with <code className="bg-muted px-1 rounded">?session_id=ID</code> appended. Always verify the session status server-side before fulfilling orders.</p>
           </div>
         </CardContent>
       </Card>
