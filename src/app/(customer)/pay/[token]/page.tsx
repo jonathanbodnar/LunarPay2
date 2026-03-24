@@ -79,6 +79,7 @@ export default function HostedCheckoutPage() {
           amount,
           action: 'sale',
           type: 'checkout',
+          hasRecurring: true, // Always use ticket intention to save card for installments
         }),
       });
 
@@ -192,10 +193,38 @@ export default function HostedCheckoutPage() {
     setPaymentError('');
 
     try {
+      // Extract ticket_id from Fortis ticket response
+      const ticketId =
+        fortisResponse?.data?.id ||
+        fortisResponse?.ticket?.id ||
+        fortisResponse?.ticket_id ||
+        fortisResponse?.ticketId ||
+        fortisResponse?.data?.ticket?.id ||
+        fortisResponse?.data?.ticket_id ||
+        fortisResponse?.id;
+
+      if (!ticketId) {
+        console.error('[Checkout] Could not extract ticket_id from response:', fortisResponse);
+        setPaymentError('Card tokenization failed. Please try again.');
+        setProcessing(false);
+        return;
+      }
+
+      // Process the ticket sale (charges the card and saves the token)
+      const amountInCents = Math.round((session?.amount || 0) * 100);
+
+      const nameParts = (session?.customer_name || '').split(' ');
       const res = await fetch('/api/checkout/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, fortisResponse }),
+        body: JSON.stringify({
+          token,
+          ticketId,
+          amount: amountInCents,
+          customerEmail: session?.customer_email,
+          customerFirstName: nameParts[0] || '',
+          customerLastName: nameParts.slice(1).join(' ') || '',
+        }),
       });
 
       const data = await res.json();

@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createFortisClient } from '@/lib/fortis/client';
 import { calculatePlatformFee } from '@/lib/utils';
 import { logPaymentEvent } from '@/lib/payment-logger';
 
@@ -89,10 +90,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { token, fortisResponse } = body;
+    const { token, ticketId, amount, customerEmail, customerFirstName, customerLastName } = body;
 
     if (!token || !token.startsWith('cs_')) {
       return NextResponse.json({ error: 'Invalid session token' }, { status: 400 });
+    }
+
+    if (!ticketId) {
+      return NextResponse.json({ error: 'Ticket ID is required' }, { status: 400 });
     }
 
     const sessions = await prisma.$queryRawUnsafe<any[]>(
@@ -119,70 +124,108 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session has expired' }, { status: 410 });
     }
 
-    if (!fortisResponse) {
-      return NextResponse.json({ error: 'Payment response data required' }, { status: 400 });
+    const organizationId = session.organization_id;
+
+    // Get merchant Fortis credentials
+    const organization = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: {
+        id: true,
+        userId: true,
+        name: true,
+        email: true,
+        fortisOnboarding: {
+          select: {
+            authUserId: true,
+            authUserApiKey: true,
+            locationId: true,
+          },
+        },
+      },
+    });
+
+    if (!organization?.fortisOnboarding?.authUserId || !organization?.fortisOnboarding?.authUserApiKey) {
+      return NextResponse.json({ error: 'Merchant payment credentials not configured' }, { status: 400 });
     }
 
-    const txData = fortisResponse.transaction || fortisResponse.data || fortisResponse;
-    const fortisTransactionId = txData.id || txData.transaction_id || fortisResponse.id;
-    const transaction_amount = txData.transaction_amount || txData.transactionAmount || txData.amount || 0;
-    const status_code = txData.status_code || txData.statusCode || txData.status_id;
-    const reason_code_id = txData.reason_code_id || txData.reasonCodeId || txData.reason_code;
-    const account_holder_name = txData.account_holder_name || txData.accountHolderName || session.customer_name || '';
-    const last_four = txData.last_four || txData.lastFour || txData.last4 || '';
-    const account_type = txData.account_type || txData.accountType || '';
-    const payment_method = txData.payment_method || txData.paymentMethod || 'cc';
-    const token_id = txData.token_id || txData.tokenId || txData.account_vault_id || null;
-    const exp_date = txData.exp_date || txData.expDate || '';
+    const fortisEnv = process.env.fortis_environment || 'dev';
+    const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
+    const fortisClient = createFortisClient(
+      env as 'sandbox' | 'production',
+      organization.fortisOnboarding.authUserId,
+      organization.fortisOnboarding.authUserApiKey
+    );
 
-    const statusCodeNum = typeof status_code === 'string' ? parseInt(status_code, 10) : status_code;
-    const reasonCodeNum = typeof reason_code_id === 'string' ? parseInt(reason_code_id, 10) : reason_code_id;
+    // Charge the card via ticket sale with save_account to get token_id
+    const amountInCents = amount || Math.round(Number(session.amount) * 100);
+    const result = await fortisClient.processTicketSale({
+      ticket_id: ticketId,
+      transaction_amount: amountInCents,
+      save_account: true,
+      location_id: organization.fortisOnboarding.locationId || undefined,
+      transaction_c1: `LP-checkout-${session.id}`,
+    });
 
-    const isCCApproved = statusCodeNum === 101 && reasonCodeNum === 1000;
-    const isACHPending = (statusCodeNum === 131 || statusCodeNum === 132) && reasonCodeNum === 1000;
-    const isGenericSuccess = (reasonCodeNum === 1000) || (txData.status === 'approved' || txData.status === 'success');
+    console.log('[Checkout] Fortis ticket result:', {
+      status: result.status,
+      tokenId: result.tokenId,
+      transactionId: result.transaction?.id,
+      message: result.message,
+    });
 
-    if (!isCCApproved && !isACHPending && !isGenericSuccess) {
+    if (!result.status) {
       await logPaymentEvent({
         eventType: 'payment.failed',
-        organizationId: session.organization_id,
-        fortisTransactionId,
-        metadata: { type: 'checkout_session', referenceId: session.id, statusCode: status_code, reasonCode: reason_code_id },
+        organizationId,
+        metadata: { type: 'checkout_session', referenceId: session.id, ticketId, error: result.message },
       });
-
       return NextResponse.json({
         success: false,
-        error: 'Payment was declined',
-        reasonCode: reason_code_id,
+        error: result.message || 'Payment was declined',
+        reasonCode: result.reasonCode,
       });
     }
 
-    const amountInDollars = transaction_amount / 100;
+    const txData = result.transaction || {};
+    const tokenId = result.tokenId;
+    const fortisTransactionId = txData.id;
+    const last_four = txData.last_four || txData.last4 || '';
+    const account_holder_name = txData.account_holder_name || session.customer_name || '';
+    const account_type = txData.account_type || '';
+    const payment_method = txData.payment_method || 'cc';
+    const exp_date = txData.exp_date || '';
+
+    const amountInDollars = amountInCents / 100;
     const fee = calculatePlatformFee(amountInDollars);
     const netAmount = amountInDollars - fee;
 
-    const organizationId = session.organization_id;
+    const cEmail = customerEmail || session.customer_email;
+    const cFirstName = customerFirstName || (session.customer_name || '').split(' ')[0] || '';
+    const cLastName = customerLastName || (session.customer_name || '').split(' ').slice(1).join(' ') || '';
 
     // Find or create donor
     let donorId = session.customer_id;
-    if (!donorId && session.customer_email) {
+    if (!donorId && cEmail) {
       const existingDonor = await prisma.donor.findFirst({
-        where: { email: { equals: session.customer_email, mode: 'insensitive' }, organizationId },
+        where: { email: { equals: cEmail, mode: 'insensitive' }, organizationId },
       });
-      if (existingDonor) {
-        donorId = existingDonor.id;
-      }
+      if (existingDonor) donorId = existingDonor.id;
     }
-
-    if (!donorId && (session.customer_email || session.customer_name || account_holder_name)) {
-      const nameParts = (session.customer_name || account_holder_name || 'Guest').split(' ');
+    if (!donorId && tokenId) {
+      const existingSource = await prisma.source.findFirst({
+        where: { fortisWalletId: tokenId, organizationId },
+        include: { donor: true },
+      });
+      if (existingSource?.donor) donorId = existingSource.donor.id;
+    }
+    if (!donorId && (cEmail || cFirstName || account_holder_name)) {
       const donor = await prisma.donor.create({
         data: {
           userId: session.user_id,
           organizationId,
-          firstName: nameParts[0] || 'Guest',
-          lastName: nameParts.slice(1).join(' ') || '',
-          email: session.customer_email || null,
+          firstName: cFirstName || account_holder_name?.split(' ')[0] || 'Guest',
+          lastName: cLastName || account_holder_name?.split(' ').slice(1).join(' ') || '',
+          email: cEmail || null,
           amountAcum: 0,
           feeAcum: 0,
           netAcum: 0,
@@ -192,26 +235,24 @@ export async function POST(request: NextRequest) {
     }
 
     const truncate = (s: string | null | undefined, max: number) => (s && s.length > max ? s.substring(0, max) : s || '');
-    const nameParts = (session.customer_name || account_holder_name || 'Guest').split(' ');
 
     const transaction = await prisma.transaction.create({
       data: {
         userId: session.user_id,
         organizationId,
         donorId: donorId || 0,
-        firstName: truncate(nameParts[0], 100),
-        lastName: truncate(nameParts.slice(1).join(' '), 100),
-        email: truncate(session.customer_email, 254),
+        firstName: truncate(cFirstName || account_holder_name?.split(' ')[0] || 'Guest', 100),
+        lastName: truncate(cLastName || account_holder_name?.split(' ').slice(1).join(' ') || '', 100),
+        email: truncate(cEmail, 254),
         totalAmount: amountInDollars,
         subTotalAmount: netAmount,
         fee,
         source: payment_method === 'ach' ? 'BNK' : 'CC',
-        status: isACHPending ? 'U' : 'P',
-        statusAch: payment_method === 'ach' ? (isACHPending ? 'W' : 'P') : null,
+        status: 'P',
         transactionType: 'DO',
         givingSource: 'checkout',
         fortisTransactionId: truncate(fortisTransactionId, 50),
-        requestResponse: JSON.stringify(fortisResponse),
+        requestResponse: JSON.stringify(result),
         template: 'lunarpayfr',
       },
     });
@@ -229,7 +270,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Update donor totals
-    if (donorId && (isCCApproved || isGenericSuccess)) {
+    if (donorId) {
       try {
         const currentDonor = await prisma.donor.findUnique({
           where: { id: donorId },
@@ -249,10 +290,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Save payment method if token available
-    if (token_id && donorId) {
+    // Save payment method using the token_id
+    let savedSourceId: number | null = null;
+    if (tokenId && donorId) {
       const existing = await prisma.source.findFirst({
-        where: { fortisWalletId: token_id, donorId },
+        where: { fortisWalletId: tokenId, donorId },
       });
       if (!existing) {
         let expMonth: string | null = null;
@@ -261,7 +303,7 @@ export async function POST(request: NextRequest) {
           expMonth = exp_date.substring(0, 2);
           expYear = '20' + exp_date.substring(2, 4);
         }
-        await prisma.source.create({
+        const newSource = await prisma.source.create({
           data: {
             donorId,
             organizationId,
@@ -274,26 +316,36 @@ export async function POST(request: NextRequest) {
             isDefault: true,
             isActive: true,
             isSaved: true,
-            fortisWalletId: token_id,
+            fortisWalletId: tokenId,
             fortisCustomerId: donorId.toString(),
           },
         });
+        savedSourceId = newSource.id;
+
+        await prisma.source.updateMany({
+          where: { donorId, id: { not: newSource.id } },
+          data: { isDefault: false },
+        });
+      } else {
+        savedSourceId = existing.id;
       }
     }
 
     await logPaymentEvent({
-      eventType: isACHPending ? 'ach.pending' : 'payment.succeeded',
+      eventType: 'payment.succeeded',
       organizationId,
       transactionId: transaction.id,
       amount: amountInDollars,
       fortisTransactionId,
-      metadata: { type: 'checkout_session', referenceId: session.id },
+      metadata: { type: 'checkout_session', referenceId: session.id, tokenId, cardSaved: !!savedSourceId },
     });
 
     return NextResponse.json({
       success: true,
-      status: isACHPending ? 'pending' : 'succeeded',
+      status: 'succeeded',
       transaction_id: transaction.id.toString(),
+      card_saved: !!savedSourceId,
+      source_id: savedSourceId,
       success_url: session.success_url,
     });
   } catch (error) {
