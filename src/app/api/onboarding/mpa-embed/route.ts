@@ -26,6 +26,18 @@ export async function GET(request: Request) {
         id: true,
         name: true,
         logo: true,
+        user: {
+          select: {
+            agencyId: true,
+            agency: {
+              select: {
+                id: true,
+                name: true,
+                logo: true,
+              },
+            },
+          },
+        },
         fortisOnboarding: {
           select: {
             appStatus: true,
@@ -50,12 +62,14 @@ export async function GET(request: Request) {
     }
 
     const { appStatus, mpaLink } = organization.fortisOnboarding;
+    const agency = organization.user?.agency || null;
 
     if (appStatus === 'ACTIVE') {
       return NextResponse.json({
         status: 'active',
         message: 'Merchant account is already active',
         organizationName: organization.name,
+        agency: agency ? { name: agency.name, logo: agency.logo } : null,
       });
     }
 
@@ -64,6 +78,7 @@ export async function GET(request: Request) {
         status: appStatus || 'pending',
         message: 'MPA link is not available yet. Please complete Steps 1 and 2 first.',
         organizationName: organization.name,
+        agency: agency ? { name: agency.name, logo: agency.logo } : null,
       });
     }
 
@@ -72,6 +87,7 @@ export async function GET(request: Request) {
       mpaLink,
       organizationName: organization.name,
       organizationLogo: organization.logo,
+      agency: agency ? { name: agency.name, logo: agency.logo } : null,
     });
   } catch (error) {
     console.error('[MPA Embed] Error:', error);

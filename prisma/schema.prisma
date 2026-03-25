@@ -18,6 +18,7 @@ model Agency {
   id              Int       @id @default(autoincrement())
   name            String    @db.VarChar(255)
   email           String    @db.VarChar(254)
+  logo            String?   @db.VarChar(500)
   apiKey          String    @unique @map("api_key") @db.VarChar(255)
   webhookUrl      String?   @map("webhook_url") @db.VarChar(500)
   webhookSecret   String?   @map("webhook_secret") @db.VarChar(255)
