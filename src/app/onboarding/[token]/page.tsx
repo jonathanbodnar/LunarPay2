@@ -8,6 +8,8 @@ import Image from 'next/image';
 interface AgencyInfo {
   name: string;
   logo: string | null;
+  primaryColor: string | null;
+  hoverColor: string | null;
 }
 
 interface MpaData {
@@ -17,6 +19,35 @@ interface MpaData {
   organizationName?: string;
   organizationLogo?: string;
   agency?: AgencyInfo | null;
+}
+
+function AgencyButton({ agency, children, onClick, href, className = '' }: {
+  agency?: AgencyInfo | null;
+  children: React.ReactNode;
+  onClick?: () => void;
+  href?: string;
+  className?: string;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const bgColor = agency?.primaryColor || '#000000';
+  const hoverBg = agency?.hoverColor || '#1f2937';
+  const style = { backgroundColor: hovered ? hoverBg : bgColor };
+  const cls = `inline-block px-6 py-3 text-white rounded-lg font-medium transition-colors ${className}`;
+
+  if (href) {
+    return (
+      <a href={href} className={cls} style={style}
+        onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <button onClick={onClick} className={cls} style={style}
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      {children}
+    </button>
+  );
 }
 
 export default function OnboardingMpaPage() {
@@ -84,12 +115,9 @@ export default function OnboardingMpaPage() {
             <p className="text-gray-500 mb-6">
               {data.organizationName ? `${data.organizationName}'s` : 'Your'} merchant account is approved and ready to accept payments.
             </p>
-            <a
-              href="/settings/payment-setup"
-              className="inline-block px-6 py-3 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
-            >
+            <AgencyButton agency={data?.agency} href="/settings/payment-setup">
               Go to Dashboard
-            </a>
+            </AgencyButton>
           </div>
         </div>
         <Footer agencyName={data?.agency?.name} />
@@ -107,12 +135,9 @@ export default function OnboardingMpaPage() {
             <p className="text-gray-500 mb-6">
               {data?.message || 'Please complete the earlier onboarding steps in your dashboard first.'}
             </p>
-            <a
-              href="/settings/payment-setup"
-              className="inline-block px-6 py-3 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
-            >
+            <AgencyButton agency={data?.agency} href="/settings/payment-setup">
               Go to Payment Setup
-            </a>
+            </AgencyButton>
           </div>
         </div>
         <Footer agencyName={data?.agency?.name} />
@@ -140,12 +165,9 @@ export default function OnboardingMpaPage() {
               >
                 Need to make changes? View application again
               </button>
-              <a
-                href="/settings/payment-setup"
-                className="inline-block px-6 py-3 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
-              >
+              <AgencyButton agency={data?.agency} href="/settings/payment-setup">
                 Go to Dashboard
-              </a>
+              </AgencyButton>
             </div>
           </div>
         </div>
@@ -241,12 +263,9 @@ export default function OnboardingMpaPage() {
             <ExternalLink className="h-4 w-4" />
             Open in New Tab
           </button>
-          <button
-            onClick={() => setCompleted(true)}
-            className="px-6 py-2.5 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
-          >
+          <AgencyButton agency={data.agency} onClick={() => setCompleted(true)} className="text-sm py-2.5">
             I've Completed the Application →
-          </button>
+          </AgencyButton>
         </div>
       </div>
 
