@@ -11,6 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { MerchantOnboardingData } from '@/types/fortis';
 import { requireAgencyKey, ApiAuthError, apiError } from '@/lib/api-auth';
+import { cleanPhoneForFortis } from '@/lib/utils';
 
 const onboardSchema = z.object({
   // Primary principal
@@ -41,6 +42,14 @@ const onboardSchema = z.object({
   ownerCity: z.string().max(100).optional(),
   ownerState: z.string().max(50).optional(),
   ownerPostalCode: z.string().max(20).optional(),
+
+  // Volume estimates (dollar amounts)
+  ccAverageTicket: z.number().int().min(0).optional(),
+  ccMonthlyVolume: z.number().int().min(0).optional(),
+  ccHighTicket: z.number().int().min(0).max(30000).optional(),
+  ecAverageTicket: z.number().int().min(0).optional(),
+  ecMonthlyVolume: z.number().int().min(0).optional(),
+  ecHighTicket: z.number().int().min(0).max(30000).optional(),
 
   // Bank info
   routingNumber: z.string().min(9).max(9),
@@ -106,11 +115,13 @@ export async function POST(
       ? 'Testing1234'
       : (org.fortisTemplate || process.env.FORTIS_TPL_DEFAULT || 'ActiveBase4');
 
+    const cleanedPhone = cleanPhoneForFortis(data.phone);
+
     const merchantPayload: MerchantOnboardingData = {
       primary_principal: {
         first_name: data.firstName,
         last_name: data.lastName,
-        phone_number: data.phone,
+        phone_number: cleanedPhone,
         title: data.ownerTitle || 'Owner',
         ownership_percent: data.ownershipPercent ?? 100,
         date_of_birth: data.dateOfBirth || undefined,
@@ -126,13 +137,25 @@ export async function POST(
       website: data.website || '',
       fed_tax_id: data.fedTaxId || undefined,
       ownership_type: (data.ownershipType as 'llc' | 'llp' | 'corporation' | 'sole_proprietorship' | 'partnership' | 'non_profit') || undefined,
+
+      ...(data.ccAverageTicket ? { cc_average_ticket: data.ccAverageTicket } : {}),
+      ...(data.ccMonthlyVolume ? { cc_monthly_volume: data.ccMonthlyVolume } : {}),
+      ...(data.ccHighTicket ? { cc_high_ticket: data.ccHighTicket } : {}),
+      ...(data.ecAverageTicket ? { ec_average_ticket: data.ecAverageTicket } : {}),
+      ...(data.ecMonthlyVolume ? { ec_monthly_volume: data.ecMonthlyVolume } : {}),
+      ...(data.ecHighTicket ? { ec_high_ticket: data.ecHighTicket } : {}),
+
+      swiped_percent: 0,
+      keyed_percent: 0,
+      ecommerce_percent: 100,
+
       location: {
         address_line_1: data.addressLine1,
         address_line_2: data.addressLine2 || undefined,
         city: data.city,
         state_province: data.state,
         postal_code: data.postalCode,
-        phone_number: data.phone,
+        phone_number: cleanedPhone,
       },
       app_delivery: 'link_iframe',
       bank_account: {
@@ -149,7 +172,7 @@ export async function POST(
       contact: {
         first_name: data.firstName,
         last_name: data.lastName,
-        phone_number: data.phone,
+        phone_number: cleanedPhone,
       },
       client_app_id: org.id.toString(),
     };

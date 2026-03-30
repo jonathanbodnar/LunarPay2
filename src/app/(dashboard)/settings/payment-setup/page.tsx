@@ -81,11 +81,17 @@ export default function PaymentSetupPage() {
     merchantPostalCode: '',
   });
 
-  // Step 2: Bank Account
+  // Step 2: Bank Account + Volume Estimates
   const [bankInfo, setBankInfo] = useState({
     achAccountNumber: '',
     achRoutingNumber: '',
     accountHolderName: '',
+    ccMonthlyVolume: '',
+    ccAverageTicket: '',
+    ccHighTicket: '',
+    ecMonthlyVolume: '',
+    ecAverageTicket: '',
+    ecHighTicket: '',
   });
 
   // Track if we've already fired the purchase event
@@ -171,7 +177,9 @@ export default function PaymentSetupPage() {
 
   const loadOrgData = (org: Organization) => {
     // Parse additional fields from processorResponse JSON
-    let additionalFields = {
+    let additionalFields: Record<string, any> = {
+      dbaName: '',
+      legalName: '',
       fedTaxId: '',
       ownershipType: '',
       ownerTitle: '',
@@ -183,8 +191,7 @@ export default function PaymentSetupPage() {
     if (org.fortisOnboarding?.processorResponse) {
       try {
         const parsed = JSON.parse(org.fortisOnboarding.processorResponse);
-        // Only use parsed data if it's not a Fortis API response (which would have different structure)
-        if (parsed.ownershipPercent !== undefined || parsed.fedTaxId !== undefined) {
+        if (parsed.ownershipPercent !== undefined || parsed.fedTaxId !== undefined || parsed.dbaName !== undefined) {
           additionalFields = { ...additionalFields, ...parsed };
         }
       } catch (e) {
@@ -192,14 +199,16 @@ export default function PaymentSetupPage() {
       }
     }
 
-    // Pre-populate all saved data from organization and fortisOnboarding
+    // Pre-populate all saved data from organization and fortisOnboarding.
+    // DBA and legalName come from saved step data first, NOT from org.name
+    // (org.name is the business name from registration which may differ from the DBA).
     setMerchantInfo({
       signFirstName: org.fortisOnboarding?.signFirstName || '',
       signLastName: org.fortisOnboarding?.signLastName || '',
       signPhoneNumber: org.fortisOnboarding?.signPhoneNumber || '',
       email: org.fortisOnboarding?.email || '',
-      dbaName: org.name || '',
-      legalName: org.legalName || org.name || '',
+      dbaName: additionalFields.dbaName || '',
+      legalName: additionalFields.legalName || org.legalName || '',
       website: org.website || '',
       fedTaxId: additionalFields.fedTaxId || '',
       ownershipType: additionalFields.ownershipType || '',
@@ -315,17 +324,23 @@ export default function PaymentSetupPage() {
           routingNumber: bankInfo.achRoutingNumber,
           accountNumber: bankInfo.achAccountNumber,
           accountHolderName: bankInfo.accountHolderName,
-          // Use primary bank account for alternative as well (Fortis requires both)
           altRoutingNumber: bankInfo.achRoutingNumber,
           altAccountNumber: bankInfo.achAccountNumber,
           altAccountHolderName: bankInfo.accountHolderName,
+          // Volume estimates
+          ccMonthlyVolume: bankInfo.ccMonthlyVolume || undefined,
+          ccAverageTicket: bankInfo.ccAverageTicket || undefined,
+          ccHighTicket: bankInfo.ccHighTicket || undefined,
+          ecMonthlyVolume: bankInfo.ecMonthlyVolume || undefined,
+          ecAverageTicket: bankInfo.ecAverageTicket || undefined,
+          ecHighTicket: bankInfo.ecHighTicket || undefined,
         }),
       });
 
       const data = await fortisRes.json();
 
       if (fortisRes.ok && data.status) {
-        setSuccess('Application submitted to Fortis successfully!');
+        setSuccess('One last step, confirm the information and submit your application.');
         setCurrentStep(3);
         await fetchOrganizations();
       } else {
@@ -841,6 +856,81 @@ export default function PaymentSetupPage() {
                         placeholder="123456789"
                         maxLength={9}
                       />
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4 mt-4">
+                    <h4 className="text-sm font-medium mb-1">Monthly Processing Volumes</h4>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Estimated monthly processing volumes help speed up your application approval.
+                    </p>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>CC Monthly Volume ($)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={bankInfo.ccMonthlyVolume}
+                            onChange={(e) => setBankInfo({ ...bankInfo, ccMonthlyVolume: e.target.value })}
+                            placeholder="10000"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>CC Avg Ticket ($)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={bankInfo.ccAverageTicket}
+                            onChange={(e) => setBankInfo({ ...bankInfo, ccAverageTicket: e.target.value })}
+                            placeholder="100"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>CC High Ticket ($)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="30000"
+                            value={bankInfo.ccHighTicket}
+                            onChange={(e) => setBankInfo({ ...bankInfo, ccHighTicket: e.target.value })}
+                            placeholder="5000"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>eCheck Monthly Volume ($)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={bankInfo.ecMonthlyVolume}
+                            onChange={(e) => setBankInfo({ ...bankInfo, ecMonthlyVolume: e.target.value })}
+                            placeholder="5000"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>eCheck Avg Ticket ($)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={bankInfo.ecAverageTicket}
+                            onChange={(e) => setBankInfo({ ...bankInfo, ecAverageTicket: e.target.value })}
+                            placeholder="200"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>eCheck High Ticket ($)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="30000"
+                            value={bankInfo.ecHighTicket}
+                            onChange={(e) => setBankInfo({ ...bankInfo, ecHighTicket: e.target.value })}
+                            placeholder="5000"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
 

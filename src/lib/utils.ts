@@ -150,6 +150,21 @@ export function formatPhoneNumber(phone: string): string {
 }
 
 /**
+ * Clean phone number for Fortis API: strip country code, non-digits,
+ * and return as XXX-XXX-XXXX (10-digit US format).
+ */
+export function cleanPhoneForFortis(phone: string): string {
+  let digits = phone.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) {
+    digits = digits.slice(1);
+  }
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return digits;
+}
+
+/**
  * Get last 4 digits
  */
 export function getLast4(value: string): string {

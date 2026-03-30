@@ -43,6 +43,19 @@ export interface MerchantOnboardingData {
   ownership_type?: 'llc' | 'llp' | 'corporation' | 'sole_proprietorship' | 'partnership' | 'non_profit';
   business_category?: string; // MCC code or category
   
+  // Volume estimates (dollar amounts, pre-fill the MPA)
+  cc_average_ticket?: number;
+  cc_monthly_volume?: number;
+  cc_high_ticket?: number;
+  ec_average_ticket?: number;
+  ec_monthly_volume?: number;
+  ec_high_ticket?: number;
+
+  // Transaction entry method percentages (must sum to 100)
+  swiped_percent?: number;
+  keyed_percent?: number;
+  ecommerce_percent?: number;
+
   // Business location (country not allowed via API)
   location: {
     address_line_1: string;

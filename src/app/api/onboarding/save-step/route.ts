@@ -51,18 +51,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update organization with business info
-    await prisma.organization.update({
-      where: { id: organizationId },
-      data: {
-        name: dbaName || organization.name,
-        legalName: legalName || undefined,
-        website: website || undefined,
-      },
-    });
-
     // Save onboarding step data (store additional fields in processorResponse as JSON for now)
+    // DBA and legalName are persisted here so they survive page refreshes
+    // without overwriting org.name (which should only update after Fortis submission)
     const additionalData = JSON.stringify({
+      dbaName,
+      legalName,
       fedTaxId,
       ownershipType,
       ownerTitle,

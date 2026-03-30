@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { MerchantOnboardingData } from '@/types/fortis';
+import { cleanPhoneForFortis } from '@/lib/utils';
 
 export async function POST(request: Request) {
   try {
@@ -48,6 +49,13 @@ export async function POST(request: Request) {
       altRoutingNumber,
       altAccountNumber,
       altAccountHolderName,
+      // Volume estimates
+      ccAverageTicket,
+      ccMonthlyVolume,
+      ccHighTicket,
+      ecAverageTicket,
+      ecMonthlyVolume,
+      ecHighTicket,
     } = body;
 
     // Verify user owns this organization
@@ -120,50 +128,52 @@ export async function POST(request: Request) {
       postalCode,
     });
 
+    const cleanedPhone = cleanPhoneForFortis(signPhoneNumber);
+
     // Prepare Fortis onboarding data (only allowed fields)
     const merchantData: MerchantOnboardingData = {
-      // Primary principal (owner) - only allowed fields
       primary_principal: {
         first_name: signFirstName,
         last_name: signLastName,
-        phone_number: signPhoneNumber,
+        phone_number: cleanedPhone,
         title: ownerTitle || 'Owner',
         ownership_percent: ownershipPercent ? parseInt(ownershipPercent) : 100,
         date_of_birth: dateOfBirth || undefined,
-        // Owner's home address
         address_line_1: ownerAddressLine1 || addressLine1,
         city: ownerCity || city,
         state_province: ownerState || state,
         postal_code: ownerPostalCode || postalCode,
       },
-      
-      // Business contact email
       email,
-      
-      // Business names
       dba_name: dbaName,
       legal_name: legalName,
-      
-      // Business details
       template_code: templateCode,
       website,
       fed_tax_id: fedTaxId || undefined,
       ownership_type: ownershipType || undefined,
-      
-      // Business location (no country field)
+
+      // Volume estimates (dollar amounts to pre-fill the Fortis MPA)
+      ...(ccAverageTicket ? { cc_average_ticket: parseInt(ccAverageTicket) } : {}),
+      ...(ccMonthlyVolume ? { cc_monthly_volume: parseInt(ccMonthlyVolume) } : {}),
+      ...(ccHighTicket ? { cc_high_ticket: parseInt(ccHighTicket) } : {}),
+      ...(ecAverageTicket ? { ec_average_ticket: parseInt(ecAverageTicket) } : {}),
+      ...(ecMonthlyVolume ? { ec_monthly_volume: parseInt(ecMonthlyVolume) } : {}),
+      ...(ecHighTicket ? { ec_high_ticket: parseInt(ecHighTicket) } : {}),
+
+      // 100% ecommerce since LunarPay is online-only
+      swiped_percent: 0,
+      keyed_percent: 0,
+      ecommerce_percent: 100,
+
       location: {
         address_line_1: addressLine1,
         address_line_2: addressLine2 || undefined,
         city,
         state_province: state,
         postal_code: postalCode,
-        phone_number: signPhoneNumber,
+        phone_number: cleanedPhone,
       },
-      
-      // Application delivery as embedded iframe
       app_delivery: 'link_iframe',
-      
-      // Bank accounts - primary for deposits, alt for fees/adjustments
       bank_account: {
         routing_number: routingNumber,
         account_number: accountNumber,
@@ -175,15 +185,11 @@ export async function POST(request: Request) {
         account_holder_name: altAccountHolderName || accountHolderName,
         deposit_type: 'fees_adjustments',
       },
-      
-      // Contact information
       contact: {
         first_name: signFirstName,
         last_name: signLastName,
-        phone_number: signPhoneNumber,
+        phone_number: cleanedPhone,
       },
-      
-      // Our internal organization ID for webhook matching
       client_app_id: organizationId.toString(),
     };
 
