@@ -887,10 +887,19 @@ export default function PaymentSetupPage() {
                   </div>
 
                   <div className="border-t pt-4 mt-4">
-                    <h4 className="text-sm font-medium mb-1">Monthly Processing Volumes *</h4>
-                    <p className="text-xs text-muted-foreground mb-4">
-                      Monthly volume must be higher than both the average ticket and high ticket.
-                    </p>
+                    <h4 className="text-sm font-medium mb-3">Monthly Processing Volumes *</h4>
+                    <div className="flex items-start gap-2.5 p-3 mb-4 bg-amber-50 border border-amber-300 rounded-lg">
+                      <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                      <div className="text-sm text-amber-800">
+                        <p className="font-medium mb-1">Volume Field Rules</p>
+                        <ul className="list-disc list-inside space-y-0.5 text-xs">
+                          <li>Monthly volume must be higher than both the average ticket and the high ticket.</li>
+                          <li>High ticket is the largest single transaction you expect to process.</li>
+                          <li>Average ticket is your typical transaction amount.</li>
+                          <li>Enter estimates — these help Fortis size your account correctly.</li>
+                        </ul>
+                      </div>
+                    </div>
                     <div className="space-y-4">
                       <div className="grid grid-cols-3 gap-4">
                         <div className="space-y-2">
