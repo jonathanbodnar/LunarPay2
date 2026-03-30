@@ -58,6 +58,30 @@ export async function POST(request: Request) {
       ecHighTicket,
     } = body;
 
+    // Validate volume fields
+    const ccVol = parseInt(ccMonthlyVolume) || 0;
+    const ccAvg = parseInt(ccAverageTicket) || 0;
+    const ccHi = parseInt(ccHighTicket) || 0;
+    const ecVol = parseInt(ecMonthlyVolume) || 0;
+    const ecAvg = parseInt(ecAverageTicket) || 0;
+    const ecHi = parseInt(ecHighTicket) || 0;
+
+    if (!ccVol || !ccAvg || !ccHi || !ecVol || !ecAvg || !ecHi) {
+      return NextResponse.json({ error: 'All volume fields are required.' }, { status: 400 });
+    }
+    if (ccVol <= ccHi) {
+      return NextResponse.json({ error: 'CC Monthly Volume must be higher than CC High Ticket.' }, { status: 400 });
+    }
+    if (ccVol <= ccAvg) {
+      return NextResponse.json({ error: 'CC Monthly Volume must be higher than CC Average Ticket.' }, { status: 400 });
+    }
+    if (ecVol <= ecHi) {
+      return NextResponse.json({ error: 'eCheck Monthly Volume must be higher than eCheck High Ticket.' }, { status: 400 });
+    }
+    if (ecVol <= ecAvg) {
+      return NextResponse.json({ error: 'eCheck Monthly Volume must be higher than eCheck Average Ticket.' }, { status: 400 });
+    }
+
     // Verify user owns this organization
     const organization = await prisma.organization.findFirst({
       where: {
@@ -152,13 +176,12 @@ export async function POST(request: Request) {
       fed_tax_id: fedTaxId || undefined,
       ownership_type: ownershipType || undefined,
 
-      // Volume estimates (dollar amounts to pre-fill the Fortis MPA)
-      ...(ccAverageTicket ? { cc_average_ticket: parseInt(ccAverageTicket) } : {}),
-      ...(ccMonthlyVolume ? { cc_monthly_volume: parseInt(ccMonthlyVolume) } : {}),
-      ...(ccHighTicket ? { cc_high_ticket: parseInt(ccHighTicket) } : {}),
-      ...(ecAverageTicket ? { ec_average_ticket: parseInt(ecAverageTicket) } : {}),
-      ...(ecMonthlyVolume ? { ec_monthly_volume: parseInt(ecMonthlyVolume) } : {}),
-      ...(ecHighTicket ? { ec_high_ticket: parseInt(ecHighTicket) } : {}),
+      cc_average_ticket: ccAvg,
+      cc_monthly_volume: ccVol,
+      cc_high_ticket: ccHi,
+      ec_average_ticket: ecAvg,
+      ec_monthly_volume: ecVol,
+      ec_high_ticket: ecHi,
 
       // 100% ecommerce since LunarPay is online-only
       swiped_percent: 0,

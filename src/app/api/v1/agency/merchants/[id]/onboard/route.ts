@@ -43,13 +43,13 @@ const onboardSchema = z.object({
   ownerState: z.string().max(50).optional(),
   ownerPostalCode: z.string().max(20).optional(),
 
-  // Volume estimates (dollar amounts)
-  ccAverageTicket: z.number().int().min(0).optional(),
-  ccMonthlyVolume: z.number().int().min(0).optional(),
-  ccHighTicket: z.number().int().min(0).max(30000).optional(),
-  ecAverageTicket: z.number().int().min(0).optional(),
-  ecMonthlyVolume: z.number().int().min(0).optional(),
-  ecHighTicket: z.number().int().min(0).max(30000).optional(),
+  // Volume estimates (dollar amounts, required)
+  ccAverageTicket: z.number().int().min(1),
+  ccMonthlyVolume: z.number().int().min(1),
+  ccHighTicket: z.number().int().min(1).max(30000),
+  ecAverageTicket: z.number().int().min(1),
+  ecMonthlyVolume: z.number().int().min(1),
+  ecHighTicket: z.number().int().min(1).max(30000),
 
   // Bank info
   routingNumber: z.string().min(9).max(9),
@@ -77,6 +77,19 @@ export async function POST(
     }
 
     const data = parsed.data;
+
+    if (data.ccMonthlyVolume <= data.ccHighTicket) {
+      return apiError('ccMonthlyVolume must be higher than ccHighTicket', 400);
+    }
+    if (data.ccMonthlyVolume <= data.ccAverageTicket) {
+      return apiError('ccMonthlyVolume must be higher than ccAverageTicket', 400);
+    }
+    if (data.ecMonthlyVolume <= data.ecHighTicket) {
+      return apiError('ecMonthlyVolume must be higher than ecHighTicket', 400);
+    }
+    if (data.ecMonthlyVolume <= data.ecAverageTicket) {
+      return apiError('ecMonthlyVolume must be higher than ecAverageTicket', 400);
+    }
 
     const user = await prisma.user.findFirst({
       where: { id: merchantId, agencyId: agency.agencyId },
@@ -138,12 +151,12 @@ export async function POST(
       fed_tax_id: data.fedTaxId || undefined,
       ownership_type: (data.ownershipType as 'llc' | 'llp' | 'corporation' | 'sole_proprietorship' | 'partnership' | 'non_profit') || undefined,
 
-      ...(data.ccAverageTicket ? { cc_average_ticket: data.ccAverageTicket } : {}),
-      ...(data.ccMonthlyVolume ? { cc_monthly_volume: data.ccMonthlyVolume } : {}),
-      ...(data.ccHighTicket ? { cc_high_ticket: data.ccHighTicket } : {}),
-      ...(data.ecAverageTicket ? { ec_average_ticket: data.ecAverageTicket } : {}),
-      ...(data.ecMonthlyVolume ? { ec_monthly_volume: data.ecMonthlyVolume } : {}),
-      ...(data.ecHighTicket ? { ec_high_ticket: data.ecHighTicket } : {}),
+      cc_average_ticket: data.ccAverageTicket,
+      cc_monthly_volume: data.ccMonthlyVolume,
+      cc_high_ticket: data.ccHighTicket,
+      ec_average_ticket: data.ecAverageTicket,
+      ec_monthly_volume: data.ecMonthlyVolume,
+      ec_high_ticket: data.ecHighTicket,
 
       swiped_percent: 0,
       keyed_percent: 0,

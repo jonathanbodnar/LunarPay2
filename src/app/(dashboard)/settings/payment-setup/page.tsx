@@ -291,8 +291,35 @@ export default function PaymentSetupPage() {
     setError('');
     setSuccess('');
 
+    const ccVol = parseInt(bankInfo.ccMonthlyVolume) || 0;
+    const ccAvg = parseInt(bankInfo.ccAverageTicket) || 0;
+    const ccHigh = parseInt(bankInfo.ccHighTicket) || 0;
+    const ecVol = parseInt(bankInfo.ecMonthlyVolume) || 0;
+    const ecAvg = parseInt(bankInfo.ecAverageTicket) || 0;
+    const ecHigh = parseInt(bankInfo.ecHighTicket) || 0;
+
+    if (ccVol <= ccHigh) {
+      setError('CC Monthly Volume must be higher than CC High Ticket.');
+      setSaving(false);
+      return;
+    }
+    if (ccVol <= ccAvg) {
+      setError('CC Monthly Volume must be higher than CC Average Ticket.');
+      setSaving(false);
+      return;
+    }
+    if (ecVol <= ecHigh) {
+      setError('eCheck Monthly Volume must be higher than eCheck High Ticket.');
+      setSaving(false);
+      return;
+    }
+    if (ecVol <= ecAvg) {
+      setError('eCheck Monthly Volume must be higher than eCheck Average Ticket.');
+      setSaving(false);
+      return;
+    }
+
     try {
-      // Submit directly to Fortis with all data
       const fortisRes = await fetch('/api/fortis/onboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -327,13 +354,13 @@ export default function PaymentSetupPage() {
           altRoutingNumber: bankInfo.achRoutingNumber,
           altAccountNumber: bankInfo.achAccountNumber,
           altAccountHolderName: bankInfo.accountHolderName,
-          // Volume estimates
-          ccMonthlyVolume: bankInfo.ccMonthlyVolume || undefined,
-          ccAverageTicket: bankInfo.ccAverageTicket || undefined,
-          ccHighTicket: bankInfo.ccHighTicket || undefined,
-          ecMonthlyVolume: bankInfo.ecMonthlyVolume || undefined,
-          ecAverageTicket: bankInfo.ecAverageTicket || undefined,
-          ecHighTicket: bankInfo.ecHighTicket || undefined,
+          // Volume estimates (required)
+          ccMonthlyVolume: bankInfo.ccMonthlyVolume,
+          ccAverageTicket: bankInfo.ccAverageTicket,
+          ccHighTicket: bankInfo.ccHighTicket,
+          ecMonthlyVolume: bankInfo.ecMonthlyVolume,
+          ecAverageTicket: bankInfo.ecAverageTicket,
+          ecHighTicket: bankInfo.ecHighTicket,
         }),
       });
 
@@ -860,37 +887,40 @@ export default function PaymentSetupPage() {
                   </div>
 
                   <div className="border-t pt-4 mt-4">
-                    <h4 className="text-sm font-medium mb-1">Monthly Processing Volumes</h4>
+                    <h4 className="text-sm font-medium mb-1">Monthly Processing Volumes *</h4>
                     <p className="text-xs text-muted-foreground mb-4">
-                      Estimated monthly processing volumes help speed up your application approval.
+                      Monthly volume must be higher than both the average ticket and high ticket.
                     </p>
                     <div className="space-y-4">
                       <div className="grid grid-cols-3 gap-4">
                         <div className="space-y-2">
-                          <Label>CC Monthly Volume ($)</Label>
+                          <Label>CC Monthly Volume ($) *</Label>
                           <Input
+                            required
                             type="number"
-                            min="0"
+                            min="1"
                             value={bankInfo.ccMonthlyVolume}
                             onChange={(e) => setBankInfo({ ...bankInfo, ccMonthlyVolume: e.target.value })}
                             placeholder="10000"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>CC Avg Ticket ($)</Label>
+                          <Label>CC Avg Ticket ($) *</Label>
                           <Input
+                            required
                             type="number"
-                            min="0"
+                            min="1"
                             value={bankInfo.ccAverageTicket}
                             onChange={(e) => setBankInfo({ ...bankInfo, ccAverageTicket: e.target.value })}
                             placeholder="100"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>CC High Ticket ($)</Label>
+                          <Label>CC High Ticket ($) *</Label>
                           <Input
+                            required
                             type="number"
-                            min="0"
+                            min="1"
                             max="30000"
                             value={bankInfo.ccHighTicket}
                             onChange={(e) => setBankInfo({ ...bankInfo, ccHighTicket: e.target.value })}
@@ -900,30 +930,33 @@ export default function PaymentSetupPage() {
                       </div>
                       <div className="grid grid-cols-3 gap-4">
                         <div className="space-y-2">
-                          <Label>eCheck Monthly Volume ($)</Label>
+                          <Label>eCheck Monthly Volume ($) *</Label>
                           <Input
+                            required
                             type="number"
-                            min="0"
+                            min="1"
                             value={bankInfo.ecMonthlyVolume}
                             onChange={(e) => setBankInfo({ ...bankInfo, ecMonthlyVolume: e.target.value })}
                             placeholder="5000"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>eCheck Avg Ticket ($)</Label>
+                          <Label>eCheck Avg Ticket ($) *</Label>
                           <Input
+                            required
                             type="number"
-                            min="0"
+                            min="1"
                             value={bankInfo.ecAverageTicket}
                             onChange={(e) => setBankInfo({ ...bankInfo, ecAverageTicket: e.target.value })}
                             placeholder="200"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>eCheck High Ticket ($)</Label>
+                          <Label>eCheck High Ticket ($) *</Label>
                           <Input
+                            required
                             type="number"
-                            min="0"
+                            min="1"
                             max="30000"
                             value={bankInfo.ecHighTicket}
                             onChange={(e) => setBankInfo({ ...bankInfo, ecHighTicket: e.target.value })}
