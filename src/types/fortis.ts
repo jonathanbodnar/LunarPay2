@@ -182,30 +182,47 @@ export interface RefundResponse {
 // Webhook Types
 export interface FortisWebhookPayload {
   client_app_id: string;
-  stage: 'sandbox' | 'production';
-  // Merchant credentials and location
+  stage?: 'sandbox' | 'production';
+
+  // Merchant credentials (present on approval)
   users?: Array<{
     user_id: string;
     user_api_key: string;
-    // Location may be included per user
     location_id?: string;
     locations?: Array<{
       id: string;
       name?: string;
     }>;
   }>;
-  // Location might also be at the top level
+
+  // Top-level location_id (Fortis sends this directly)
   location_id?: string;
+
+  // Top-level locations array (Fortis v1+ format, may contain product_transactions)
   locations?: Array<{
     id: string;
     name?: string;
     product_transactions?: Array<{
       id: string;
-      payment_method: string;
+      payment_method: string; // 'cc' or 'ach'
     }>;
   }>;
-  // Additional fields that may be in the webhook
+
+  // Top-level product_transactions array (Fortis classic format from old EpicPay API)
+  product_transactions?: Array<{
+    id: string;
+    payment_method: string; // 'cc' or 'ach'
+  }>;
+
+  // Singular fallback
   product_transaction_id?: string;
+
+  // Status (present on pended/approved/declined webhooks)
+  status?: {
+    response_code?: string; // 'approved', 'pended', 'declined'
+    reason_code?: string;
+    reason_text?: string;
+  };
 }
 
 // Reason Codes
