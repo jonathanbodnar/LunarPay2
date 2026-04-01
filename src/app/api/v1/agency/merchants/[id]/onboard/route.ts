@@ -78,13 +78,6 @@ export async function POST(
 
     const data = parsed.data;
 
-    if (data.ccMonthlyVolumeRange < data.ccAverageTicketRange) {
-      return apiError('ccMonthlyVolumeRange must be >= ccAverageTicketRange', 400);
-    }
-    if (data.ecMonthlyVolumeRange < data.ecAverageTicketRange) {
-      return apiError('ecMonthlyVolumeRange must be >= ecAverageTicketRange', 400);
-    }
-
     const user = await prisma.user.findFirst({
       where: { id: merchantId, agencyId: agency.agencyId },
       include: {

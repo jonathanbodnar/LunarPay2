@@ -291,22 +291,6 @@ export default function PaymentSetupPage() {
     setError('');
     setSuccess('');
 
-    const ccVolR = parseInt(bankInfo.ccMonthlyVolumeRange) || 0;
-    const ccAvgR = parseInt(bankInfo.ccAverageTicketRange) || 0;
-    const ecVolR = parseInt(bankInfo.ecMonthlyVolumeRange) || 0;
-    const ecAvgR = parseInt(bankInfo.ecAverageTicketRange) || 0;
-
-    if (ccVolR < ccAvgR) {
-      setError('CC Monthly Volume range must be equal to or higher than CC Average Ticket range.');
-      setSaving(false);
-      return;
-    }
-    if (ecVolR < ecAvgR) {
-      setError('eCheck Monthly Volume range must be equal to or higher than eCheck Average Ticket range.');
-      setSaving(false);
-      return;
-    }
-
     try {
       const fortisRes = await fetch('/api/fortis/onboard', {
         method: 'POST',

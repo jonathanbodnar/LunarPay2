@@ -69,12 +69,6 @@ export async function POST(request: Request) {
     if (!ccVolRange || !ccAvgRange || !ccHi || !ecVolRange || !ecAvgRange || !ecHi) {
       return NextResponse.json({ error: 'All volume fields are required.' }, { status: 400 });
     }
-    if (ccVolRange < ccAvgRange) {
-      return NextResponse.json({ error: 'CC Monthly Volume range must be >= CC Average Ticket range.' }, { status: 400 });
-    }
-    if (ecVolRange < ecAvgRange) {
-      return NextResponse.json({ error: 'eCheck Monthly Volume range must be >= eCheck Average Ticket range.' }, { status: 400 });
-    }
 
     // Verify user owns this organization
     const organization = await prisma.organization.findFirst({
