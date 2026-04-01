@@ -43,13 +43,13 @@ export interface MerchantOnboardingData {
   ownership_type?: 'llc' | 'llp' | 'corporation' | 'sole_proprietorship' | 'partnership' | 'non_profit';
   business_category?: string; // MCC code or category
   
-  // Volume estimates (dollar amounts, pre-fill the MPA)
-  cc_average_ticket?: number;
-  cc_monthly_volume?: number;
-  cc_high_ticket?: number;
-  ec_average_ticket?: number;
-  ec_monthly_volume?: number;
-  ec_high_ticket?: number;
+  // Volume estimates (ranges 1-7 for volume/ticket, dollar amount for high ticket)
+  cc_average_ticket_range?: number; // 1-7
+  cc_monthly_volume_range?: number; // 1-7
+  cc_high_ticket?: number;          // 0-30000 dollars
+  ec_average_ticket_range?: number; // 1-7
+  ec_monthly_volume_range?: number; // 1-7
+  ec_high_ticket?: number;          // 0-30000 dollars
 
   // Transaction entry method percentages (must sum to 100)
   swiped_percent?: number;

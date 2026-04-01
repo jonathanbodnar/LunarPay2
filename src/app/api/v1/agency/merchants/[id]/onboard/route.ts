@@ -43,12 +43,12 @@ const onboardSchema = z.object({
   ownerState: z.string().max(50).optional(),
   ownerPostalCode: z.string().max(20).optional(),
 
-  // Volume estimates (dollar amounts, required)
-  ccAverageTicket: z.number().int().min(1),
-  ccMonthlyVolume: z.number().int().min(1),
+  // Volume estimates (ranges 1-7 for avg ticket/monthly volume, dollar amount for high ticket)
+  ccAverageTicketRange: z.number().int().min(1).max(7),
+  ccMonthlyVolumeRange: z.number().int().min(1).max(7),
   ccHighTicket: z.number().int().min(1).max(30000),
-  ecAverageTicket: z.number().int().min(1),
-  ecMonthlyVolume: z.number().int().min(1),
+  ecAverageTicketRange: z.number().int().min(1).max(7),
+  ecMonthlyVolumeRange: z.number().int().min(1).max(7),
   ecHighTicket: z.number().int().min(1).max(30000),
 
   // Bank info
@@ -78,17 +78,11 @@ export async function POST(
 
     const data = parsed.data;
 
-    if (data.ccMonthlyVolume <= data.ccHighTicket) {
-      return apiError('ccMonthlyVolume must be higher than ccHighTicket', 400);
+    if (data.ccMonthlyVolumeRange < data.ccAverageTicketRange) {
+      return apiError('ccMonthlyVolumeRange must be >= ccAverageTicketRange', 400);
     }
-    if (data.ccMonthlyVolume <= data.ccAverageTicket) {
-      return apiError('ccMonthlyVolume must be higher than ccAverageTicket', 400);
-    }
-    if (data.ecMonthlyVolume <= data.ecHighTicket) {
-      return apiError('ecMonthlyVolume must be higher than ecHighTicket', 400);
-    }
-    if (data.ecMonthlyVolume <= data.ecAverageTicket) {
-      return apiError('ecMonthlyVolume must be higher than ecAverageTicket', 400);
+    if (data.ecMonthlyVolumeRange < data.ecAverageTicketRange) {
+      return apiError('ecMonthlyVolumeRange must be >= ecAverageTicketRange', 400);
     }
 
     const user = await prisma.user.findFirst({
@@ -151,11 +145,11 @@ export async function POST(
       fed_tax_id: data.fedTaxId || undefined,
       ownership_type: (data.ownershipType as 'llc' | 'llp' | 'corporation' | 'sole_proprietorship' | 'partnership' | 'non_profit') || undefined,
 
-      cc_average_ticket: data.ccAverageTicket,
-      cc_monthly_volume: data.ccMonthlyVolume,
+      cc_average_ticket_range: data.ccAverageTicketRange,
+      cc_monthly_volume_range: data.ccMonthlyVolumeRange,
       cc_high_ticket: data.ccHighTicket,
-      ec_average_ticket: data.ecAverageTicket,
-      ec_monthly_volume: data.ecMonthlyVolume,
+      ec_average_ticket_range: data.ecAverageTicketRange,
+      ec_monthly_volume_range: data.ecMonthlyVolumeRange,
       ec_high_ticket: data.ecHighTicket,
 
       swiped_percent: 0,

@@ -49,37 +49,31 @@ export async function POST(request: Request) {
       altRoutingNumber,
       altAccountNumber,
       altAccountHolderName,
-      // Volume estimates
-      ccAverageTicket,
-      ccMonthlyVolume,
+      // Volume estimates (ranges 1-7 for avg ticket / monthly volume, dollar amount for high ticket)
+      ccAverageTicketRange,
+      ccMonthlyVolumeRange,
       ccHighTicket,
-      ecAverageTicket,
-      ecMonthlyVolume,
+      ecAverageTicketRange,
+      ecMonthlyVolumeRange,
       ecHighTicket,
     } = body;
 
     // Validate volume fields
-    const ccVol = parseInt(ccMonthlyVolume) || 0;
-    const ccAvg = parseInt(ccAverageTicket) || 0;
+    const ccVolRange = parseInt(ccMonthlyVolumeRange) || 0;
+    const ccAvgRange = parseInt(ccAverageTicketRange) || 0;
     const ccHi = parseInt(ccHighTicket) || 0;
-    const ecVol = parseInt(ecMonthlyVolume) || 0;
-    const ecAvg = parseInt(ecAverageTicket) || 0;
+    const ecVolRange = parseInt(ecMonthlyVolumeRange) || 0;
+    const ecAvgRange = parseInt(ecAverageTicketRange) || 0;
     const ecHi = parseInt(ecHighTicket) || 0;
 
-    if (!ccVol || !ccAvg || !ccHi || !ecVol || !ecAvg || !ecHi) {
+    if (!ccVolRange || !ccAvgRange || !ccHi || !ecVolRange || !ecAvgRange || !ecHi) {
       return NextResponse.json({ error: 'All volume fields are required.' }, { status: 400 });
     }
-    if (ccVol <= ccHi) {
-      return NextResponse.json({ error: 'CC Monthly Volume must be higher than CC High Ticket.' }, { status: 400 });
+    if (ccVolRange < ccAvgRange) {
+      return NextResponse.json({ error: 'CC Monthly Volume range must be >= CC Average Ticket range.' }, { status: 400 });
     }
-    if (ccVol <= ccAvg) {
-      return NextResponse.json({ error: 'CC Monthly Volume must be higher than CC Average Ticket.' }, { status: 400 });
-    }
-    if (ecVol <= ecHi) {
-      return NextResponse.json({ error: 'eCheck Monthly Volume must be higher than eCheck High Ticket.' }, { status: 400 });
-    }
-    if (ecVol <= ecAvg) {
-      return NextResponse.json({ error: 'eCheck Monthly Volume must be higher than eCheck Average Ticket.' }, { status: 400 });
+    if (ecVolRange < ecAvgRange) {
+      return NextResponse.json({ error: 'eCheck Monthly Volume range must be >= eCheck Average Ticket range.' }, { status: 400 });
     }
 
     // Verify user owns this organization
@@ -176,11 +170,11 @@ export async function POST(request: Request) {
       fed_tax_id: fedTaxId || undefined,
       ownership_type: ownershipType || undefined,
 
-      cc_average_ticket: ccAvg,
-      cc_monthly_volume: ccVol,
+      cc_average_ticket_range: ccAvgRange,
+      cc_monthly_volume_range: ccVolRange,
       cc_high_ticket: ccHi,
-      ec_average_ticket: ecAvg,
-      ec_monthly_volume: ecVol,
+      ec_average_ticket_range: ecAvgRange,
+      ec_monthly_volume_range: ecVolRange,
       ec_high_ticket: ecHi,
 
       // 100% ecommerce since LunarPay is online-only

@@ -86,11 +86,11 @@ export default function PaymentSetupPage() {
     achAccountNumber: '',
     achRoutingNumber: '',
     accountHolderName: '',
-    ccMonthlyVolume: '',
-    ccAverageTicket: '',
+    ccMonthlyVolumeRange: '',
+    ccAverageTicketRange: '',
     ccHighTicket: '',
-    ecMonthlyVolume: '',
-    ecAverageTicket: '',
+    ecMonthlyVolumeRange: '',
+    ecAverageTicketRange: '',
     ecHighTicket: '',
   });
 
@@ -291,30 +291,18 @@ export default function PaymentSetupPage() {
     setError('');
     setSuccess('');
 
-    const ccVol = parseInt(bankInfo.ccMonthlyVolume) || 0;
-    const ccAvg = parseInt(bankInfo.ccAverageTicket) || 0;
-    const ccHigh = parseInt(bankInfo.ccHighTicket) || 0;
-    const ecVol = parseInt(bankInfo.ecMonthlyVolume) || 0;
-    const ecAvg = parseInt(bankInfo.ecAverageTicket) || 0;
-    const ecHigh = parseInt(bankInfo.ecHighTicket) || 0;
+    const ccVolR = parseInt(bankInfo.ccMonthlyVolumeRange) || 0;
+    const ccAvgR = parseInt(bankInfo.ccAverageTicketRange) || 0;
+    const ecVolR = parseInt(bankInfo.ecMonthlyVolumeRange) || 0;
+    const ecAvgR = parseInt(bankInfo.ecAverageTicketRange) || 0;
 
-    if (ccVol <= ccHigh) {
-      setError('CC Monthly Volume must be higher than CC High Ticket.');
+    if (ccVolR < ccAvgR) {
+      setError('CC Monthly Volume range must be equal to or higher than CC Average Ticket range.');
       setSaving(false);
       return;
     }
-    if (ccVol <= ccAvg) {
-      setError('CC Monthly Volume must be higher than CC Average Ticket.');
-      setSaving(false);
-      return;
-    }
-    if (ecVol <= ecHigh) {
-      setError('eCheck Monthly Volume must be higher than eCheck High Ticket.');
-      setSaving(false);
-      return;
-    }
-    if (ecVol <= ecAvg) {
-      setError('eCheck Monthly Volume must be higher than eCheck Average Ticket.');
+    if (ecVolR < ecAvgR) {
+      setError('eCheck Monthly Volume range must be equal to or higher than eCheck Average Ticket range.');
       setSaving(false);
       return;
     }
@@ -354,12 +342,12 @@ export default function PaymentSetupPage() {
           altRoutingNumber: bankInfo.achRoutingNumber,
           altAccountNumber: bankInfo.achAccountNumber,
           altAccountHolderName: bankInfo.accountHolderName,
-          // Volume estimates (required)
-          ccMonthlyVolume: bankInfo.ccMonthlyVolume,
-          ccAverageTicket: bankInfo.ccAverageTicket,
+          // Volume estimates (ranges 1-7 for volume/avg ticket, dollar for high ticket)
+          ccMonthlyVolumeRange: bankInfo.ccMonthlyVolumeRange,
+          ccAverageTicketRange: bankInfo.ccAverageTicketRange,
           ccHighTicket: bankInfo.ccHighTicket,
-          ecMonthlyVolume: bankInfo.ecMonthlyVolume,
-          ecAverageTicket: bankInfo.ecAverageTicket,
+          ecMonthlyVolumeRange: bankInfo.ecMonthlyVolumeRange,
+          ecAverageTicketRange: bankInfo.ecAverageTicketRange,
           ecHighTicket: bankInfo.ecHighTicket,
         }),
       });
@@ -903,26 +891,40 @@ export default function PaymentSetupPage() {
                     <div className="space-y-4">
                       <div className="grid grid-cols-3 gap-4">
                         <div className="space-y-2">
-                          <Label>CC Monthly Volume ($) *</Label>
-                          <Input
+                          <Label>CC Monthly Volume *</Label>
+                          <select
                             required
-                            type="number"
-                            min="1"
-                            value={bankInfo.ccMonthlyVolume}
-                            onChange={(e) => setBankInfo({ ...bankInfo, ccMonthlyVolume: e.target.value })}
-                            placeholder="10000"
-                          />
+                            className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm"
+                            value={bankInfo.ccMonthlyVolumeRange}
+                            onChange={(e) => setBankInfo({ ...bankInfo, ccMonthlyVolumeRange: e.target.value })}
+                          >
+                            <option value="">Select range...</option>
+                            <option value="1">Up to $5,000</option>
+                            <option value="2">$5,001 – $10,000</option>
+                            <option value="3">$10,001 – $25,000</option>
+                            <option value="4">$25,001 – $50,000</option>
+                            <option value="5">$50,001 – $100,000</option>
+                            <option value="6">$100,001 – $250,000</option>
+                            <option value="7">$250,001+</option>
+                          </select>
                         </div>
                         <div className="space-y-2">
-                          <Label>CC Avg Ticket ($) *</Label>
-                          <Input
+                          <Label>CC Avg Ticket *</Label>
+                          <select
                             required
-                            type="number"
-                            min="1"
-                            value={bankInfo.ccAverageTicket}
-                            onChange={(e) => setBankInfo({ ...bankInfo, ccAverageTicket: e.target.value })}
-                            placeholder="100"
-                          />
+                            className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm"
+                            value={bankInfo.ccAverageTicketRange}
+                            onChange={(e) => setBankInfo({ ...bankInfo, ccAverageTicketRange: e.target.value })}
+                          >
+                            <option value="">Select range...</option>
+                            <option value="1">Up to $15</option>
+                            <option value="2">$16 – $25</option>
+                            <option value="3">$26 – $50</option>
+                            <option value="4">$51 – $100</option>
+                            <option value="5">$101 – $200</option>
+                            <option value="6">$201 – $500</option>
+                            <option value="7">$501+</option>
+                          </select>
                         </div>
                         <div className="space-y-2">
                           <Label>CC High Ticket ($) *</Label>
@@ -939,26 +941,40 @@ export default function PaymentSetupPage() {
                       </div>
                       <div className="grid grid-cols-3 gap-4">
                         <div className="space-y-2">
-                          <Label>eCheck Monthly Volume ($) *</Label>
-                          <Input
+                          <Label>eCheck Monthly Volume *</Label>
+                          <select
                             required
-                            type="number"
-                            min="1"
-                            value={bankInfo.ecMonthlyVolume}
-                            onChange={(e) => setBankInfo({ ...bankInfo, ecMonthlyVolume: e.target.value })}
-                            placeholder="5000"
-                          />
+                            className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm"
+                            value={bankInfo.ecMonthlyVolumeRange}
+                            onChange={(e) => setBankInfo({ ...bankInfo, ecMonthlyVolumeRange: e.target.value })}
+                          >
+                            <option value="">Select range...</option>
+                            <option value="1">Up to $5,000</option>
+                            <option value="2">$5,001 – $10,000</option>
+                            <option value="3">$10,001 – $25,000</option>
+                            <option value="4">$25,001 – $50,000</option>
+                            <option value="5">$50,001 – $100,000</option>
+                            <option value="6">$100,001 – $250,000</option>
+                            <option value="7">$250,001+</option>
+                          </select>
                         </div>
                         <div className="space-y-2">
-                          <Label>eCheck Avg Ticket ($) *</Label>
-                          <Input
+                          <Label>eCheck Avg Ticket *</Label>
+                          <select
                             required
-                            type="number"
-                            min="1"
-                            value={bankInfo.ecAverageTicket}
-                            onChange={(e) => setBankInfo({ ...bankInfo, ecAverageTicket: e.target.value })}
-                            placeholder="200"
-                          />
+                            className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm"
+                            value={bankInfo.ecAverageTicketRange}
+                            onChange={(e) => setBankInfo({ ...bankInfo, ecAverageTicketRange: e.target.value })}
+                          >
+                            <option value="">Select range...</option>
+                            <option value="1">Up to $15</option>
+                            <option value="2">$16 – $25</option>
+                            <option value="3">$26 – $50</option>
+                            <option value="4">$51 – $100</option>
+                            <option value="5">$101 – $200</option>
+                            <option value="6">$201 – $500</option>
+                            <option value="7">$501+</option>
+                          </select>
                         </div>
                         <div className="space-y-2">
                           <Label>eCheck High Ticket ($) *</Label>
