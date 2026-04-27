@@ -187,7 +187,8 @@ async function handleMerchantOnboardingWebhook(payload: FortisWebhookPayload, ra
       ccProductTransactionId = topLevelProductTxId;
     }
 
-    // Store the CC product_transaction_id as the primary (used for card payments)
+    // Store CC and ACH product_transaction_ids separately so we can route
+    // intentions/charges to the correct product on the merchant's Fortis account.
     const productTransactionId = ccProductTransactionId || achProductTransactionId || null;
 
     console.log('[Fortis Webhook] Extracted credentials:', {
@@ -205,6 +206,7 @@ async function handleMerchantOnboardingWebhook(payload: FortisWebhookPayload, ra
         authUserApiKey: merchantUser.user_api_key,
         locationId,
         productTransactionId,
+        achProductTransactionId,
         appStatus: 'ACTIVE',
         processorResponse: JSON.stringify(rawBody),
         updatedAt: new Date(),

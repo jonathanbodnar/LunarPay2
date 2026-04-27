@@ -15,6 +15,8 @@ export interface ApiAuthResult {
   fortisUserId: string;
   fortisApiKey: string;
   fortisLocationId: string | null;
+  fortisCcProductTransactionId: string | null;
+  fortisAchProductTransactionId: string | null;
 }
 
 function extractApiKey(request: NextRequest): string | null {
@@ -67,6 +69,8 @@ async function resolveKey(key: string, type: 'secret' | 'publishable', opts?: { 
               authUserId: true,
               authUserApiKey: true,
               locationId: true,
+              productTransactionId: true,
+              achProductTransactionId: true,
             },
           },
         },
@@ -105,6 +109,8 @@ async function resolveKey(key: string, type: 'secret' | 'publishable', opts?: { 
     fortisUserId: fortis?.authUserId ?? '',
     fortisApiKey: fortis?.authUserApiKey ?? '',
     fortisLocationId: fortis?.locationId ?? null,
+    fortisCcProductTransactionId: fortis?.productTransactionId ?? null,
+    fortisAchProductTransactionId: (fortis as any)?.achProductTransactionId ?? null,
   };
 }
 

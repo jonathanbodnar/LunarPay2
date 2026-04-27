@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Calculate fee (example: 2.3% + $0.30 for ActiveBase4)
+    // Calculate platform fee — see PLATFORM_FEE_PERCENTAGE in src/lib/utils.ts
     const feePercentage = 0.023;
     const feeFixed = 0.30;
     const fee = calculateFee(amount, feePercentage, feeFixed);
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
         statusAch: source.sourceType === 'bank' ? 'W' : null, // Waiting for ACH
         transactionType: 'Donation',
         givingSource,
-        template: organization.fortisTemplate || 'ActiveBase4',
+        template: organization.fortisTemplate || 'lunarpayfr',
         isFeeCovered,
         invoiceId,
         paymentLinkId,

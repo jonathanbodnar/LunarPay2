@@ -135,12 +135,17 @@ const NAV = [
   { id: 'quickstart',      label: 'Quick Start' },
   { id: 'authentication',  label: 'Authentication' },
   { id: 'errors',          label: 'Errors' },
+  { id: 'hosted-checkout', label: 'Hosted Checkout' },
   { id: 'customers',       label: 'Customers' },
   { id: 'payment-methods', label: 'Payment Methods' },
   { id: 'charges',         label: 'Charges' },
   { id: 'refunds',         label: 'Refunds' },
   { id: 'subscriptions',   label: 'Subscriptions' },
+  { id: 'schedules',       label: 'Payment Schedules' },
   { id: 'intentions',      label: 'Payment Intentions' },
+  { id: 'onboarding',      label: 'Onboarding' },
+  { id: 'agency',          label: 'Agency API' },
+  { id: 'reference',       label: 'Quick Reference' },
 ];
 
 // ─── page ────────────────────────────────────────────────────────────────────
@@ -440,30 +445,49 @@ const { clientToken } = await res.json();
           {/* Payment Methods */}
           <Section id="payment-methods" title="Payment Methods">
             <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-800 mb-6">
-              <strong>How card saving works:</strong> You never pass raw card numbers to the LunarPay API. Instead, use the Fortis Elements iframe (via a payment intention) to collect card data directly in the customer&apos;s browser. Fortis returns a <code className="bg-blue-100 px-1 rounded text-xs">ticket_id</code> — pass that to this endpoint to vault the card and get back a reusable <code className="bg-blue-100 px-1 rounded text-xs">paymentMethodId</code>.
+              <strong>How card &amp; bank saving works:</strong> You never pass raw card numbers or bank account details to the LunarPay API. Instead, use the Fortis Elements iframe (via a payment intention) to collect payment data directly in the customer&apos;s browser. Fortis returns a <code className="bg-blue-100 px-1 rounded text-xs">ticket_id</code> — pass that to this endpoint to vault the card or bank account and get back a reusable <code className="bg-blue-100 px-1 rounded text-xs">paymentMethodId</code>.
+            </div>
+
+            <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-900 mb-6">
+              <strong>Credit cards vs ACH (eCheck):</strong> LunarPay supports both. To save a bank account instead of a card, request an ACH intention (<code className="bg-emerald-100 px-1 rounded text-xs">paymentMethod: &quot;ach&quot;</code>) and pass <code className="bg-emerald-100 px-1 rounded text-xs">paymentMethod: &quot;ach&quot;</code> when saving the payment method. ACH requires the merchant to have ACH enabled on their Fortis account during onboarding.
             </div>
 
             <Endpoint ep={{
               method: 'POST', path: '/api/v1/customers/:id/payment-methods', key: 'secret',
-              desc: 'Save a payment method for a customer using a ticket_id returned by Fortis Elements.',
+              desc: 'Save a payment method (credit card or bank account) for a customer using a ticket_id returned by Fortis Elements.',
               params: [{ name: 'id', type: 'number', required: true, desc: 'Customer ID' }],
               body: [
-                { name: 'ticketId',   type: 'string',  required: true,  desc: 'ticket_id from Fortis Elements callback' },
-                { name: 'nameHolder', type: 'string',  required: false, desc: 'Name on card' },
-                { name: 'setDefault', type: 'boolean', required: false, desc: 'Set as default payment method (default: false)' },
+                { name: 'ticketId',      type: 'string',  required: true,  desc: 'ticket_id from Fortis Elements callback' },
+                { name: 'paymentMethod', type: 'string',  required: false, desc: '"cc" (default) or "ach". Must match the tab the customer used in Fortis Elements.' },
+                { name: 'nameHolder',    type: 'string',  required: false, desc: 'Name on card or account' },
+                { name: 'setDefault',    type: 'boolean', required: false, desc: 'Set as default payment method (default: false)' },
               ],
-              example: `curl -X POST ${BASE}/api/v1/customers/123/payment-methods \\
+              example: `# Save a credit card
+curl -X POST ${BASE}/api/v1/customers/123/payment-methods \\
   -H "Authorization: Bearer lp_sk_..." \\
   -H "Content-Type: application/json" \\
   -d '{
     "ticketId": "ticket_fts_abc123",
+    "paymentMethod": "cc",
     "nameHolder": "Jane Smith",
     "setDefault": true
+  }'
+
+# Save a bank account (ACH / eCheck)
+curl -X POST ${BASE}/api/v1/customers/123/payment-methods \\
+  -H "Authorization: Bearer lp_sk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "ticketId": "ticket_fts_ach_xyz",
+    "paymentMethod": "ach",
+    "nameHolder": "Jane Smith",
+    "setDefault": false
   }'`,
               response: `{
   "data": {
     "id": 456,
-    "sourceType": "cc",
+    "sourceType": "cc",      // "cc" or "ach"
+    "bankType": null,        // "checking" or "savings" for ACH; null for CC
     "lastDigits": "4242",
     "nameHolder": "Jane Smith",
     "isDefault": true,
@@ -493,15 +517,19 @@ const { clientToken } = await res.json();
           {/* Charges */}
           <Section id="charges" title="Charges">
             <p className="text-sm text-gray-600 mb-6">
-              Charge a saved payment method. The customer must have at least one saved payment method. All amounts are in <strong>cents</strong>.
+              Charge a saved payment method. The customer must have at least one saved payment method. All amounts are in <strong>cents</strong>. The charge is automatically routed to the correct Fortis product based on whether the saved payment method is a credit card or a bank account — you don&apos;t need to specify.
             </p>
+
+            <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl text-sm text-amber-900 mb-6">
+              <strong>ACH settlement:</strong> ACH charges return <code className="bg-amber-100 px-1 rounded text-xs">status: &quot;pending&quot;</code> immediately. Final settlement (success or return) happens 3–5 business days later and is delivered to your registered webhook. Credit card charges return <code className="bg-amber-100 px-1 rounded text-xs">status: &quot;paid&quot;</code> instantly.
+            </div>
 
             <Endpoint ep={{
               method: 'POST', path: '/api/v1/charges', key: 'secret',
-              desc: 'Charge a customer\'s saved payment method.',
+              desc: 'Charge a customer\'s saved payment method. Works for both credit card and ACH payment methods.',
               body: [
                 { name: 'customerId',      type: 'number', required: true,  desc: 'Customer ID to charge' },
-                { name: 'paymentMethodId', type: 'number', required: true,  desc: 'Payment method ID to charge' },
+                { name: 'paymentMethodId', type: 'number', required: true,  desc: 'Payment method ID to charge (CC or ACH)' },
                 { name: 'amount',          type: 'number', required: true,  desc: 'Amount in cents (e.g. 4999 = $49.99). Minimum 50.' },
                 { name: 'description',     type: 'string', required: false, desc: 'Optional description shown on the transaction' },
               ],
@@ -518,7 +546,8 @@ const { clientToken } = await res.json();
   "data": {
     "id": "789",
     "amount": 4999,
-    "status": "paid",
+    "status": "paid",            // "paid" for CC, "pending" for ACH
+    "paymentMethod": "cc",       // "cc" or "ach"
     "customerId": 123,
     "paymentMethodId": 456,
     "fortisTransactionId": "fts_txn_abc123",
@@ -634,6 +663,97 @@ curl -X POST ${BASE}/api/v1/charges/789/refund \\
             }} />
           </Section>
 
+          {/* Hosted Checkout */}
+          <Section id="hosted-checkout" title="Hosted Checkout">
+            <p className="text-sm text-gray-600 mb-4">
+              Create a hosted payment page on <code className="bg-gray-100 px-1 rounded text-xs">app.lunarpay.com</code> without embedding any payment form on your site.
+              No domain whitelisting needed — the Fortis payment form runs entirely on the LunarPay domain.
+            </p>
+            <p className="text-sm text-gray-600 mb-6">
+              <strong>Flow:</strong> Create a session → redirect customer to the returned URL → customer pays → redirect back to your <code className="bg-gray-100 px-1 rounded text-xs">success_url</code> → poll session status.
+            </p>
+
+            <Endpoint ep={{
+              method: 'POST', path: '/api/v1/checkout/sessions', key: 'secret',
+              desc: 'Create a hosted checkout session. Returns a URL to redirect the customer to.',
+              body: [
+                { name: 'amount',          type: 'number', required: true,  desc: 'Amount in dollars (e.g. 49.99)' },
+                { name: 'description',     type: 'string', required: false, desc: 'Description shown on the payment page' },
+                { name: 'customer_email',  type: 'string', required: false, desc: 'Pre-fill customer email' },
+                { name: 'customer_name',   type: 'string', required: false, desc: 'Pre-fill customer name' },
+                { name: 'payment_methods', type: 'array',  required: false, desc: 'Methods to allow: ["cc"], ["ach"], or ["cc","ach"] (default).' },
+                { name: 'success_url',     type: 'string', required: true,  desc: 'URL to redirect after successful payment' },
+                { name: 'cancel_url',      type: 'string', required: false, desc: 'URL to redirect if customer cancels' },
+                { name: 'metadata',        type: 'object', required: false, desc: 'Arbitrary key-value metadata (e.g. proposal_id)' },
+                { name: 'expires_in',      type: 'number', required: false, desc: 'Seconds until session expires (default: 3600)' },
+              ],
+              example: `curl -X POST ${BASE}/api/v1/checkout/sessions \\
+  -H "Authorization: Bearer lp_sk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "amount": 49.99,
+    "description": "Wedding Venue Deposit",
+    "customer_email": "bride@example.com",
+    "customer_name": "Jane Smith",
+    "payment_methods": ["cc", "ach"],
+    "success_url": "https://yourdomain.com/payment/success",
+    "cancel_url": "https://yourdomain.com/payment/cancel",
+    "metadata": { "proposal_id": "abc123" },
+    "expires_in": 3600
+  }'`,
+              response: `{
+  "id": 1,
+  "token": "cs_abc...",
+  "url": "https://app.lunarpay.com/pay/cs_abc...",
+  "status": "open",
+  "amount": 49.99,
+  "payment_methods": ["cc", "ach"],
+  "expires_at": "2026-03-16T19:00:00Z"
+}`,
+            }} />
+
+            <div className="mt-4 p-3 bg-emerald-50 border border-emerald-100 rounded-lg text-xs text-emerald-900">
+              <strong>ACH on hosted checkout:</strong> When <code className="bg-emerald-100 px-1 rounded">&quot;ach&quot;</code> is in <code className="bg-emerald-100 px-1 rounded">payment_methods</code>, the hosted page shows a bank-account tab alongside card. ACH charges return <code className="bg-emerald-100 px-1 rounded">pending</code> and settle via webhook 3–5 business days later. Requires the merchant to have ACH enabled on their Fortis account.
+            </div>
+
+            <SubSection id="hosted-checkout-redirect" title="Redirect the customer">
+              <Code>{`// Redirect, popup, or iframe:
+window.location.href = session.url;
+
+// Or open as popup:
+window.open(session.url, '_blank', 'width=500,height=700');`}</Code>
+            </SubSection>
+
+            <Endpoint ep={{
+              method: 'GET', path: '/api/v1/checkout/sessions/:id', key: 'secret',
+              desc: 'Check the status of a checkout session. Poll this after the customer is redirected back.',
+              params: [{ name: 'id', type: 'number', required: true, desc: 'Session ID' }],
+              example: `curl ${BASE}/api/v1/checkout/sessions/1 \\
+  -H "Authorization: Bearer lp_sk_..."`,
+              response: `{
+  "id": 1,
+  "status": "completed",
+  "amount": 49.99,
+  "transaction_id": 789,
+  "fortis_transaction_id": "fts_txn_abc123",
+  "paid_at": "2026-03-16T18:30:00Z"
+}`,
+            }} />
+
+            <Endpoint ep={{
+              method: 'GET', path: '/api/v1/checkout/sessions', key: 'secret',
+              desc: 'List all checkout sessions for your account.',
+              params: [
+                { name: 'status', type: 'string', required: false, desc: 'Filter by status: open, completed, expired' },
+                { name: 'limit',  type: 'number', required: false, desc: 'Per page, max 100 (default: 20)' },
+              ],
+            }} />
+
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
+              <strong>Important:</strong> After payment, the customer is redirected to your <code className="bg-yellow-100 px-1 rounded">success_url</code> with <code className="bg-yellow-100 px-1 rounded">?session_id=ID</code> appended. Always verify the session status server-side before fulfilling orders.
+            </div>
+          </Section>
+
           {/* Payment Intentions */}
           <Section id="intentions" title="Payment Intentions">
             <p className="text-sm text-gray-600 mb-4">
@@ -651,14 +771,26 @@ curl -X POST ${BASE}/api/v1/charges/789/refund \\
               </ol>
             </SubSection>
 
+            <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-900 mb-4">
+              <strong>Choosing which methods Elements shows:</strong> Use <code className="bg-emerald-100 px-1 rounded text-xs">paymentMethods</code> (array) to declare which tabs the Fortis Elements iframe should expose to your customer.
+              <ul className="list-disc list-inside mt-2 space-y-0.5">
+                <li><code className="bg-emerald-100 px-1 rounded text-xs">[&quot;cc&quot;]</code> — credit/debit card tab only (suppresses ACH/eCheck)</li>
+                <li><code className="bg-emerald-100 px-1 rounded text-xs">[&quot;ach&quot;]</code> — bank account / eCheck tab only (suppresses card)</li>
+                <li><code className="bg-emerald-100 px-1 rounded text-xs">[&quot;cc&quot;,&quot;ach&quot;]</code> (default if omitted) — both tabs visible</li>
+              </ul>
+              The legacy <code className="bg-emerald-100 px-1 rounded text-xs">paymentMethod</code> (singular) shorthand is still supported (<code className="bg-emerald-100 px-1 rounded text-xs">&quot;cc&quot;</code> / <code className="bg-emerald-100 px-1 rounded text-xs">&quot;ach&quot;</code> / <code className="bg-emerald-100 px-1 rounded text-xs">&quot;any&quot;</code>) for backward compatibility. When the customer submits, the Fortis response includes the <code className="bg-emerald-100 px-1 rounded text-xs">payment_method</code> they used — pass that when saving the payment method.
+            </div>
+
             <Endpoint ep={{
               method: 'POST', path: '/api/v1/intentions', key: 'publishable',
               desc: 'Create a Fortis Elements payment intention. Use your publishable key on the frontend.',
               body: [
-                { name: 'amount',       type: 'number',  required: false, desc: 'Amount in cents for a one-time charge. Omit if only saving a card.' },
-                { name: 'hasRecurring', type: 'boolean', required: false, desc: 'Set true when saving a card for future use or subscriptions (uses ticket intention).' },
+                { name: 'amount',         type: 'number',  required: false, desc: 'Amount in cents for a one-time charge. Omit if only saving a payment method.' },
+                { name: 'hasRecurring',   type: 'boolean', required: false, desc: 'Set true when saving a card/bank for future use or subscriptions (uses ticket intention).' },
+                { name: 'paymentMethods', type: 'array',   required: false, desc: 'Array of methods to expose: ["cc"], ["ach"], or ["cc","ach"] (default). Use ["cc"] to hide ACH from Elements.' },
+                { name: 'paymentMethod',  type: 'string',  required: false, desc: 'Legacy shorthand: "cc", "ach", or "any" (default). paymentMethods (plural) takes precedence if both are sent.' },
               ],
-              example: `// From your frontend
+              example: `// From your frontend — hide ACH, show card only
 const res = await fetch("${BASE}/api/v1/intentions", {
   method: "POST",
   headers: {
@@ -666,19 +798,393 @@ const res = await fetch("${BASE}/api/v1/intentions", {
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
-    hasRecurring: true   // saving a card
+    amount: 4999,
+    paymentMethods: ["cc"]   // ACH tab will not appear in Elements
   })
 });
 
-const { clientToken, intentionType, locationId } = await res.json();
-// intentionType: "ticket" (for saving) or "transaction" (one-time)`,
+const { clientToken, intentionType, paymentMethod, locationId } = await res.json();
+// intentionType: "ticket" (for saving) or "transaction" (one-time)
+// paymentMethod: "cc", "ach", or "any" — reflects what the intention was scoped to`,
               response: `{
   "clientToken": "eyJ...",
-  "intentionType": "ticket",
+  "intentionType": "transaction",
+  "paymentMethod": "cc",
   "locationId": "loc_abc123",
+  "productTransactionId": "pt_cc_xyz",  // set when you pinned a method
   "environment": "sandbox"
 }`,
             }} />
+          </Section>
+
+          {/* Payment Schedules */}
+          <Section id="schedules" title="Payment Schedules">
+            <p className="text-sm text-gray-600 mb-6">
+              Schedule multiple payments with specific amounts and dates for a customer. Each payment is automatically charged on its due date via the LunarPay daily cron.
+            </p>
+
+            <Endpoint ep={{
+              method: 'POST', path: '/api/v1/payment-schedules', key: 'secret',
+              desc: 'Create a payment schedule with one or more dated payments.',
+              body: [
+                { name: 'customerId',      type: 'number', required: true,  desc: 'Customer ID' },
+                { name: 'paymentMethodId', type: 'number', required: true,  desc: 'Payment method to charge' },
+                { name: 'description',     type: 'string', required: false, desc: 'Schedule description' },
+                { name: 'payments',        type: 'array',  required: true,  desc: 'Array of { amount (cents), date (YYYY-MM-DD) }. Up to 100.' },
+              ],
+              example: `curl -X POST ${BASE}/api/v1/payment-schedules \\
+  -H "Authorization: Bearer lp_sk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "customerId": 42,
+    "paymentMethodId": 7,
+    "description": "3-part payment plan",
+    "payments": [
+      { "amount": 50000, "date": "2026-04-01" },
+      { "amount": 30000, "date": "2026-05-15" },
+      { "amount": 20000, "date": "2026-06-30" }
+    ]
+  }'`,
+              response: `{
+  "data": {
+    "id": 1,
+    "customerId": 42,
+    "paymentMethodId": 7,
+    "status": "active",
+    "totalAmount": 100000,
+    "paidAmount": 0,
+    "paymentsTotal": 3,
+    "paymentsCompleted": 0,
+    "payments": [
+      { "id": 1, "amount": 50000, "date": "2026-04-01", "status": "pending" },
+      { "id": 2, "amount": 30000, "date": "2026-05-15", "status": "pending" },
+      { "id": 3, "amount": 20000, "date": "2026-06-30", "status": "pending" }
+    ]
+  }
+}`,
+            }} />
+
+            <Endpoint ep={{
+              method: 'GET', path: '/api/v1/payment-schedules', key: 'secret',
+              desc: 'List all payment schedules. Filter by status.',
+              params: [
+                { name: 'status', type: 'string', required: false, desc: 'active | completed | cancelled' },
+              ],
+            }} />
+
+            <Endpoint ep={{
+              method: 'GET', path: '/api/v1/payment-schedules/:id', key: 'secret',
+              desc: 'Get full schedule details including all individual payments and their statuses.',
+              params: [{ name: 'id', type: 'number', required: true, desc: 'Schedule ID' }],
+            }} />
+
+            <Endpoint ep={{
+              method: 'DELETE', path: '/api/v1/payment-schedules/:id', key: 'secret',
+              desc: 'Cancel a payment schedule. Remaining pending payments will not be charged.',
+              params: [{ name: 'id', type: 'number', required: true, desc: 'Schedule ID' }],
+            }} />
+
+            <div className="text-xs text-gray-500 mt-4 space-y-1">
+              <p>Schedule statuses: <code className="bg-gray-100 px-1 rounded">active</code> → <code className="bg-gray-100 px-1 rounded">completed</code> | <code className="bg-gray-100 px-1 rounded">cancelled</code></p>
+              <p>Payment statuses: <code className="bg-gray-100 px-1 rounded">pending</code> → <code className="bg-gray-100 px-1 rounded">paid</code> | <code className="bg-gray-100 px-1 rounded">failed</code> | <code className="bg-gray-100 px-1 rounded">cancelled</code></p>
+            </div>
+          </Section>
+
+          {/* Onboarding */}
+          <Section id="onboarding" title="Onboarding">
+            <p className="text-sm text-gray-600 mb-6">
+              Check your merchant account&apos;s onboarding status and access the Fortis MPA application form.
+            </p>
+
+            <Endpoint ep={{
+              method: 'GET', path: '/api/v1/onboarding/status', key: 'secret',
+              desc: 'Get your merchant onboarding status. Poll this to check if Fortis has approved your account.',
+              example: `curl ${BASE}/api/v1/onboarding/status \\
+  -H "Authorization: Bearer lp_sk_..."`,
+              response: `{
+  "organizationId": 42,
+  "organizationName": "Acme Corp",
+  "status": "ACTIVE",
+  "isActive": true,
+  "stepCompleted": 2,
+  "mpaLink": "https://...",
+  "mpaEmbedUrl": "https://app.lunarpay.com/onboarding/abc123",
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-02T00:00:00.000Z"
+}`,
+            }} />
+
+            <div className="text-xs text-gray-500 mt-2 mb-6 space-y-1">
+              <p>Status values: <code className="bg-gray-100 px-1 rounded">PENDING</code> → <code className="bg-gray-100 px-1 rounded">BANK_INFORMATION_SENT</code> → <code className="bg-gray-100 px-1 rounded">PENDING_REVIEW</code> → <code className="bg-gray-100 px-1 rounded">ACTIVE</code></p>
+              <p><code className="bg-gray-100 px-1 rounded">isActive: true</code> means the merchant can process payments.</p>
+            </div>
+
+            <SubSection id="onboarding-mpa" title="MPA Embed Page">
+              <p className="text-sm text-gray-600 mb-3">
+                The Fortis Merchant Processing Agreement form must be served from <code className="bg-gray-100 px-1 rounded text-xs">app.lunarpay.com</code> (iframe domain restriction). Use the <code className="bg-gray-100 px-1 rounded text-xs">mpaEmbedUrl</code> from the status endpoint, or construct it directly:
+              </p>
+              <Code>{`https://app.lunarpay.com/onboarding/{org_token}`}</Code>
+            </SubSection>
+
+            <SubSection id="onboarding-mpa-api" title="MPA Embed API (Public)">
+              <p className="text-sm text-gray-600 mb-3">
+                No authentication required — the org token acts as the identifier.
+              </p>
+              <Code>{`GET ${BASE}/api/onboarding/mpa-embed?token={org_token}
+
+// Response:
+{
+  "status": "BANK_INFORMATION_SENT",
+  "mpaLink": "https://fortis.example.com/...",
+  "organizationName": "Acme Corp",
+  "organizationLogo": "..."
+}`}</Code>
+            </SubSection>
+          </Section>
+
+          {/* Agency API */}
+          <Section id="agency" title="Agency API">
+            <p className="text-sm text-gray-600 mb-4">
+              Agency keys (<code className="bg-gray-100 px-1 rounded text-xs font-mono">lp_agency_...</code>) let you register and onboard merchants programmatically.
+              Each merchant gets their own <code className="bg-gray-100 px-1 rounded text-xs font-mono">lp_sk_</code> / <code className="bg-gray-100 px-1 rounded text-xs font-mono">lp_pk_</code> keys for payment processing.
+            </p>
+
+            <div className="p-4 bg-cyan-50 border border-cyan-200 rounded-xl text-sm text-cyan-800 mb-6">
+              <strong>Agency keys are different from merchant keys.</strong> Use <code className="bg-cyan-100 px-1 rounded text-xs">Authorization: Bearer lp_agency_...</code> for all agency endpoints. Merchant keys are returned when you register a merchant.
+            </div>
+
+            <SubSection id="agency-register" title="1. Register a Merchant">
+              <Code>{`POST ${BASE}/api/v1/agency/merchants
+Authorization: Bearer lp_agency_your_key
+Content-Type: application/json
+
+{
+  "email": "venue@example.com",
+  "password": "securepass123",
+  "firstName": "John",
+  "lastName": "Doe",
+  "phone": "555-0100",
+  "businessName": "Doe Wedding Venue"
+}
+
+// Response:
+{
+  "data": {
+    "merchantId": 123,
+    "publishableKey": "lp_pk_...",
+    "secretKey": "lp_sk_...",
+    "orgToken": "abc123..."
+  }
+}`}</Code>
+            </SubSection>
+
+            <SubSection id="agency-onboard" title="2. Submit Onboarding to Fortis">
+              <Code>{`POST ${BASE}/api/v1/agency/merchants/:id/onboard
+Authorization: Bearer lp_agency_your_key
+Content-Type: application/json
+
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "phone": "555-0100",
+  "email": "venue@example.com",
+  "dbaName": "Doe Wedding Venue",
+  "legalName": "Doe Venues LLC",
+  "addressLine1": "123 Main St",
+  "city": "Austin",
+  "state": "TX",
+  "postalCode": "78701",
+  "routingNumber": "021000021",
+  "accountNumber": "123456789",
+  "accountHolderName": "John Doe",
+  "ccMonthlyVolumeRange": 3,
+  "ccAverageTicketRange": 2,
+  "ccHighTicket": 5000,
+  "ecMonthlyVolumeRange": 2,
+  "ecAverageTicketRange": 1,
+  "ecHighTicket": 3000
+}
+
+// Response includes mpaEmbedUrl — redirect the merchant there
+// to complete the Fortis MPA form.`}</Code>
+              <div className="mt-4 overflow-x-auto">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Volume Range Values</p>
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 text-left">
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-600 border border-gray-200 w-20">Range</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-600 border border-gray-200">Monthly Volume</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-600 border border-gray-200">Average Ticket</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {[
+                      ['1', 'Up to $5,000', 'Up to $15'],
+                      ['2', '$5,001 – $10,000', '$16 – $25'],
+                      ['3', '$10,001 – $25,000', '$26 – $50'],
+                      ['4', '$25,001 – $50,000', '$51 – $100'],
+                      ['5', '$50,001 – $100,000', '$101 – $200'],
+                      ['6', '$100,001 – $250,000', '$201 – $500'],
+                      ['7', '$250,001+', '$500+'],
+                    ].map(([range, vol, avg]) => (
+                      <tr key={range} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 border border-gray-200"><code className="text-xs font-mono font-semibold text-gray-800">{range}</code></td>
+                        <td className="px-3 py-2 border border-gray-200 text-xs text-gray-600">{vol}</td>
+                        <td className="px-3 py-2 border border-gray-200 text-xs text-gray-600">{avg}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-xs text-gray-500 mt-2">High ticket fields (<code className="bg-gray-100 px-1 rounded">ccHighTicket</code>, <code className="bg-gray-100 px-1 rounded">ecHighTicket</code>) are dollar amounts (1–30,000).</p>
+              </div>
+            </SubSection>
+
+            <SubSection id="agency-status" title="3. Check Status / Get Keys">
+              <Code>{`GET ${BASE}/api/v1/agency/merchants/:id
+Authorization: Bearer lp_agency_your_key
+
+// Returns merchant details, API keys, and onboarding status`}</Code>
+            </SubSection>
+
+            <SubSection id="agency-list" title="List All Merchants">
+              <Code>{`GET ${BASE}/api/v1/agency/merchants
+Authorization: Bearer lp_agency_your_key
+
+// Returns all merchants registered under your agency`}</Code>
+            </SubSection>
+
+            <SubSection id="agency-webhooks" title="4. Configure Webhooks">
+              <p className="text-sm text-gray-600 mb-3">
+                Register a webhook to be notified when a merchant&apos;s Fortis application is approved or denied.
+              </p>
+              <Code>{`PUT ${BASE}/api/v1/agency/webhook
+Authorization: Bearer lp_agency_your_key
+Content-Type: application/json
+
+{
+  "webhookUrl": "https://yourdomain.com/webhooks/lunarpay"
+}
+
+// Response — save the secret for signature verification:
+{
+  "data": {
+    "webhookUrl": "https://yourdomain.com/webhooks/lunarpay",
+    "webhookSecret": "whsec_abc123..."
+  }
+}`}</Code>
+            </SubSection>
+
+            <SubSection id="agency-webhook-payload" title="Webhook Payload">
+              <Code>{`// POST to your webhook URL
+{
+  "event": "merchant.approved",   // or "merchant.denied"
+  "merchant": {
+    "id": 123,
+    "email": "venue@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "businessName": "Doe Wedding Venue",
+    "organizationId": 42
+  },
+  "onboarding": {
+    "status": "ACTIVE",
+    "previousStatus": "BANK_INFORMATION_SENT"
+  },
+  "keys": {                        // only on merchant.approved
+    "publishableKey": "lp_pk_...",
+    "secretKey": "lp_sk_..."
+  },
+  "timestamp": "2026-03-21T20:00:00.000Z"
+}`}</Code>
+            </SubSection>
+
+            <SubSection id="agency-verify-signature" title="Verifying Webhook Signatures">
+              <p className="text-sm text-gray-600 mb-3">
+                Every webhook includes an <code className="bg-gray-100 px-1 rounded text-xs">X-LunarPay-Signature</code> header. Verify it with your webhook secret:
+              </p>
+              <Code>{`const crypto = require('crypto');
+const expected = crypto
+  .createHmac('sha256', webhookSecret)
+  .update(rawBody)
+  .digest('hex');
+
+if (expected !== req.headers['x-lunarpay-signature']) {
+  return res.status(401).send('Invalid signature');
+}`}</Code>
+            </SubSection>
+
+            <SubSection id="agency-manage-webhook" title="Manage Webhook">
+              <Code>{`// Get current webhook config
+GET ${BASE}/api/v1/agency/webhook
+Authorization: Bearer lp_agency_your_key
+
+// Remove webhook
+DELETE ${BASE}/api/v1/agency/webhook
+Authorization: Bearer lp_agency_your_key`}</Code>
+            </SubSection>
+
+            <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700">
+              <strong>Full flow:</strong> Register merchant → Submit onboarding → Merchant completes MPA form → Fortis approves (24–48h) → <strong>Webhook fires</strong> → <code className="bg-gray-100 px-1 rounded">isActive: true</code> → Merchant can process payments with their own keys.
+            </div>
+          </Section>
+
+          {/* Endpoint Quick Reference */}
+          <Section id="reference" title="Endpoint Quick Reference">
+            <p className="text-sm text-gray-600 mb-4">Base URL: <code className="bg-gray-100 px-1 rounded">{BASE}</code></p>
+            <div className="space-y-1">
+              {[
+                { method: 'POST', path: '/api/v1/customers', desc: 'Create or upsert a customer', auth: 'secret' },
+                { method: 'GET',  path: '/api/v1/customers', desc: 'List customers', auth: 'secret' },
+                { method: 'PUT',  path: '/api/v1/customers/:id', desc: 'Update a customer', auth: 'secret' },
+                { method: 'POST', path: '/api/v1/customers/:id/payment-methods', desc: 'Save a payment method (CC or ACH)', auth: 'secret' },
+                { method: 'GET',  path: '/api/v1/customers/:id/payment-methods', desc: 'List payment methods', auth: 'secret' },
+                { method: 'DELETE', path: '/api/v1/customers/:id/payment-methods/:pmId', desc: 'Remove a payment method', auth: 'secret' },
+                { method: 'POST', path: '/api/v1/charges', desc: 'Charge a saved payment method (CC or ACH)', auth: 'secret' },
+                { method: 'POST', path: '/api/v1/charges/:id/refund', desc: 'Refund a charge', auth: 'secret' },
+                { method: 'POST', path: '/api/v1/subscriptions', desc: 'Create a subscription', auth: 'secret' },
+                { method: 'GET',  path: '/api/v1/subscriptions', desc: 'List subscriptions', auth: 'secret' },
+                { method: 'PATCH', path: '/api/v1/subscriptions/:id', desc: 'Update a subscription', auth: 'secret' },
+                { method: 'DELETE', path: '/api/v1/subscriptions/:id', desc: 'Cancel a subscription', auth: 'secret' },
+                { method: 'POST', path: '/api/v1/payment-schedules', desc: 'Create a payment schedule', auth: 'secret' },
+                { method: 'GET',  path: '/api/v1/payment-schedules', desc: 'List payment schedules', auth: 'secret' },
+                { method: 'GET',  path: '/api/v1/payment-schedules/:id', desc: 'Get schedule details', auth: 'secret' },
+                { method: 'DELETE', path: '/api/v1/payment-schedules/:id', desc: 'Cancel a payment schedule', auth: 'secret' },
+                { method: 'POST', path: '/api/v1/checkout/sessions', desc: 'Create hosted checkout session', auth: 'secret' },
+                { method: 'GET',  path: '/api/v1/checkout/sessions', desc: 'List checkout sessions', auth: 'secret' },
+                { method: 'GET',  path: '/api/v1/checkout/sessions/:id', desc: 'Get checkout session status', auth: 'secret' },
+                { method: 'POST', path: '/api/v1/intentions', desc: 'Create a payment intention (Elements)', auth: 'publishable' },
+                { method: 'GET',  path: '/api/v1/onboarding/status', desc: 'Get merchant onboarding status', auth: 'secret' },
+                { method: 'GET',  path: '/api/onboarding/mpa-embed?token=:token', desc: 'Get Fortis MPA embed link', auth: 'public' },
+                { method: 'POST', path: '/api/v1/agency/merchants', desc: 'Register a new merchant', auth: 'agency' },
+                { method: 'GET',  path: '/api/v1/agency/merchants', desc: 'List agency merchants', auth: 'agency' },
+                { method: 'GET',  path: '/api/v1/agency/merchants/:id', desc: 'Get merchant details + keys', auth: 'agency' },
+                { method: 'POST', path: '/api/v1/agency/merchants/:id/onboard', desc: 'Submit merchant onboarding', auth: 'agency' },
+                { method: 'GET',  path: '/api/v1/agency/webhook', desc: 'Get webhook configuration', auth: 'agency' },
+                { method: 'PUT',  path: '/api/v1/agency/webhook', desc: 'Set or update webhook URL', auth: 'agency' },
+                { method: 'DELETE', path: '/api/v1/agency/webhook', desc: 'Remove webhook', auth: 'agency' },
+              ].map((ep, i) => {
+                const mc: Record<string, string> = {
+                  GET: 'text-green-600 bg-green-50', POST: 'text-blue-600 bg-blue-50',
+                  PUT: 'text-yellow-600 bg-yellow-50', PATCH: 'text-yellow-600 bg-yellow-50',
+                  DELETE: 'text-red-600 bg-red-50',
+                };
+                const ac: Record<string, { bg: string; label: string }> = {
+                  secret: { bg: 'bg-orange-50 text-orange-600', label: 'lp_sk_' },
+                  publishable: { bg: 'bg-purple-50 text-purple-600', label: 'lp_pk_' },
+                  agency: { bg: 'bg-cyan-50 text-cyan-600', label: 'lp_agency_' },
+                  public: { bg: 'bg-green-50 text-green-600', label: 'public' },
+                };
+                const a = ac[ep.auth] ?? ac.secret;
+                return (
+                  <div key={i} className="flex items-center gap-3 py-2 border-b last:border-0">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono shrink-0 ${mc[ep.method] ?? ''}`}>{ep.method}</span>
+                    <code className="text-xs font-mono text-gray-800 flex-1">{ep.path}</code>
+                    <span className="text-xs text-gray-500 hidden sm:block flex-1">{ep.desc}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${a.bg}`}>{a.label}</span>
+                  </div>
+                );
+              })}
+            </div>
           </Section>
 
           {/* Footer note */}

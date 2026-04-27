@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================
@@ -222,10 +223,11 @@ model FortisOnboarding {
   mpaLink               String?   @map("mpa_link") @db.Text
   
   // API Credentials (from webhook)
-  locationId            String?   @map("location_id") @db.VarChar(255)
-  productTransactionId  String?   @map("product_transaction_id") @db.VarChar(255)
-  authUserId            String?   @map("auth_user_id") @db.VarChar(255)
-  authUserApiKey        String?   @map("auth_user_api_key") @db.VarChar(500)
+  locationId                String?   @map("location_id") @db.VarChar(255)
+  productTransactionId      String?   @map("product_transaction_id") @db.VarChar(255)
+  achProductTransactionId   String?   @map("ach_product_transaction_id") @db.VarChar(255)
+  authUserId                String?   @map("auth_user_id") @db.VarChar(255)
+  authUserApiKey            String?   @map("auth_user_api_key") @db.VarChar(500)
   
   // Audit
   processorResponse     String?   @map("processor_response") @db.Text
@@ -1063,7 +1065,11 @@ model CheckoutSession {
   customerId          Int?      @map("customer_id")
   
   metadata            String?   @db.Text
-  
+
+  // Comma-separated list of allowed payment methods: "cc", "ach", or "cc,ach".
+  // Controls which tabs Fortis Elements exposes on the hosted payment page.
+  paymentMethods      String?   @default("cc,ach") @map("payment_methods") @db.VarChar(50)
+
   successUrl          String?   @map("success_url") @db.VarChar(2000)
   cancelUrl           String?   @map("cancel_url") @db.VarChar(2000)
   

@@ -350,6 +350,74 @@ export class FortisClient {
   }
 
   /**
+   * 2D. PROCESS ACH TICKET DEBIT
+   * POST /v1/transactions/ach/debit/ticket
+   *
+   * Process an ACH/bank-account debit using a ticket_id from Fortis Elements.
+   * Use save_account: true to tokenize the bank account for future charges.
+   */
+  async processACHTicketSale(data: {
+    ticket_id: string;
+    transaction_amount: number;
+    save_account?: boolean;
+    location_id?: string;
+    transaction_c1?: string;
+    transaction_c2?: string;
+  }): Promise<{
+    status: boolean;
+    transaction?: any;
+    tokenId?: string;
+    message?: string;
+    reasonCode?: string;
+  }> {
+    try {
+      console.log('[Fortis ACH Ticket Debit] Processing:', data);
+
+      const response = await this.client.post<TransactionResponse>(
+        'transactions/ach/debit/ticket',
+        data
+      );
+
+      const txData = response.data.data;
+
+      console.log('[Fortis ACH Ticket Debit] Response:', {
+        id: txData.id,
+        status_code: txData.status_code,
+        reason_code_id: txData.reason_code_id,
+        token_id: txData.token_id,
+        transaction_amount: txData.transaction_amount,
+      });
+
+      const hasTransactionId = !!txData.id;
+
+      // ACH starts pending; final status comes via webhook. reason_code 1000 = accepted.
+      if (txData.reason_code_id === 1000 || (hasTransactionId && !txData.reason_code_id)) {
+        return {
+          status: true,
+          transaction: txData,
+          tokenId: txData.token_id || undefined,
+          message: 'ACH transaction initiated - waiting for bank clearance',
+        };
+      }
+
+      const reasonMessage = FORTIS_REASON_CODES[txData.reason_code_id?.toString()] || 'Unknown error';
+
+      return {
+        status: false,
+        transaction: txData,
+        message: `ACH transaction failed: ${reasonMessage}`,
+        reasonCode: txData.reason_code_id?.toString(),
+      };
+    } catch (error) {
+      console.error('[Fortis ACH Ticket Debit] Error:', error);
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
    * 3. CREDIT CARD SALE WITH TOKEN
    * POST /v1/transactions/cc/sale/token
    * 
@@ -546,22 +614,35 @@ export class FortisClient {
    * 7. GET LOCATION DETAILS
    * GET /v1/locations/{locationId}
    * 
-   * Fetches details for a specific location
+   * Fetches details for a specific location.
+   * Pass expand: ['product_transactions'] to get the full PT records (otherwise
+   * Fortis returns a [null] array for product_transactions).
    */
-  async getLocation(locationId: string): Promise<{
+  async getLocation(
+    locationId: string,
+    options?: { expand?: string[] }
+  ): Promise<{
     status: boolean;
     location?: {
       id: string;
       name: string;
       product_transactions?: Array<{
         id: string;
-        payment_method: string;
+        payment_method?: string;
+        active?: number | boolean;
+        title?: string;
+        mcc?: string;
+        sub_processor?: string;
       }>;
     };
     message?: string;
   }> {
     try {
-      const response = await this.client.get(`locations/${locationId}`);
+      const params: Record<string, string> = {};
+      if (options?.expand?.length) {
+        params.expand = options.expand.join(',');
+      }
+      const response = await this.client.get(`locations/${locationId}`, { params });
       
       if (response.data?.data) {
         const loc = response.data.data;

@@ -28,6 +28,9 @@ async function processChatFollowups(): Promise<{ sent: number; errors: number; s
     where: {
       followupEmailSentAt: null,
       status: 'active',
+      user: {
+        agencyId: null,
+      },
     },
     include: {
       user: {

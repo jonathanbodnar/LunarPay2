@@ -24,6 +24,13 @@ const createSessionSchema = z.object({
   success_url: z.string().url().max(2000).optional(),
   cancel_url: z.string().url().max(2000).optional(),
   expires_in: z.number().int().min(300).max(86400).default(3600), // seconds, default 1hr
+  /**
+   * Payment methods to allow on the hosted page.
+   * - ['cc']       — credit card only
+   * - ['ach']      — bank account (eCheck) only
+   * - ['cc','ach'] — both (default)
+   */
+  payment_methods: z.array(z.enum(['cc', 'ach'])).min(1).max(2).optional().default(['cc', 'ach']),
 });
 
 function generateSessionToken(): string {
@@ -44,12 +51,14 @@ export async function POST(request: NextRequest) {
     const token = generateSessionToken();
     const expiresAt = new Date(Date.now() + data.expires_in * 1000);
 
+    const paymentMethodsStr = [...new Set(data.payment_methods)].join(',');
+
     const session = await prisma.$queryRawUnsafe<{ id: number }[]>(
       `INSERT INTO checkout_sessions 
         (token, organization_id, user_id, amount, currency, description, 
-         customer_email, customer_name, customer_id, metadata, 
+         customer_email, customer_name, customer_id, metadata, payment_methods,
          success_url, cancel_url, status, expires_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'open', $13, NOW(), NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'open', $14, NOW(), NOW())
        RETURNING id`,
       token,
       auth.organizationId,
@@ -61,6 +70,7 @@ export async function POST(request: NextRequest) {
       data.customer_name || null,
       data.customer_id || null,
       data.metadata ? JSON.stringify(data.metadata) : null,
+      paymentMethodsStr,
       data.success_url || null,
       data.cancel_url || null,
       expiresAt
@@ -79,6 +89,7 @@ export async function POST(request: NextRequest) {
       amount: data.amount,
       currency: data.currency,
       description: data.description || null,
+      payment_methods: data.payment_methods,
       expires_at: expiresAt.toISOString(),
     }, { status: 201 });
   } catch (e: any) {

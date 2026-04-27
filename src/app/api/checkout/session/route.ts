@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const sessions = await prisma.$queryRawUnsafe<any[]>(
       `SELECT cs.id, cs.token, cs.amount, cs.currency, cs.description,
               cs.customer_email, cs.customer_name, cs.status,
-              cs.success_url, cs.cancel_url, cs.expires_at,
+              cs.success_url, cs.cancel_url, cs.expires_at, cs.payment_methods,
               cs.organization_id,
               cd.church_name as org_name, cd.logo as org_logo,
               cd.primary_color, cd.background_color, cd.button_text_color
@@ -61,6 +61,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Session has expired' }, { status: 410 });
     }
 
+    const paymentMethods = (s.payment_methods || 'cc,ach').split(',').map((m: string) => m.trim()).filter(Boolean);
+
     return NextResponse.json({
       session: {
         id: s.id,
@@ -79,6 +81,7 @@ export async function GET(request: NextRequest) {
         primary_color: s.primary_color || '#000000',
         background_color: s.background_color || '#f8fafc',
         button_text_color: s.button_text_color || '#ffffff',
+        payment_methods: paymentMethods,
       },
     });
   } catch (error) {
@@ -90,7 +93,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { token, ticketId, amount, customerEmail, customerFirstName, customerLastName } = body;
+    const { token, ticketId, amount, customerEmail, customerFirstName, customerLastName, paymentMethod } = body;
+    const isAch = paymentMethod === 'ach';
 
     if (!token || !token.startsWith('cs_')) {
       return NextResponse.json({ error: 'Invalid session token' }, { status: 400 });
@@ -156,15 +160,23 @@ export async function POST(request: NextRequest) {
       organization.fortisOnboarding.authUserApiKey
     );
 
-    // Charge the card via ticket sale with save_account to get token_id
+    // Route the ticket sale through the correct Fortis product (CC vs ACH).
     const amountInCents = amount || Math.round(Number(session.amount) * 100);
-    const result = await fortisClient.processTicketSale({
-      ticket_id: ticketId,
-      transaction_amount: amountInCents,
-      save_account: true,
-      location_id: organization.fortisOnboarding.locationId || undefined,
-      transaction_c1: `LP-checkout-${session.id}`,
-    });
+    const result = isAch
+      ? await fortisClient.processACHTicketSale({
+          ticket_id: ticketId,
+          transaction_amount: amountInCents,
+          save_account: true,
+          location_id: organization.fortisOnboarding.locationId || undefined,
+          transaction_c1: `LP-checkout-${session.id}`,
+        })
+      : await fortisClient.processTicketSale({
+          ticket_id: ticketId,
+          transaction_amount: amountInCents,
+          save_account: true,
+          location_id: organization.fortisOnboarding.locationId || undefined,
+          transaction_c1: `LP-checkout-${session.id}`,
+        });
 
     console.log('[Checkout] Fortis ticket result:', {
       status: result.status,
@@ -192,7 +204,7 @@ export async function POST(request: NextRequest) {
     const last_four = txData.last_four || txData.last4 || '';
     const account_holder_name = txData.account_holder_name || session.customer_name || '';
     const account_type = txData.account_type || '';
-    const payment_method = txData.payment_method || 'cc';
+    const payment_method = isAch ? 'ach' : (txData.payment_method || 'cc');
     const exp_date = txData.exp_date || '';
 
     const amountInDollars = amountInCents / 100;
@@ -248,7 +260,8 @@ export async function POST(request: NextRequest) {
         subTotalAmount: netAmount,
         fee,
         source: payment_method === 'ach' ? 'BNK' : 'CC',
-        status: 'P',
+        // ACH transactions settle via webhook days later; mark as pending.
+        status: payment_method === 'ach' ? 'U' : 'P',
         transactionType: 'DO',
         givingSource: 'checkout',
         fortisTransactionId: truncate(fortisTransactionId, 50),

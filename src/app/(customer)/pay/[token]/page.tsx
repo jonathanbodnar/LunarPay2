@@ -22,6 +22,7 @@ interface SessionData {
   primary_color: string;
   background_color: string;
   button_text_color: string;
+  payment_methods: string[];
 }
 
 export default function HostedCheckoutPage() {
@@ -193,7 +194,6 @@ export default function HostedCheckoutPage() {
     setPaymentError('');
 
     try {
-      // Extract ticket_id from Fortis ticket response
       const ticketId =
         fortisResponse?.data?.id ||
         fortisResponse?.ticket?.id ||
@@ -203,14 +203,20 @@ export default function HostedCheckoutPage() {
         fortisResponse?.data?.ticket_id ||
         fortisResponse?.id;
 
+      // Fortis tells us which tab the customer used: 'cc' or 'ach'.
+      const paymentMethod =
+        fortisResponse?.data?.payment_method ||
+        fortisResponse?.payment_method ||
+        fortisResponse?.data?.ticket?.payment_method ||
+        'cc';
+
       if (!ticketId) {
         console.error('[Checkout] Could not extract ticket_id from response:', fortisResponse);
-        setPaymentError('Card tokenization failed. Please try again.');
+        setPaymentError('Payment tokenization failed. Please try again.');
         setProcessing(false);
         return;
       }
 
-      // Process the ticket sale (charges the card and saves the token)
       const amountInCents = Math.round((session?.amount || 0) * 100);
 
       const nameParts = (session?.customer_name || '').split(' ');
@@ -221,6 +227,7 @@ export default function HostedCheckoutPage() {
           token,
           ticketId,
           amount: amountInCents,
+          paymentMethod,
           customerEmail: session?.customer_email,
           customerFirstName: nameParts[0] || '',
           customerLastName: nameParts.slice(1).join(' ') || '',

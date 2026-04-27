@@ -48,11 +48,16 @@ async function processOnboardingEmails(): Promise<EmailResult> {
 
   console.log('[ONBOARDING_EMAILS] Starting onboarding email processing at:', now.toISOString());
 
-  // Get all incomplete onboardings that might need emails
+  // Get all incomplete onboardings that might need emails (exclude agency merchants)
   const incompleteOnboardings = await prisma.fortisOnboarding.findMany({
     where: {
       appStatus: {
         not: 'ACTIVE',
+      },
+      organization: {
+        user: {
+          agencyId: null,
+        },
       },
     },
     include: {

@@ -48,14 +48,24 @@ export async function POST(request: NextRequest) {
     const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
     const fortisClient = createFortisClient(env as 'sandbox' | 'production', auth.fortisUserId, auth.fortisApiKey);
 
-    // Charge the saved card using the wallet token
-    const result = await fortisClient.processCreditCardSale({
-      transaction_amount: amount, // already in cents
-      token_id: source.fortisWalletId,
-      location_id: auth.fortisLocationId || undefined,
-      transaction_c1: description || undefined,
-      transaction_c2: String(customerId), // store customer ID in custom field
-    });
+    const isAch = source.sourceType === 'ach';
+
+    // Route to the correct Fortis endpoint based on the saved payment method.
+    const result = isAch
+      ? await fortisClient.processACHDebit({
+          transaction_amount: amount,
+          token_id: source.fortisWalletId,
+          location_id: auth.fortisLocationId || undefined,
+          transaction_c1: description || undefined,
+          transaction_c2: String(customerId),
+        })
+      : await fortisClient.processCreditCardSale({
+          transaction_amount: amount,
+          token_id: source.fortisWalletId,
+          location_id: auth.fortisLocationId || undefined,
+          transaction_c1: description || undefined,
+          transaction_c2: String(customerId),
+        });
 
     if (!result.status) {
       return apiError(result.message || 'Charge failed', 402);
@@ -64,7 +74,6 @@ export async function POST(request: NextRequest) {
     const fortisTransactionId = result.transaction?.id || null;
     const amountInDollars = amount / 100;
 
-    // Record the transaction
     const transaction = await prisma.transaction.create({
       data: {
         userId: auth.userId,
@@ -77,8 +86,9 @@ export async function POST(request: NextRequest) {
         lastName: customer.lastName || '',
         email: customer.email || '',
         phone: customer.phone || null,
-        source: source.sourceType === 'ach' ? 'BNK' : 'CC',
-        status: 'P',
+        source: isAch ? 'BNK' : 'CC',
+        // ACH clears asynchronously — mark as pending until the webhook confirms.
+        status: isAch ? 'U' : 'P',
         givingSource: 'api',
         fortisTransactionId,
         requestResponse: JSON.stringify(result.transaction),
@@ -98,12 +108,14 @@ export async function POST(request: NextRequest) {
       data: {
         id: transaction.id.toString(),
         amount,
-        status: 'paid',
+        status: isAch ? 'pending' : 'paid',
+        paymentMethod: isAch ? 'ach' : 'cc',
         customerId,
         paymentMethodId,
         fortisTransactionId,
         description: description || null,
         createdAt: transaction.createdAt,
+        ...(isAch ? { note: 'ACH transactions take 3–5 business days to clear. Final status is delivered via webhook.' } : {}),
       },
     }, { status: 201 });
   } catch (e) {
