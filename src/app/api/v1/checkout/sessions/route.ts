@@ -53,30 +53,34 @@ export async function POST(request: NextRequest) {
 
     const paymentMethodsStr = [...new Set(data.payment_methods)].join(',');
 
-    const session = await prisma.$queryRawUnsafe<{ id: number }[]>(
-      `INSERT INTO checkout_sessions 
-        (token, organization_id, user_id, amount, currency, description, 
-         customer_email, customer_name, customer_id, metadata, payment_methods,
-         success_url, cancel_url, status, expires_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'open', $14, NOW(), NOW())
-       RETURNING id`,
-      token,
-      auth.organizationId,
-      auth.userId,
-      data.amount,
-      data.currency,
-      data.description || null,
-      data.customer_email || null,
-      data.customer_name || null,
-      data.customer_id || null,
-      data.metadata ? JSON.stringify(data.metadata) : null,
-      paymentMethodsStr,
-      data.success_url || null,
-      data.cancel_url || null,
-      expiresAt
-    );
+    // Use the typed Prisma client rather than $queryRawUnsafe so the parameter
+    // binding is driver-managed (the raw path was failing on JSON-string values
+    // for the metadata column — Prisma's unsafe-raw binder mishandles strings
+    // that look like array/json literals over the transaction-mode pooler).
+    // Bonus: any future schema additions (new columns) flow through automatically
+    // — no more "raw INSERT forgot a column" 500s.
+    const session = await prisma.checkoutSession.create({
+      data: {
+        token,
+        organizationId: auth.organizationId,
+        userId: auth.userId,
+        amount: data.amount,
+        currency: data.currency,
+        description: data.description ?? null,
+        customerEmail: data.customer_email ?? null,
+        customerName: data.customer_name ?? null,
+        customerId: data.customer_id ?? null,
+        metadata: data.metadata ? JSON.stringify(data.metadata) : null,
+        paymentMethods: paymentMethodsStr,
+        successUrl: data.success_url ?? null,
+        cancelUrl: data.cancel_url ?? null,
+        status: 'open',
+        expiresAt,
+      },
+      select: { id: true },
+    });
 
-    const sessionId = session[0].id;
+    const sessionId = session.id;
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com';
     const checkoutUrl = `${baseUrl}/pay/${token}`;
@@ -107,45 +111,53 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '25'), 100);
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    let whereClause = 'WHERE organization_id = $1';
-    const params: any[] = [auth.organizationId];
+    const where = {
+      organizationId: auth.organizationId,
+      ...(status ? { status } : {}),
+    };
 
-    if (status) {
-      params.push(status);
-      whereClause += ` AND status = $${params.length}`;
-    }
-
-    const sessions = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT id, token, amount, currency, description, customer_email, customer_name,
-              status, fortis_transaction_id, paid_at, expires_at, created_at, metadata
-       FROM checkout_sessions ${whereClause}
-       ORDER BY created_at DESC
-       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      ...params, limit, offset
-    );
-
-    const countResult = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
-      `SELECT COUNT(*)::bigint as count FROM checkout_sessions ${whereClause}`,
-      ...params
-    );
+    const [sessions, total] = await Promise.all([
+      prisma.checkoutSession.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+        select: {
+          id: true,
+          token: true,
+          amount: true,
+          currency: true,
+          description: true,
+          customerEmail: true,
+          customerName: true,
+          status: true,
+          fortisTransactionId: true,
+          paidAt: true,
+          expiresAt: true,
+          createdAt: true,
+          metadata: true,
+        },
+      }),
+      prisma.checkoutSession.count({ where }),
+    ]);
 
     return Response.json({
-      data: sessions.map((s: any) => ({
+      data: sessions.map((s) => ({
         id: s.id,
         token: s.token,
         amount: Number(s.amount),
         currency: s.currency,
         description: s.description,
-        customer_email: s.customer_email,
-        customer_name: s.customer_name,
+        customer_email: s.customerEmail,
+        customer_name: s.customerName,
         status: s.status,
-        fortis_transaction_id: s.fortis_transaction_id,
-        paid_at: s.paid_at,
-        expires_at: s.expires_at,
-        created_at: s.created_at,
+        fortis_transaction_id: s.fortisTransactionId,
+        paid_at: s.paidAt,
+        expires_at: s.expiresAt,
+        created_at: s.createdAt,
         metadata: s.metadata ? JSON.parse(s.metadata) : null,
       })),
-      total: Number(countResult[0].count),
+      total,
       limit,
       offset,
     });
