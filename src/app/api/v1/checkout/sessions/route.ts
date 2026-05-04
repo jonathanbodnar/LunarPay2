@@ -20,7 +20,11 @@ const createSessionSchema = z.object({
   customer_email: z.string().email().optional(),
   customer_name: z.string().max(200).optional(),
   customer_id: z.number().int().optional(),
-  metadata: z.record(z.any()).optional(),
+  // Zod 4 requires both key and value schemas for z.record. Calling
+  // z.record(z.any()) silently leaves the value schema undefined, which
+  // crashes with "Cannot read properties of undefined (reading '_zod')"
+  // the moment the metadata object contains at least one key.
+  metadata: z.record(z.string(), z.any()).optional(),
   success_url: z.string().url().max(2000).optional(),
   cancel_url: z.string().url().max(2000).optional(),
   expires_in: z.number().int().min(300).max(86400).default(3600), // seconds, default 1hr
@@ -99,22 +103,6 @@ export async function POST(request: NextRequest) {
   } catch (e: any) {
     if (e instanceof ApiAuthError) return apiError(e.message, e.statusCode);
     console.error('[v1/checkout/sessions POST]', e);
-    // TEMP: include error detail in body when ?debug=<CRON_ADMIN_KEY> is passed,
-    // so we can root-cause the metadata 500 without Railway log access. Remove
-    // once the underlying bug is fixed.
-    const debugKey = new URL(request.url).searchParams.get('debug');
-    if (debugKey && process.env.CRON_ADMIN_KEY && debugKey === process.env.CRON_ADMIN_KEY) {
-      return Response.json({
-        error: 'Internal server error',
-        debug: {
-          name: e?.name ?? null,
-          message: e?.message ?? String(e),
-          code: e?.code ?? null,
-          meta: e?.meta ?? null,
-          stack: typeof e?.stack === 'string' ? e.stack.split('\n').slice(0, 8) : null,
-        },
-      }, { status: 500 });
-    }
     return apiError('Internal server error', 500);
   }
 }
