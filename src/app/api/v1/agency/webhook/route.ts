@@ -46,7 +46,7 @@ export async function PUT(request: NextRequest) {
 
     if (!parsed.success) {
       return apiError(
-        `Validation error: ${parsed.error.errors.map((e: any) => e.message).join(', ')}`,
+        `Validation error: ${parsed.error.issues.map((e) => e.message).join(', ')}`,
         422
       );
     }

@@ -2,10 +2,20 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { dollarsToCents, calculateFee } from '@/lib/utils';
-import { sendSubscriptionRecurringPaymentReceipt } from '@/lib/email';
+import {
+  sendSubscriptionRecurringPaymentReceipt,
+  sendPaymentFailedEmail,
+  sendSubscriptionCancelledEmail,
+} from '@/lib/email';
 
 // Admin key for manual triggering (must be set via environment variable)
 const ADMIN_TRIGGER_KEY = process.env.CRON_ADMIN_KEY;
+
+// Auto-cancel a subscription after this many *consecutive* failed charges.
+// Successes reset the counter to 0, so a long-running healthy sub never gets
+// killed by sporadic declines — only by sustained payment failure (typical
+// cause: card cancelled, account closed, or a hard block on the Fortis side).
+const MAX_CONSECUTIVE_FAILURES = 4;
 
 /**
  * Cron job to process recurring subscriptions
@@ -252,13 +262,14 @@ async function processSubscriptions(request: Request) {
 
           console.log(`[CRON] Subscription ${subscription.id} next payment: ${nextPaymentDate.toISOString()}`);
 
-          // Update subscription
+          // Update subscription — successful charge resets consecutive-fail counter.
           await prisma.subscription.update({
             where: { id: subscription.id },
             data: {
               nextPaymentOn: nextPaymentDate,
               lastPaymentOn: new Date(),
               successTrxns: { increment: 1 },
+              consecutiveFailures: 0,
             },
           });
 
@@ -301,28 +312,72 @@ async function processSubscriptions(request: Request) {
             },
           });
 
-          // Update fail count
-          const failCount = (subscription.failTrxns || 0) + 1;
-          const updateData: any = {
-            failTrxns: { increment: 1 },
-          };
-
-          // Cancel subscription after 4 failed attempts with no previous success
-          if (failCount >= 4 && (subscription.successTrxns || 0) === 0) {
-            updateData.status = 'D';
-            updateData.cancelledAt = new Date();
-          }
+          // Update fail counters. Track consecutive failures separately from
+          // lifetime fail count — the consecutive counter is what drives
+          // auto-cancellation, and it resets every time a charge succeeds
+          // (handled in the success branch above).
+          const newConsecutive = (subscription.consecutiveFailures ?? 0) + 1;
+          const willCancel = newConsecutive >= MAX_CONSECUTIVE_FAILURES;
 
           await prisma.subscription.update({
             where: { id: subscription.id },
-            data: updateData,
+            data: {
+              failTrxns: { increment: 1 },
+              consecutiveFailures: newConsecutive,
+              ...(willCancel ? { status: 'D', cancelledAt: new Date() } : {}),
+            },
           });
+
+          // Notify the customer about the failed charge so they can update
+          // their payment method before they get auto-cancelled. Best-effort —
+          // never block the cron loop on email failure.
+          const portalBase =
+            process.env.NEXT_PUBLIC_APP_URL || 'https://app.lunarpay.com';
+          try {
+            await sendPaymentFailedEmail({
+              customerEmail: subscription.email,
+              customerName: `${subscription.firstName} ${subscription.lastName}`.trim(),
+              organizationName: organization.name,
+              organizationId: organization.id,
+              amount: `$${Number(subscription.amount).toFixed(2)}`,
+              reason: result.message || 'Payment was declined.',
+              updatePaymentUrl: `${portalBase}/portal`,
+            });
+          } catch (emailError) {
+            console.error(
+              `[CRON] Failed to send payment-failed email for subscription ${subscription.id}:`,
+              emailError
+            );
+          }
+
+          // If we just auto-cancelled, send a separate cancellation notice.
+          if (willCancel) {
+            console.log(
+              `[CRON] Subscription ${subscription.id} auto-cancelled after ${newConsecutive} consecutive failures`
+            );
+            try {
+              await sendSubscriptionCancelledEmail(
+                subscription.email,
+                `${subscription.firstName} ${subscription.lastName}`.trim(),
+                organization.name,
+                undefined,
+                undefined,
+                organization.id
+              );
+            } catch (emailError) {
+              console.error(
+                `[CRON] Failed to send cancellation email for subscription ${subscription.id}:`,
+                emailError
+              );
+            }
+          }
 
           results.failed++;
           results.details.push({
             subscriptionId: subscription.id,
-            status: 'failed',
+            status: willCancel ? 'failed_and_cancelled' : 'failed',
             error: result.message,
+            consecutiveFailures: newConsecutive,
           });
         }
       } catch (error) {

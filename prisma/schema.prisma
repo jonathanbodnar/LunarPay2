@@ -470,6 +470,9 @@ model Subscription {
   // Tracking
   successTrxns          Int?      @default(0) @map("success_trxns")
   failTrxns             Int?      @default(0) @map("fail_trxns")
+  // Resets to 0 on every successful charge; auto-cancel triggers when this
+  // hits MAX_CONSECUTIVE_FAILURES in process-subscriptions.
+  consecutiveFailures   Int       @default(0) @map("consecutive_failures")
   
   // Payment Link Integration
   paymentLinkProductsId Int?      @map("payment_link_products_id")
