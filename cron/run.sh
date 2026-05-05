@@ -38,7 +38,18 @@ if [ -n "$LEAD_NURTURING_URL" ]; then
   echo "$body" | head -c 1000
 fi
 
-# Job 4: Chat Followup Emails (24h no-reply)
+# Job 4: Process Scheduled Payments (installment plans)
+if [ -n "$SCHEDULED_PAYMENTS_URL" ]; then
+  echo ""
+  echo "--- Processing Scheduled Payments ---"
+  response=$(curl -s -w "\n%{http_code}" "$SCHEDULED_PAYMENTS_URL")
+  http_code=$(echo "$response" | tail -n1)
+  body=$(echo "$response" | sed '$d')
+  echo "Response (HTTP $http_code):"
+  echo "$body" | head -c 1000
+fi
+
+# Job 5: Chat Followup Emails (24h no-reply)
 if [ -n "$CHAT_FOLLOWUP_URL" ]; then
   echo ""
   echo "--- Processing Chat Followup Emails ---"
