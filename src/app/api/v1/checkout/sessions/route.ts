@@ -13,6 +13,32 @@ import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { requireSecretKey, ApiAuthError, apiError } from '@/lib/api-auth';
 
+const RECURRING_FREQUENCIES = ['weekly', 'monthly', 'quarterly', 'yearly'] as const;
+
+const recurringConfigSchema = z.object({
+  frequency: z.enum(RECURRING_FREQUENCIES),
+  // Per-period amount in dollars. Defaults to the session `amount` (i.e. the
+  // first charge equals every recurring charge). Override when the first
+  // payment is a setup fee or partial period that differs from the recurring
+  // amount.
+  amount: z.number().positive().optional(),
+  // ISO date for the FIRST recurring charge after the initial one. Defaults
+  // to (today + 1 frequency interval).
+  start_on: z.string().datetime({ offset: true }).optional(),
+});
+
+const installmentsConfigSchema = z.object({
+  // Total number of payments in the plan, INCLUDING the one paid at checkout.
+  // count=3 means the customer pays one now and two more on schedule.
+  count: z.number().int().min(2).max(60),
+  frequency: z.enum(RECURRING_FREQUENCIES),
+  // Per-installment amount in dollars. Defaults to the session `amount` (i.e.
+  // every installment is the same as the first).
+  amount: z.number().positive().optional(),
+  // ISO date for installment #2. Defaults to (today + 1 frequency interval).
+  start_on: z.string().datetime({ offset: true }).optional(),
+});
+
 const createSessionSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
   currency: z.string().length(3).default('USD'),
@@ -35,6 +61,31 @@ const createSessionSchema = z.object({
    * - ['cc','ach'] — both (default)
    */
   payment_methods: z.array(z.enum(['cc', 'ach'])).min(1).max(2).optional().default(['cc', 'ach']),
+
+  /**
+   * What happens after the customer completes the first charge.
+   * - "payment"      — one-off (default)
+   * - "subscription" — auto-create a recurring Subscription against the saved card
+   * - "installments" — auto-create a fixed-count PaymentSchedule for the remaining payments
+   */
+  mode: z.enum(['payment', 'subscription', 'installments']).optional().default('payment'),
+  recurring: recurringConfigSchema.optional(),
+  installments: installmentsConfigSchema.optional(),
+}).superRefine((val, ctx) => {
+  if (val.mode === 'subscription' && !val.recurring) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['recurring'],
+      message: 'recurring is required when mode is "subscription"',
+    });
+  }
+  if (val.mode === 'installments' && !val.installments) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['installments'],
+      message: 'installments is required when mode is "installments"',
+    });
+  }
 });
 
 function generateSessionToken(): string {
@@ -63,6 +114,15 @@ export async function POST(request: NextRequest) {
     // that look like array/json literals over the transaction-mode pooler).
     // Bonus: any future schema additions (new columns) flow through automatically
     // — no more "raw INSERT forgot a column" 500s.
+    // Persist the mode-specific config alongside the row so the completion
+    // handler can read it back without hitting another store.
+    const modeConfig =
+      data.mode === 'subscription' && data.recurring
+        ? { recurring: data.recurring }
+        : data.mode === 'installments' && data.installments
+        ? { installments: data.installments }
+        : null;
+
     const session = await prisma.checkoutSession.create({
       data: {
         token,
@@ -76,6 +136,8 @@ export async function POST(request: NextRequest) {
         customerId: data.customer_id ?? null,
         metadata: data.metadata ? JSON.stringify(data.metadata) : null,
         paymentMethods: paymentMethodsStr,
+        mode: data.mode,
+        modeConfig: modeConfig ?? undefined,
         successUrl: data.success_url ?? null,
         cancelUrl: data.cancel_url ?? null,
         status: 'open',
@@ -98,6 +160,9 @@ export async function POST(request: NextRequest) {
       currency: data.currency,
       description: data.description || null,
       payment_methods: data.payment_methods,
+      mode: data.mode,
+      ...(data.mode === 'subscription' ? { recurring: data.recurring } : {}),
+      ...(data.mode === 'installments' ? { installments: data.installments } : {}),
       expires_at: expiresAt.toISOString(),
     }, { status: 201 });
   } catch (e: any) {
@@ -136,10 +201,16 @@ export async function GET(request: NextRequest) {
           customerName: true,
           status: true,
           fortisTransactionId: true,
+          transactionId: true,
           paidAt: true,
           expiresAt: true,
           createdAt: true,
           metadata: true,
+          mode: true,
+          modeConfig: true,
+          subscriptionId: true,
+          paymentScheduleId: true,
+          donorId: true,
         },
       }),
       prisma.checkoutSession.count({ where }),
@@ -156,10 +227,17 @@ export async function GET(request: NextRequest) {
         customer_name: s.customerName,
         status: s.status,
         fortis_transaction_id: s.fortisTransactionId,
+        transaction_id: s.transactionId ? String(s.transactionId) : null,
         paid_at: s.paidAt,
         expires_at: s.expiresAt,
         created_at: s.createdAt,
         metadata: s.metadata ? JSON.parse(s.metadata) : null,
+        mode: s.mode,
+        mode_config: s.modeConfig ?? null,
+        // Resources auto-created on completion based on mode (null until paid).
+        customer_id: s.donorId,
+        subscription_id: s.subscriptionId,
+        payment_schedule_id: s.paymentScheduleId,
       })),
       total,
       limit,

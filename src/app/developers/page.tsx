@@ -682,6 +682,9 @@ curl -X POST ${BASE}/api/v1/charges/789/refund \\
                 { name: 'customer_email',  type: 'string', required: false, desc: 'Pre-fill customer email' },
                 { name: 'customer_name',   type: 'string', required: false, desc: 'Pre-fill customer name' },
                 { name: 'payment_methods', type: 'array',  required: false, desc: 'Methods to allow: ["cc"], ["ach"], or ["cc","ach"] (default).' },
+                { name: 'mode',            type: 'string', required: false, desc: '"payment" (default), "subscription", or "installments". See below.' },
+                { name: 'recurring',       type: 'object', required: false, desc: 'Required when mode="subscription". { frequency: "weekly"|"monthly"|"quarterly"|"yearly", amount?, start_on? }' },
+                { name: 'installments',    type: 'object', required: false, desc: 'Required when mode="installments". { count: 2..60, frequency, amount?, start_on? }' },
                 { name: 'success_url',     type: 'string', required: true,  desc: 'URL to redirect after successful payment' },
                 { name: 'cancel_url',      type: 'string', required: false, desc: 'URL to redirect if customer cancels' },
                 { name: 'metadata',        type: 'object', required: false, desc: 'Arbitrary key-value metadata (e.g. proposal_id)' },
@@ -715,6 +718,42 @@ curl -X POST ${BASE}/api/v1/charges/789/refund \\
             <div className="mt-4 p-3 bg-emerald-50 border border-emerald-100 rounded-lg text-xs text-emerald-900">
               <strong>ACH on hosted checkout:</strong> When <code className="bg-emerald-100 px-1 rounded">&quot;ach&quot;</code> is in <code className="bg-emerald-100 px-1 rounded">payment_methods</code>, the hosted page shows a bank-account tab alongside card. ACH charges return <code className="bg-emerald-100 px-1 rounded">pending</code> and settle via webhook 3–5 business days later. Requires the merchant to have ACH enabled on their Fortis account.
             </div>
+
+            <SubSection id="hosted-checkout-modes" title="Subscriptions and installments in one call">
+              <p className="text-sm text-gray-700 mb-3">
+                Pass <code className="bg-gray-100 px-1 rounded">mode</code> to have LunarPay automatically create the recurring resource after the first charge succeeds. The customer pays once on the hosted page; LunarPay vaults the card, runs the first charge, and creates the subscription / payment schedule against that saved card. The <code className="bg-gray-100 px-1 rounded">checkout.session.completed</code> webhook delivers the IDs you need.
+              </p>
+              <Code>{`// Recurring weekly subscription, $30/wk
+POST /api/v1/checkout/sessions
+{
+  "amount": 30.00,
+  "description": "StoryVenue Weekly Plan",
+  "mode": "subscription",
+  "recurring": {
+    "frequency": "weekly"
+  },
+  "customer_email": "owner@storyvenue.com",
+  "success_url": "https://storypay.app/billing/done",
+  "metadata": { "plan_id": "weekly-30" }
+}
+
+// 3-payment installment plan, $200 total
+POST /api/v1/checkout/sessions
+{
+  "amount": 66.67,
+  "description": "Proposal #84321 - Payment 1 of 3",
+  "mode": "installments",
+  "installments": {
+    "count": 3,
+    "frequency": "monthly"
+  },
+  "customer_email": "client@example.com",
+  "success_url": "https://storypay.app/proposals/84321/done"
+}`}</Code>
+              <p className="text-xs text-gray-600 mt-3">
+                <strong>Defaults:</strong> if you omit <code className="bg-gray-100 px-1 rounded">amount</code> on the recurring/installments object, every period is the same as the first charge. If you omit <code className="bg-gray-100 px-1 rounded">start_on</code>, the next period is one frequency-interval after today.
+              </p>
+            </SubSection>
 
             <SubSection id="hosted-checkout-redirect" title="Redirect the customer">
               <Code>{`// Redirect, popup, or iframe:
@@ -1074,7 +1113,8 @@ Content-Type: application/json
 }`}</Code>
             </SubSection>
 
-            <SubSection id="agency-webhook-payload" title="Webhook Payload">
+            <SubSection id="agency-webhook-payload" title="Webhook Events">
+              <p className="text-sm text-gray-700 mb-2"><strong>merchant.approved / merchant.denied</strong></p>
               <Code>{`// POST to your webhook URL
 {
   "event": "merchant.approved",   // or "merchant.denied"
@@ -1095,6 +1135,40 @@ Content-Type: application/json
     "secretKey": "lp_sk_..."
   },
   "timestamp": "2026-03-21T20:00:00.000Z"
+}`}</Code>
+
+              <p className="text-sm text-gray-700 mt-4 mb-2"><strong>checkout.session.completed</strong></p>
+              <p className="text-xs text-gray-600 mb-2">
+                Fires when any of your merchants&apos; hosted checkout sessions completes successfully. Use <code className="bg-gray-100 px-1 rounded">customer.id</code> + <code className="bg-gray-100 px-1 rounded">payment_method.id</code> to make follow-up <code className="bg-gray-100 px-1 rounded">/v1/subscriptions</code> or <code className="bg-gray-100 px-1 rounded">/v1/payment-schedules</code> calls. If the session was created with <code className="bg-gray-100 px-1 rounded">mode</code>, the <code className="bg-gray-100 px-1 rounded">resources</code> object tells you what was already created for you.
+              </p>
+              <Code>{`{
+  "event": "checkout.session.completed",
+  "session": {
+    "id": 39, "token": "cs_abc...",
+    "amount": 30.00, "currency": "USD",
+    "description": "StoryVenue Weekly Plan",
+    "customer_email": "owner@storyvenue.com",
+    "customer_name": "Jane Smith",
+    "metadata": { "plan_id": "weekly-30" },
+    "mode": "subscription",
+    "paid_at": "2026-04-30T14:22:00.000Z"
+  },
+  "merchant": {
+    "id": 41, "organizationId": 124,
+    "businessName": "StoryVenue"
+  },
+  "transaction": {
+    "id": "667",
+    "fortis_transaction_id": "fts_txn_...",
+    "amount": 30.00, "payment_method": "cc"
+  },
+  "customer": { "id": 241, "email": "owner@storyvenue.com" },
+  "payment_method": { "id": 243, "type": "cc", "last4": "5089" },
+  "resources": {
+    "subscription_id": 87,           // populated when mode="subscription"
+    "payment_schedule_id": null      // populated when mode="installments"
+  },
+  "timestamp": "2026-04-30T14:22:00.123Z"
 }`}</Code>
             </SubSection>
 

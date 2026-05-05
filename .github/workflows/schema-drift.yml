@@ -1,0 +1,108 @@
+name: Schema drift check
+
+# Catches the regression class where prisma/schema.prisma is updated but the
+# corresponding ALTER TABLE never lands in production. Runs `prisma migrate diff`
+# between the live production database and the committed schema; fails the build
+# if any non-empty SQL would be required to bring production in sync.
+#
+# Required GitHub Actions secret:
+#   PROD_DIRECT_URL  Postgres direct URL (port 5432) for the production Supabase
+#                    database. Use the Supavisor SESSION pooler:
+#                      postgresql://postgres.<project-ref>:<password>@<host>:5432/postgres
+#                    Direct introspection is required, which the transaction
+#                    pooler (port 6543) does not support.
+#
+# To debug locally:
+#   DIRECT_URL=<the-prod-direct-url> npm run db:diff
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: schema-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diff:
+    name: Compare prisma/schema.prisma against production database
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify production secret is configured
+        env:
+          PROD_DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+        run: |
+          if [ -z "$PROD_DIRECT_URL" ]; then
+            echo "::error::Missing required GitHub secret PROD_DIRECT_URL."
+            echo "Set it in Settings → Secrets and variables → Actions."
+            echo "Format: postgresql://postgres.<ref>:<password>@<host>:5432/postgres"
+            exit 1
+          fi
+
+      - name: Diff Prisma schema against production
+        env:
+          # prisma.config.ts loads DATABASE_URL via dotenv even when the diff
+          # uses --from-url, so point both at the same direct URL.
+          DATABASE_URL: ${{ secrets.PROD_DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+        run: |
+          set -o pipefail
+
+          # Capture stdout (the SQL script) only. stderr (Prisma warn lines,
+          # config-loader chatter, connection errors) flows to the runner log
+          # automatically — keeping it out of DIFF_OUTPUT prevents false-positive
+          # drift detections from non-SQL noise.
+          DIFF_OUTPUT=$(
+            npx --yes prisma migrate diff \
+              --from-url "$DIRECT_URL" \
+              --to-schema-datamodel prisma/schema.prisma \
+              --script
+          ) || {
+            echo "::error::prisma migrate diff failed to execute. See stderr above."
+            exit 1
+          }
+
+          # Strip SQL comments and whitespace so the "-- This is an empty
+          # migration." footer doesn't trip the drift check.
+          STRIPPED=$(echo "$DIFF_OUTPUT" | sed -E 's|--.*$||g' | tr -d '[:space:];')
+
+          if [ -z "$STRIPPED" ]; then
+            echo "::notice::No schema drift. Production database matches prisma/schema.prisma."
+            exit 0
+          fi
+
+          echo "::error::Schema drift detected — production is missing changes from prisma/schema.prisma."
+          echo ""
+          echo "──────────────────────────────────────────────────────────────────"
+          echo "Required SQL to bring production in sync:"
+          echo "──────────────────────────────────────────────────────────────────"
+          echo "$DIFF_OUTPUT"
+          echo "──────────────────────────────────────────────────────────────────"
+          echo ""
+          echo "Resolve before merging by either:"
+          echo "  1. Apply the SQL above to production (via Supabase MCP or the"
+          echo "     Supabase SQL editor), then re-run this workflow."
+          echo "  2. Revert the schema change in this PR if it was unintentional."
+          echo ""
+          echo "Why this check exists: a schema field referenced by Prisma raw"
+          echo "queries that doesn't exist on the live table returns an opaque"
+          echo "500 'Internal server error' to API callers (see the"
+          echo "ach_product_transaction_id and payment_methods incidents)."
+
+          exit 1

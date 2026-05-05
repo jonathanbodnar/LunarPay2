@@ -113,7 +113,7 @@ export async function POST(
     const isTest = fortisEnv !== 'prd';
     const templateCode = isTest
       ? 'Testing1234'
-      : (org.fortisTemplate || process.env.FORTIS_TPL_DEFAULT || 'lunarpayfr');
+      : (org.fortisTemplate || 'lunarpayfr');
 
     const cleanedPhone = cleanPhoneForFortis(data.phone);
 

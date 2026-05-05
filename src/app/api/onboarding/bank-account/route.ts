@@ -154,7 +154,7 @@ export async function POST(request: Request) {
     // Determine test mode - treat 'dev', 'development', 'test' as sandbox
     const envRaw = process.env.FORTIS_ENVIRONMENT || 'sandbox';
     const isTest = envRaw !== 'prd' && envRaw !== 'production' && envRaw !== 'prod';
-    const templateCode = isTest ? 'Testing1234' : (organization.fortisTemplate || process.env.FORTIS_TPL_DEFAULT || 'lunarpayfr');
+    const templateCode = isTest ? 'Testing1234' : (organization.fortisTemplate || 'lunarpayfr');
 
     // Prepare Fortis onboarding data combining step 1 and step 2 data
     const merchantData: MerchantOnboardingData = {

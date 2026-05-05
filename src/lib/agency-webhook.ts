@@ -1,7 +1,12 @@
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 
-export interface AgencyWebhookPayload {
+export type AgencyWebhookEvent =
+  | 'merchant.approved'
+  | 'merchant.denied'
+  | 'checkout.session.completed';
+
+interface MerchantApprovalPayload {
   event: 'merchant.approved' | 'merchant.denied';
   merchant: {
     id: number;
@@ -22,6 +27,59 @@ export interface AgencyWebhookPayload {
   };
   timestamp: string;
 }
+
+export interface CheckoutSessionCompletedPayload {
+  event: 'checkout.session.completed';
+  session: {
+    id: number;
+    token: string;
+    amount: number;
+    currency: string;
+    description: string | null;
+    customer_email: string | null;
+    customer_name: string | null;
+    metadata: Record<string, unknown> | null;
+    mode: string;
+    paid_at: string;
+  };
+  merchant: {
+    id: number;
+    organizationId: number;
+    businessName: string | null;
+  };
+  // The Fortis-cleared transaction the customer just paid.
+  transaction: {
+    id: string;
+    fortis_transaction_id: string | null;
+    amount: number;
+    payment_method: 'cc' | 'ach';
+  };
+  // The donor row LunarPay assigned to / created for this email/card.
+  // Persist this on the partner side so subsequent /v1/subscriptions or
+  // /v1/payment-schedules calls reference the same customer.
+  customer: {
+    id: number;
+    email: string | null;
+  } | null;
+  // The saved card / bank token. Use this id when calling /v1/subscriptions
+  // or /v1/payment-schedules for follow-up recurring charges.
+  payment_method: {
+    id: number;
+    type: 'cc' | 'ach';
+    last4: string | null;
+  } | null;
+  // Populated when the session was created with mode="subscription" or
+  // mode="installments" — LunarPay already created the resource for you.
+  resources: {
+    subscription_id: number | null;
+    payment_schedule_id: number | null;
+  };
+  timestamp: string;
+}
+
+export type AgencyWebhookPayload =
+  | MerchantApprovalPayload
+  | CheckoutSessionCompletedPayload;
 
 function signPayload(payload: string, secret: string): string {
   return crypto.createHmac('sha256', secret).update(payload).digest('hex');

@@ -1073,6 +1073,20 @@ model CheckoutSession {
   // Controls which tabs Fortis Elements exposes on the hosted payment page.
   paymentMethods      String?   @default("cc,ach") @map("payment_methods") @db.VarChar(50)
 
+  // Stripe-style mode flag. Determines what we do AFTER the first charge succeeds:
+  //   "payment"       - one-off, do nothing extra (default)
+  //   "subscription"  - auto-create a Subscription using the saved card + modeConfig.frequency
+  //   "installments"  - auto-create a PaymentSchedule using the saved card + modeConfig.{count,frequency,amount}
+  mode                String    @default("payment") @db.VarChar(20)
+  // Free-form configuration for the active mode (frequency, count, etc.).
+  // See createSessionSchema in src/app/api/v1/checkout/sessions/route.ts for accepted shapes.
+  modeConfig          Json?     @map("mode_config")
+
+  // Populated at completion time so partners can look up what was created.
+  subscriptionId      Int?      @map("subscription_id")
+  paymentScheduleId   Int?      @map("payment_schedule_id")
+  donorId             Int?      @map("donor_id")
+
   successUrl          String?   @map("success_url") @db.VarChar(2000)
   cancelUrl           String?   @map("cancel_url") @db.VarChar(2000)
   
