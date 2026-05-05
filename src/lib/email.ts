@@ -9,12 +9,53 @@ if (process.env.SENDGRID_API_KEY) {
 const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'noreply@lunarpay.com';
 const FROM_NAME = process.env.SENDGRID_FROM_NAME || 'LunarPay';
 
+/**
+ * Categories used to gate email sends. Pass one to `sendEmail` so an operator
+ * can suppress an entire class of mail without redeploying. Disabled categories
+ * are configured via the EMAILS_DISABLED_CATEGORIES env var (comma-separated).
+ *
+ * Defaults to "cron,subscription,agency" while SendGrid is in a degraded state
+ * (401 "not authorized to send mail"). To re-enable everything once SendGrid is
+ * fixed, set EMAILS_DISABLED_CATEGORIES to an empty string on Railway.
+ *   - "cron"         drip / nurturing / chat-followup batches fired by cron
+ *   - "subscription" recurring receipts, payment-failed, subscription-cancelled
+ *   - "agency"       reserved for any merchant-approval / agency notifications
+ *   - "transactional" portal logins, password resets, invoices, ticket replies
+ *                    (NOT in the default disabled list — these stay on)
+ */
+export type EmailCategory =
+  | 'cron'
+  | 'subscription'
+  | 'agency'
+  | 'transactional';
+
+const DEFAULT_DISABLED_CATEGORIES: EmailCategory[] = ['cron', 'subscription', 'agency'];
+
+function getDisabledCategories(): Set<EmailCategory> {
+  // `EMAILS_DISABLED_CATEGORIES=""` (explicitly empty) -> nothing disabled.
+  // Unset -> use defaults.
+  const raw = process.env.EMAILS_DISABLED_CATEGORIES;
+  if (raw === undefined) return new Set(DEFAULT_DISABLED_CATEGORIES);
+  return new Set(
+    raw
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean) as EmailCategory[]
+  );
+}
+
 interface EmailOptions {
   to: string;
   subject: string;
   text?: string;
   html: string;
   replyTo?: string;
+  /**
+   * Logical category for kill-switch routing. Omit only for ad-hoc one-off
+   * sends; otherwise tag every helper in this file so a single env flag can
+   * mute the right mailers in an outage.
+   */
+  category?: EmailCategory;
 }
 
 // ============================================
@@ -56,6 +97,14 @@ function replaceVariables(text: string, variables: Record<string, string>): stri
 }
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
+  const disabled = getDisabledCategories();
+  if (options.category && disabled.has(options.category)) {
+    console.log(
+      `[EMAIL] Category "${options.category}" is disabled — skipping send to ${options.to} (subject: ${options.subject})`
+    );
+    return false;
+  }
+
   if (!process.env.SENDGRID_API_KEY) {
     console.log('[EMAIL] SendGrid not configured, skipping email:', options.subject);
     console.log('[EMAIL] Would send to:', options.to);
@@ -644,6 +693,7 @@ export async function sendSubscriptionConfirmation(data: SubscriptionConfirmatio
     subject,
     html,
     replyTo: data.organizationEmail,
+    category: 'subscription',
   });
 }
 
@@ -701,6 +751,7 @@ export async function sendSubscriptionCancelledEmail(
     subject,
     html,
     replyTo: organizationEmail,
+    category: 'subscription',
   });
 }
 
@@ -790,6 +841,7 @@ export async function sendSubscriptionRecurringPaymentReceipt(data: Subscription
     subject: `Payment receipt - ${data.organizationName}`,
     html,
     replyTo: data.organizationEmail,
+    category: 'subscription',
   });
 }
 
@@ -882,6 +934,7 @@ export async function sendPaymentFailedEmail(data: PaymentFailedData): Promise<b
     subject,
     html,
     replyTo: data.organizationEmail,
+    category: 'subscription',
   });
 }
 
@@ -1244,6 +1297,7 @@ export async function sendOnboardingEmail1(data: OnboardingEmailData): Promise<b
     to: data.to,
     subject: 'Welcome to LunarPay.',
     html,
+    category: 'cron',
   });
 }
 
@@ -1307,6 +1361,7 @@ export async function sendOnboardingEmail2(data: OnboardingEmailData): Promise<b
     to: data.to,
     subject: 'This is the last day of your business.',
     html,
+    category: 'cron',
   });
 }
 
@@ -1359,6 +1414,7 @@ export async function sendOnboardingEmail3(data: OnboardingEmailData): Promise<b
     to: data.to,
     subject: 'The part they don\'t tell you',
     html,
+    category: 'cron',
   });
 }
 
@@ -1403,6 +1459,7 @@ export async function sendOnboardingEmail4(data: OnboardingEmailData): Promise<b
     to: data.to,
     subject: 'Are your payments safe?',
     html,
+    category: 'cron',
   });
 }
 
@@ -1496,6 +1553,7 @@ export async function sendLeadNurturingEmail1(data: LeadNurturingEmailData): Pro
     to: data.to,
     subject: 'They froze $135K overnight. No warning.',
     html,
+    category: 'cron',
   });
 }
 
@@ -1539,6 +1597,7 @@ export async function sendLeadNurturingEmail2(data: LeadNurturingEmailData): Pro
     to: data.to,
     subject: 'The email that killed my business',
     html,
+    category: 'cron',
   });
 }
 
@@ -1580,6 +1639,7 @@ export async function sendLeadNurturingEmail3(data: LeadNurturingEmailData): Pro
     to: data.to,
     subject: 'The list of businesses they\'ve shut down',
     html,
+    category: 'cron',
   });
 }
 
@@ -1631,6 +1691,7 @@ export async function sendLeadNurturingEmail4(data: LeadNurturingEmailData): Pro
     to: data.to,
     subject: 'Why "instant approval" is a trap',
     html,
+    category: 'cron',
   });
 }
 
@@ -1674,6 +1735,7 @@ export async function sendLeadNurturingEmail5(data: LeadNurturingEmailData): Pro
     to: data.to,
     subject: 'What\'s your backup plan?',
     html,
+    category: 'cron',
   });
 }
 
@@ -1743,6 +1805,7 @@ export async function sendChatFollowupEmail(data: {
     subject: 'You have an unread message from Jonathan at LunarPay',
     html,
     replyTo: data.replyToAddress,
+    category: 'cron',
   });
 }
 
@@ -1782,5 +1845,6 @@ export async function sendLeadNurturingEmail6(data: LeadNurturingEmailData): Pro
     to: data.to,
     subject: 'I thought it would never happen to me.',
     html,
+    category: 'cron',
   });
 }
