@@ -497,6 +497,7 @@ export default function PortalDashboard() {
       elements.eventBus.on('error', (err: any) => {
         console.error('[Portal Fortis] Form error:', err);
         setAddPaymentError(err?.message || 'Payment form error');
+        setAddPaymentProcessing(false);
       });
 
       elements.eventBus.on('done', async (response: any) => {
@@ -549,6 +550,7 @@ export default function PortalDashboard() {
       elements.eventBus.on('error', (err: any) => {
         console.error('[Portal Fortis] New card form error:', err);
         setCheckoutError(err?.message || 'Payment form error');
+        setCheckoutLoading(false);
       });
 
       elements.eventBus.on('done', async (response: any) => {

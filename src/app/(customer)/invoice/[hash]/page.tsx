@@ -194,6 +194,7 @@ export default function PublicInvoicePage() {
         elements.eventBus.on('error', (err: any) => {
           console.error('[Fortis] error:', err);
           setPaymentError(err?.message || 'Payment form error');
+          setProcessing(false);
         });
       } else {
         // Fallback to elements.on() if eventBus not available

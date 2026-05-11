@@ -313,6 +313,7 @@ export default function CustomerDetailPage() {
       elements.eventBus.on('error', (err: any) => {
         console.error('[Fortis] Form error:', err);
         setPaymentError(err?.message || 'Payment form error');
+        setProcessing(false);
       });
 
       elements.eventBus.on('done', async (response: any) => {

@@ -214,6 +214,7 @@ export default function PaymentLinkPage() {
         elements.eventBus.on('error', (err: any) => {
           console.error('[Fortis] error:', err);
           setPaymentError(err?.message || 'Payment form error');
+          setProcessing(false);
         });
         
         // Log all events for debugging

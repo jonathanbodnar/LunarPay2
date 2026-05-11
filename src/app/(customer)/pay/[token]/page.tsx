@@ -149,6 +149,7 @@ export default function HostedCheckoutPage() {
         });
         elements.eventBus.on('error', (err: any) => {
           setPaymentError(err?.message || 'Payment error.');
+          setProcessing(false);
         });
       } else {
         elements.on('ready', () => {});
