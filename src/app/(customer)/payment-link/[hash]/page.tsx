@@ -253,7 +253,7 @@ export default function PaymentLinkPage() {
           colorBackground: '#ffffff',
           colorText: '#1a202c',
           // fontFamily must be one of: Roboto, Montserrat, OpenSans, Raleway, SourceCode, SourceSans
-          fontFamily: 'Roboto',
+          fontFamily: 'Source Sans Pro',
           fontSize: '16px',
           borderRadius: '8px',
         },

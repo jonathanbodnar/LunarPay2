@@ -903,7 +903,7 @@ const { clientToken, intentionType, paymentMethod, locationId } = await res.json
                       ['colorButtonBackground', 'string', '#f7fafc', 'Background of unselected tabs'],
                       ['colorBackground', 'string', '#ffffff', 'Form background'],
                       ['colorText', 'string', '#1a202c', 'Input text and label color'],
-                      ['fontFamily', 'string', 'Roboto', 'Font inside the iframes'],
+                      ['fontFamily', 'string', 'Source Sans Pro', 'Font inside the iframes'],
                       ['fontSize', 'string', '16px', 'Text size'],
                       ['borderRadius', 'string', '8px', 'Corner rounding on inputs and container'],
                     ].map(([opt, type, def, desc], i) => (
@@ -995,7 +995,7 @@ const form = elements.create({
     colorButtonBackground: "#f7fafc",
     colorBackground: "#ffffff",
     colorText: "#1a202c",
-    fontFamily: "Inter",
+    fontFamily: "Source Sans Pro",
     fontSize: "16px",
     borderRadius: "8px",
   },
