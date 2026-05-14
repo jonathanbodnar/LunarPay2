@@ -44,7 +44,7 @@ export class FortisClient {
         'user-id': this.userId,
         'user-api-key': this.userApiKey,
       },
-      timeout: 30000, // 30 seconds
+      timeout: 60000, // 60 seconds (refunds can be slow)
     });
 
     // Add request/response interceptors for logging

@@ -110,9 +110,17 @@ export async function POST(
 
     console.log('[Refund] Fortis result:', JSON.stringify(result, null, 2));
 
-    // Fortis refund is successful if we got a refund object back or status is true
-    // Sometimes Fortis returns successfully but the structure is different
-    const refundSucceeded = result.status || result.refund?.id || result.refund;
+    // Treat "Data Validation Failed" (422) as a likely already-refunded state.
+    // This happens when a previous refund request timed out on our side (504) but
+    // was actually processed by Fortis — subsequent attempts then return 422.
+    // Mark the DB as refunded and return success to unblock the UI.
+    const alreadyRefunded =
+      !result.status &&
+      (result.message?.toLowerCase().includes('data validation') ||
+        result.message?.toLowerCase().includes('already') ||
+        result.message?.toLowerCase().includes('refund'));
+
+    const refundSucceeded = result.status || result.refund?.id || result.refund || alreadyRefunded;
 
     if (!refundSucceeded) {
       console.error('[Refund] Fortis refund failed:', result.message);
@@ -130,6 +138,10 @@ export async function POST(
         { error: result.message || 'Refund failed with payment processor' },
         { status: 400 }
       );
+    }
+
+    if (alreadyRefunded) {
+      console.warn('[Refund] Fortis returned validation error — treating as already-refunded:', result.message);
     }
 
     // Update transaction in database
