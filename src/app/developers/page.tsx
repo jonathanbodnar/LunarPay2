@@ -897,10 +897,10 @@ const { clientToken, intentionType, paymentMethod, locationId } = await res.json
                   </thead>
                   <tbody>
                     {[
-                      ['colorButtonSelectedBackground', 'string', 'Merchant primary color', 'CC/ACH tab background when selected (main brand color)'],
-                      ['colorButtonSelectedText', 'string', 'Merchant button text color', 'Text on the selected CC/ACH tab'],
-                      ['colorButtonText', 'string', '#4a5568', 'Text on unselected tabs'],
-                      ['colorButtonBackground', 'string', '#f7fafc', 'Background of unselected tabs'],
+                      ['colorButtonSelectedBackground', 'string', 'Merchant primary color', 'Submit button background AND selected CC/ACH tab background — this is your brand color'],
+                      ['colorButtonSelectedText', 'string', 'Merchant button text color', 'Submit button text color AND text on the selected CC/ACH tab'],
+                      ['colorButtonText', 'string', '#4a5568', 'Text on unselected payment method tabs'],
+                      ['colorButtonBackground', 'string', '#f7fafc', 'Background of unselected payment method tabs'],
                       ['colorBackground', 'string', '#ffffff', 'Form background'],
                       ['colorText', 'string', '#1a202c', 'Input text and label color'],
                       ['fontFamily', 'string', 'Source Sans Pro', 'Font inside the iframes'],
