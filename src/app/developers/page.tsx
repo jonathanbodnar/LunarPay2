@@ -822,9 +822,9 @@ window.open(session.url, '_blank', 'width=500,height=700');`}</Code>
             <SubSection id="intentions-flow" title="Integration flow">
               <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside mb-4">
                 <li>Your frontend calls <code className="bg-gray-100 px-1 rounded text-xs">POST /api/v1/intentions</code> with the publishable key</li>
-                <li>Mount the Fortis Elements iframe using the returned <code className="bg-gray-100 px-1 rounded text-xs">clientToken</code></li>
+                <li>Mount the Fortis Elements iframe using the returned <code className="bg-gray-100 px-1 rounded text-xs">clientToken</code> — always use <code className="bg-gray-100 px-1 rounded text-xs">showSubmitButton: true</code></li>
                 <li>Customer enters card — data goes directly browser → Fortis</li>
-                <li>Fortis returns a <code className="bg-gray-100 px-1 rounded text-xs">ticket_id</code> to your frontend callback</li>
+                <li>Customer clicks the Fortis Pay button; on success Fortis fires <code className="bg-gray-100 px-1 rounded text-xs">ticket_success</code> with a <code className="bg-gray-100 px-1 rounded text-xs">ticket_id</code> — show your loading overlay here</li>
                 <li>Send <code className="bg-gray-100 px-1 rounded text-xs">ticket_id</code> to your backend, then call <code className="bg-gray-100 px-1 rounded text-xs">POST /api/v1/customers/:id/payment-methods</code></li>
               </ol>
             </SubSection>
@@ -938,7 +938,7 @@ const { clientToken, intentionType, paymentMethod, locationId } = await res.json
                       ['language', '"en-us"', 'Language for labels and validation messages'],
                       ['defaultCountry', '"US"', 'Default country for phone/address fields'],
                       ['floatingLabels', 'true', 'Labels animate above inputs on focus'],
-                      ['showSubmitButton', 'true', 'Show the built-in Fortis pay button (hide to use your own)'],
+                      ['showSubmitButton', 'true', 'Always keep true — form.submit() is a no-op when false. Use ticket_success to detect submission and overlay your own loading UI.'],
                       ['showValidationAnimation', 'true', 'Red/green borders on field validation'],
                       ['hideTotal', 'false', 'Hide the amount display above the form'],
                       ['hideAgreementCheckbox', 'false', 'Hide the terms agreement checkbox'],
@@ -975,8 +975,11 @@ script.src = "https://js.fortis.tech/commercejs-v1.0.0.min.js";
 document.head.appendChild(script);
 
 // 3. Create the payment form with your brand colors
+//    Leave showSubmitButton: true — Fortis renders the Pay button.
+//    form.submit() is a no-op when showSubmitButton is false, so do NOT
+//    use a custom button to trigger submission.
 const elements = Commerce.elements(clientToken, { environment: "production" });
-const form = elements.create({
+elements.create({
   container: "#payment-form",
   theme: "default",
   environment: "production",
@@ -984,7 +987,7 @@ const form = elements.create({
   language: "en-us",
   defaultCountry: "US",
   floatingLabels: true,
-  showSubmitButton: false,        // use your own button
+  showSubmitButton: true,         // Fortis button submits the form — required
   showValidationAnimation: true,
   hideTotal: true,
   hideAgreementCheckbox: true,
@@ -1001,25 +1004,41 @@ const form = elements.create({
   },
 });
 
-// 4. Listen for the result
-elements.eventBus.on("ticket_success", (payload) => {
-  // Send payload to your server to complete the charge
-  fetch("/api/your-charge-endpoint", {
-    method: "POST",
-    body: JSON.stringify({ ticketId: payload }),
-  });
+// 4. When the customer clicks Pay, Fortis validates and fires ticket_success.
+//    Show your own processing overlay here, then call your backend.
+elements.eventBus.on("ticket_success", async (payload) => {
+  // Show a loading overlay while the server processes
+  document.getElementById("processing-overlay").style.display = "flex";
+
+  try {
+    const res = await fetch("/api/your-charge-endpoint", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticketId: payload }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      window.location.href = "/success";
+    } else {
+      showError(data.error || "Payment failed");
+    }
+  } catch (err) {
+    showError("Network error — please try again");
+  } finally {
+    document.getElementById("processing-overlay").style.display = "none";
+  }
 });
 
 elements.eventBus.on("error", (err) => {
   console.error("Payment error:", err.message);
-});
-
-// 5. Submit on your own button click
-document.getElementById("pay-btn").addEventListener("click", () => {
-  form.submit();
 });`}</Code>
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-900">
-                <strong>Important:</strong> The <code className="bg-blue-100 px-1 rounded">appearance</code> object is the only way to style the card fields — they are cross-origin iframes. CSS on your page cannot reach them. If you use LunarPay hosted checkout (<code className="bg-blue-100 px-1 rounded">/v1/checkout/sessions</code>), styling is automatic based on the merchant's branding settings.
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+                <strong>Important — do not use a custom submit button:</strong> <code className="bg-amber-100 px-1 rounded">form.submit()</code> is a no-op when <code className="bg-amber-100 px-1 rounded">showSubmitButton: false</code>.
+                Always keep <code className="bg-amber-100 px-1 rounded">showSubmitButton: true</code> so Fortis renders its own Pay button.
+                To show a loading state, display an overlay <em>after</em> <code className="bg-amber-100 px-1 rounded">ticket_success</code> fires — your server call runs at that point, not before.
+              </div>
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-900">
+                <strong>Styling note:</strong> The <code className="bg-blue-100 px-1 rounded">appearance</code> object is the only way to style the card fields — they are cross-origin iframes. CSS on your page cannot reach them. If you use LunarPay hosted checkout (<code className="bg-blue-100 px-1 rounded">/v1/checkout/sessions</code>), styling is applied automatically.
               </div>
             </SubSection>
           </Section>
