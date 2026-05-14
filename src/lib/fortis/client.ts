@@ -281,7 +281,59 @@ export class FortisClient {
   }
 
   /**
-   * 2C. PROCESS TICKET SALE
+   * 2C. CREATE ACCOUNT VAULT (save card without charging)
+   * POST /v1/accountvaults
+   *
+   * Saves a payment method for future use WITHOUT processing a transaction.
+   * Used for trial subscriptions — the card is tokenized via a ticket_id from
+   * Elements and stored as an account vault (saved source) on Fortis.
+   */
+  async createAccountVault(data: {
+    ticket_id: string;
+    location_id: string;
+    payment_method: 'cc' | 'ach';
+    account_holder_name?: string;
+    accountvault_c1?: string;
+    accountvault_c2?: string;
+  }): Promise<{
+    status: boolean;
+    tokenId?: string;
+    accountVaultId?: string;
+    lastFour?: string;
+    accountType?: string;
+    message?: string;
+  }> {
+    try {
+      console.log('[Fortis Account Vault] Creating:', { ...data, ticket_id: '***' });
+
+      const response = await this.client.post('accountvaults', data);
+      const vaultData = response.data.data;
+
+      console.log('[Fortis Account Vault] Response:', {
+        id: vaultData.id,
+        payment_method: vaultData.payment_method,
+        last_four: vaultData.last_four,
+        active: vaultData.active,
+      });
+
+      return {
+        status: true,
+        tokenId: vaultData.id,
+        accountVaultId: vaultData.id,
+        lastFour: vaultData.last_four,
+        accountType: vaultData.account_type,
+      };
+    } catch (error) {
+      console.error('[Fortis Account Vault] Error:', error);
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
+   * 2D. PROCESS TICKET SALE
    * POST /v1/transactions/cc/sale/ticket
    * 
    * Process a credit card payment using a ticket_id from Elements.

@@ -683,7 +683,7 @@ curl -X POST ${BASE}/api/v1/charges/789/refund \\
                 { name: 'customer_name',   type: 'string', required: false, desc: 'Pre-fill customer name' },
                 { name: 'payment_methods', type: 'array',  required: false, desc: 'Methods to allow: ["cc"], ["ach"], or ["cc","ach"] (default).' },
                 { name: 'mode',            type: 'string', required: false, desc: '"payment" (default), "subscription", or "installments". See below.' },
-                { name: 'recurring',       type: 'object', required: false, desc: 'Required when mode="subscription". { frequency: "weekly"|"monthly"|"quarterly"|"yearly", amount?, start_on? }' },
+                { name: 'recurring',       type: 'object', required: false, desc: 'Required when mode="subscription". { frequency: "weekly"|"monthly"|"quarterly"|"yearly", amount?, start_on?, trial?: boolean }' },
                 { name: 'installments',    type: 'object', required: false, desc: 'Required when mode="installments". { count: 2..60, frequency, amount?, start_on? }' },
                 { name: 'success_url',     type: 'string', required: true,  desc: 'URL to redirect after successful payment' },
                 { name: 'cancel_url',      type: 'string', required: false, desc: 'URL to redirect if customer cancels' },
@@ -753,6 +753,24 @@ POST /api/v1/checkout/sessions
               <p className="text-xs text-gray-600 mt-3">
                 <strong>Defaults:</strong> if you omit <code className="bg-gray-100 px-1 rounded">amount</code> on the recurring/installments object, every period is the same as the first charge. If you omit <code className="bg-gray-100 px-1 rounded">start_on</code>, the next period is one frequency-interval after today.
               </p>
+              <Code>{`// Trial subscription: save card, no charge, bill later
+POST /api/v1/checkout/sessions
+{
+  "amount": 15.00,
+  "description": "14-day trial - then $15/mo",
+  "mode": "subscription",
+  "recurring": {
+    "frequency": "monthly",
+    "trial": true
+  },
+  "customer_email": "user@example.com",
+  "success_url": "https://yourapp.com/welcome"
+}
+// Response includes "status": "trial_started"
+// No money is collected. The subscription's first charge
+// runs on start_on (default: 1 frequency period from now).
+// Webhook event: checkout.session.completed
+//   transaction.amount = 0, transaction.id = ""`}</Code>
             </SubSection>
 
             <SubSection id="hosted-checkout-redirect" title="Redirect the customer">

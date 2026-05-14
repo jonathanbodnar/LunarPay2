@@ -14,9 +14,9 @@ export async function POST(request: Request) {
 
     console.log('Password reset requested for:', email);
 
-    // Check if user exists in our database
-    const user = await prisma.user.findUnique({
-      where: { email },
+    // Check if user exists in our database (case-insensitive lookup)
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
     });
 
     // Always return success even if user doesn't exist (security best practice)

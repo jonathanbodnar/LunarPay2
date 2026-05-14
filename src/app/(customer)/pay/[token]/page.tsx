@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Lock, CheckCircle, XCircle, Clock, ArrowLeft } from 'lucide-react';
 import '@/types/global';
@@ -142,7 +142,16 @@ export default function HostedCheckoutPage() {
         elements.eventBus.on('ready', () => {});
         elements.eventBus.on('payment_success', handleSuccess);
         elements.eventBus.on('success', handleSuccess);
-        elements.eventBus.on('done', handleSuccess);
+        elements.eventBus.on('tokenize_success', handleSuccess);
+        elements.eventBus.on('ticket_success', handleSuccess);
+        elements.eventBus.on('done', (data: any) => {
+          // Fortis fires 'done' as a success callback — only process when it
+          // actually contains a ticket/transaction payload, otherwise ignore
+          // (some versions fire 'done' as a generic "form closed" event).
+          if (data?.id || data?.ticket_id || data?.ticket?.id || data?.data?.id) {
+            handleSuccess(data);
+          }
+        });
         elements.eventBus.on('payment_error', (err: any) => {
           setPaymentError(err?.message || 'Payment failed. Please try again.');
           setProcessing(false);
@@ -151,10 +160,20 @@ export default function HostedCheckoutPage() {
           setPaymentError(err?.message || 'Payment error.');
           setProcessing(false);
         });
+        elements.eventBus.on('submit', (data: any) => {
+          // Some versions fire 'submit' with the payload *instead* of done/tokenize_success
+          if (data?.id || data?.ticket_id || data?.ticket?.id || data?.data?.id) {
+            handleSuccess(data);
+          }
+        });
       } else {
         elements.on('ready', () => {});
         elements.on('done', handleSuccess);
-        elements.on('error', (err: any) => setPaymentError(err?.message || 'Payment error.'));
+        elements.on('tokenize_success', handleSuccess);
+        elements.on('error', (err: any) => {
+          setPaymentError(err?.message || 'Payment error.');
+          setProcessing(false);
+        });
       }
 
       elements.create({
@@ -256,6 +275,16 @@ export default function HostedCheckoutPage() {
     }
   };
 
+  // Ref so success/error handlers can cancel the submit-timeout
+  const processingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelProcessingTimeout = useCallback(() => {
+    if (processingTimeoutRef.current) {
+      clearTimeout(processingTimeoutRef.current);
+      processingTimeoutRef.current = null;
+    }
+  }, []);
+
   const handlePay = () => {
     if (!payForm) {
       setPaymentError('Payment form not ready.');
@@ -263,9 +292,16 @@ export default function HostedCheckoutPage() {
     }
     setProcessing(true);
     setPaymentError('');
+    // Safety net: if Fortis never fires a success or error event the button
+    // would stay "Processing…" forever. This timer resets it after 15 s.
+    processingTimeoutRef.current = setTimeout(() => {
+      setProcessing(false);
+      setPaymentError('Payment timed out. Please try again.');
+    }, 15_000);
     try {
       payForm.submit();
     } catch (err) {
+      cancelProcessingTimeout();
       setPaymentError('Failed to submit payment.');
       setProcessing(false);
     }

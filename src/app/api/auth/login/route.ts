@@ -16,9 +16,9 @@ export async function POST(request: Request) {
     // Validate input
     const validatedData = loginSchema.parse(body);
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email: validatedData.email },
+    // Find user (case-insensitive email lookup)
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: validatedData.email, mode: 'insensitive' } },
       select: {
         id: true,
         email: true,

@@ -25,6 +25,10 @@ const recurringConfigSchema = z.object({
   // ISO date for the FIRST recurring charge after the initial one. Defaults
   // to (today + 1 frequency interval).
   start_on: z.string().datetime({ offset: true }).optional(),
+  // Trial mode: save the card at checkout without charging. The session
+  // `amount` becomes the recurring amount and no money is collected until the
+  // first billing cycle. `start_on` determines when the first charge occurs.
+  trial: z.boolean().optional(),
 });
 
 const installmentsConfigSchema = z.object({

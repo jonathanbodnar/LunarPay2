@@ -165,6 +165,40 @@ export interface TransactionResponse {
   };
 }
 
+// Account Vault Types (save card without charging)
+export interface AccountVaultCreateData {
+  location_id: string;
+  payment_method: 'cc' | 'ach';
+  account_holder_name?: string;
+  // Ticket ID from Fortis Elements ticket intention — tokenizes without charging
+  ticket_id?: string;
+  // Alternatively provide raw card data (less PCI-friendly)
+  account_number?: string;
+  exp_date?: string;
+  // For ACH
+  routing_number?: string;
+  account_type?: 'checking' | 'savings';
+  // Custom fields
+  accountvault_c1?: string;
+  accountvault_c2?: string;
+}
+
+export interface AccountVaultResponse {
+  data: {
+    id: string;
+    payment_method: string;
+    account_holder_name: string;
+    first_six: string;
+    last_four: string;
+    exp_date: string;
+    account_type: string;
+    active: boolean;
+    location_id: string;
+    contact_id: string | null;
+    created_ts: number;
+  };
+}
+
 // Refund Types
 export interface RefundData {
   transaction_amount: number; // in cents

@@ -601,6 +601,7 @@ export async function sendPasswordResetEmail(
     to,
     subject: 'Reset your LunarPay password',
     html,
+    category: 'transactional',
   });
 }
 

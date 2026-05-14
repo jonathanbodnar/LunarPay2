@@ -179,7 +179,208 @@ export async function POST(request: NextRequest) {
       organization.fortisOnboarding.authUserApiKey
     );
 
-    // Route the ticket sale through the correct Fortis product (CC vs ACH).
+    // ────────────────────────────────────────────────────────────────────────
+    // Detect trial mode: save the card WITHOUT charging
+    // ────────────────────────────────────────────────────────────────────────
+    const cfg = (session.modeConfig ?? {}) as any;
+    const isTrialSubscription =
+      session.mode === 'subscription' && cfg?.recurring?.trial === true;
+
+    const cEmail = customerEmail || session.customerEmail;
+    const cFirstName = customerFirstName || (session.customerName || '').split(' ')[0] || '';
+    const cLastName = customerLastName || (session.customerName || '').split(' ').slice(1).join(' ') || '';
+    const truncate = (s: string | null | undefined, max: number) => (s && s.length > max ? s.substring(0, max) : s || '');
+    const account_holder_name = cFirstName + ' ' + cLastName;
+
+    if (isTrialSubscription) {
+      // ── TRIAL FLOW: save card only, no charge ──────────────────────────
+      const vaultResult = await fortisClient.createAccountVault({
+        ticket_id: ticketId,
+        location_id: organization.fortisOnboarding.locationId || '',
+        payment_method: isAch ? 'ach' : 'cc',
+        account_holder_name: account_holder_name.trim(),
+        accountvault_c1: `LP-trial-${session.id}`,
+      });
+
+      if (!vaultResult.status) {
+        return NextResponse.json({
+          success: false,
+          error: vaultResult.message || 'Failed to save payment method',
+        });
+      }
+
+      const tokenId = vaultResult.tokenId;
+      const payment_method = isAch ? 'ach' : 'cc';
+
+      // Find or create donor (same logic as regular flow)
+      let donorId = session.customerId;
+      if (!donorId && cEmail) {
+        const existingDonor = await prisma.donor.findFirst({
+          where: { email: { equals: cEmail, mode: 'insensitive' }, organizationId },
+        });
+        if (existingDonor) donorId = existingDonor.id;
+      }
+      if (!donorId && (cEmail || cFirstName)) {
+        const donor = await prisma.donor.create({
+          data: {
+            userId: session.userId,
+            organizationId,
+            firstName: cFirstName || 'Guest',
+            lastName: cLastName || '',
+            email: cEmail || null,
+            amountAcum: 0,
+            feeAcum: 0,
+            netAcum: 0,
+          },
+        });
+        donorId = donor.id;
+      }
+
+      // Save the card source
+      let savedSourceId: number | null = null;
+      if (donorId && tokenId) {
+        const newSource = await prisma.source.create({
+          data: {
+            donorId,
+            organizationId,
+            sourceType: payment_method,
+            bankType: null,
+            lastDigits: vaultResult.lastFour || '',
+            nameHolder: account_holder_name.trim(),
+            isDefault: true,
+            isActive: true,
+            isSaved: true,
+            fortisWalletId: tokenId,
+            fortisCustomerId: donorId.toString(),
+          },
+        });
+        savedSourceId = newSource.id;
+
+        await prisma.source.updateMany({
+          where: { donorId, id: { not: newSource.id } },
+          data: { isDefault: false },
+        });
+      }
+
+      // Create subscription (no initial charge)
+      let createdSubscriptionId: number | null = null;
+      const recurring = cfg.recurring;
+      const recurringFreq: string = recurring.frequency;
+      const recurringAmount: number = Number(recurring.amount ?? Number(session.amount));
+      const startDate = recurring.start_on
+        ? new Date(recurring.start_on)
+        : addFrequency(new Date(), recurringFreq);
+
+      if (savedSourceId && donorId) {
+        const sub = await prisma.subscription.create({
+          data: {
+            donorId,
+            organizationId,
+            sourceId: savedSourceId,
+            amount: recurringAmount,
+            frequency: recurringFreq,
+            status: 'A',
+            firstName: cFirstName || 'Guest',
+            lastName: cLastName || '',
+            email: cEmail || '',
+            givingSource: 'checkout',
+            source: payment_method === 'ach' ? 'BNK' : 'CC',
+            fortisWalletId: tokenId || null,
+            fortisCustomerId: donorId.toString(),
+            startOn: new Date(),
+            nextPaymentOn: startDate,
+          },
+        });
+        createdSubscriptionId = sub.id;
+        console.log(`[Checkout] mode=subscription+trial created subscription ${sub.id} (first charge ${startDate.toISOString()})`);
+      }
+
+      // Mark session completed (no transaction — card was only saved)
+      await prisma.checkoutSession.update({
+        where: { token },
+        data: {
+          status: 'completed',
+          paidAt: new Date(),
+          customerId: donorId || null,
+          donorId: donorId || null,
+          subscriptionId: createdSubscriptionId,
+        },
+      });
+
+      // Fire agency webhook (trial — no transaction)
+      try {
+        const merchantUser = await prisma.user.findUnique({
+          where: { id: session.userId },
+          select: { agencyId: true },
+        });
+        if (merchantUser?.agencyId) {
+          const sourceRow = savedSourceId
+            ? await prisma.source.findUnique({
+                where: { id: savedSourceId },
+                select: { lastDigits: true, sourceType: true },
+              })
+            : null;
+
+          const webhookPayload: CheckoutSessionCompletedPayload = {
+            event: 'checkout.session.completed',
+            session: {
+              id: session.id,
+              token,
+              amount: 0,
+              currency: 'USD',
+              description: null,
+              customer_email: cEmail || null,
+              customer_name: `${cFirstName} ${cLastName}`.trim() || null,
+              metadata: session.metadata ? safeParseJson(session.metadata) : null,
+              mode: 'subscription',
+              paid_at: new Date().toISOString(),
+            },
+            merchant: {
+              id: session.userId,
+              organizationId,
+              businessName: organization.name,
+            },
+            transaction: {
+              id: '',
+              fortis_transaction_id: null,
+              amount: 0,
+              payment_method: payment_method === 'ach' ? 'ach' : 'cc',
+            },
+            customer: donorId ? { id: donorId, email: cEmail || null } : null,
+            payment_method: savedSourceId
+              ? { id: savedSourceId, type: sourceRow?.sourceType === 'ach' ? 'ach' : 'cc', last4: sourceRow?.lastDigits || null }
+              : null,
+            resources: { subscription_id: createdSubscriptionId, payment_schedule_id: null },
+            timestamp: new Date().toISOString(),
+          };
+
+          sendAgencyWebhook(merchantUser.agencyId, webhookPayload).catch(() => {});
+        }
+      } catch (whErr) {
+        console.error('[Checkout] trial webhook dispatch failed:', whErr);
+      }
+
+      await logPaymentEvent({
+        eventType: 'subscription.created',
+        organizationId,
+        metadata: { type: 'checkout_session_trial', referenceId: session.id, subscriptionId: createdSubscriptionId },
+      });
+
+      return NextResponse.json({
+        success: true,
+        status: 'trial_started',
+        card_saved: !!savedSourceId,
+        source_id: savedSourceId,
+        customer_id: donorId,
+        subscription_id: createdSubscriptionId,
+        payment_schedule_id: null,
+        success_url: session.successUrl,
+      });
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // REGULAR FLOW: charge the card AND save it
+    // ────────────────────────────────────────────────────────────────────────
     const amountInCents = amount || Math.round(Number(session.amount) * 100);
     const result = isAch
       ? await fortisClient.processACHTicketSale({
@@ -221,7 +422,6 @@ export async function POST(request: NextRequest) {
     const tokenId = result.tokenId;
     const fortisTransactionId = txData.id;
     const last_four = txData.last_four || txData.last4 || '';
-    const account_holder_name = txData.account_holder_name || session.customerName || '';
     const account_type = txData.account_type || '';
     const payment_method = isAch ? 'ach' : (txData.payment_method || 'cc');
     const exp_date = txData.exp_date || '';
@@ -229,10 +429,6 @@ export async function POST(request: NextRequest) {
     const amountInDollars = amountInCents / 100;
     const fee = calculatePlatformFee(amountInDollars);
     const netAmount = amountInDollars - fee;
-
-    const cEmail = customerEmail || session.customerEmail;
-    const cFirstName = customerFirstName || (session.customerName || '').split(' ')[0] || '';
-    const cLastName = customerLastName || (session.customerName || '').split(' ').slice(1).join(' ') || '';
 
     // Find or create donor
     let donorId = session.customerId;
@@ -265,8 +461,6 @@ export async function POST(request: NextRequest) {
       donorId = donor.id;
     }
 
-    const truncate = (s: string | null | undefined, max: number) => (s && s.length > max ? s.substring(0, max) : s || '');
-
     const transaction = await prisma.transaction.create({
       data: {
         userId: session.userId,
@@ -279,7 +473,6 @@ export async function POST(request: NextRequest) {
         subTotalAmount: netAmount,
         fee,
         source: payment_method === 'ach' ? 'BNK' : 'CC',
-        // ACH transactions settle via webhook days later; mark as pending.
         status: payment_method === 'ach' ? 'U' : 'P',
         transactionType: 'DO',
         givingSource: 'checkout',
@@ -289,9 +482,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Mark the session completed up front so the page redirect works even if
-    // the mode-specific follow-ups below fail. We patch in the follow-up IDs
-    // a few lines later in a separate update once we know what we created.
+    // Mark the session completed
     await prisma.checkoutSession.update({
       where: { token },
       data: {
@@ -326,16 +517,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Save / dedup the payment method.
-    //
-    // We dedup on TWO different keys, in priority order:
-    //   1. fortisWalletId (Fortis token) — primary, exact match
-    //   2. (donorId, sourceType, last4, expMonth, expYear) — secondary
-    //
-    // Why both: every hosted-checkout charge that calls processTicketSale()
-    // with save_account:true asks Fortis to vault the card, and Fortis hands
-    // back a freshly-issued wallet token each time even when it's the SAME
-    // card. That made the (fortisWalletId,donorId) check above always miss
-    // and we ended up with one source row per payment for the same card.
     let savedSourceId: number | null = null;
     if (donorId) {
       let expMonth: string | null = null;
@@ -366,8 +547,6 @@ export async function POST(request: NextRequest) {
 
       if (existing) {
         savedSourceId = existing.id;
-        // If Fortis handed us a fresh token for the same card, refresh the
-        // stored token so future charges/subscriptions use the latest one.
         if (tokenId && existing.fortisWalletId !== tokenId) {
           await prisma.source.update({
             where: { id: existing.id },
@@ -403,13 +582,6 @@ export async function POST(request: NextRequest) {
 
     // ────────────────────────────────────────────────────────────────────────
     // Mode-based follow-up: subscription / installments
-    //
-    // When the merchant created the session with mode="subscription" or
-    // mode="installments" (Stripe-style), we auto-create the recurring
-    // resource here using the saved card we just confirmed. Best-effort: a
-    // failure here does NOT roll back the payment — the session is already
-    // marked completed and the funds have settled. Errors are logged and
-    // surfaced in the response so the partner sees the problem.
     // ────────────────────────────────────────────────────────────────────────
     let createdSubscriptionId: number | null = null;
     let createdPaymentScheduleId: number | null = null;
@@ -417,8 +589,6 @@ export async function POST(request: NextRequest) {
 
     if (savedSourceId && donorId && session.mode && session.mode !== 'payment') {
       try {
-        const cfg = (session.modeConfig ?? {}) as any;
-
         if (session.mode === 'subscription') {
           const recurring = cfg.recurring ?? {};
           const recurringFreq: string = recurring.frequency;
@@ -496,8 +666,6 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Patch the session row with whatever we created so the partner can
-        // poll GET /v1/checkout/sessions and see it.
         if (createdSubscriptionId || createdPaymentScheduleId) {
           await prisma.checkoutSession.update({
             where: { token },
@@ -517,9 +685,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Fire the agency-level webhook so partners (e.g. StoryPay) get a
-    // server-to-server confirmation containing customer_id, payment_method_id
-    // and any auto-created subscription / payment_schedule. Best-effort.
+    // Fire agency webhook
     try {
       const merchantUser = await prisma.user.findUnique({
         where: { id: session.userId },
