@@ -143,6 +143,7 @@ const NAV = [
   { id: 'subscriptions',   label: 'Subscriptions' },
   { id: 'schedules',       label: 'Payment Schedules' },
   { id: 'intentions',      label: 'Payment Intentions' },
+  { id: 'elements-styling', label: 'Styling Elements' },
   { id: 'onboarding',      label: 'Onboarding' },
   { id: 'agency',          label: 'Agency API' },
   { id: 'reference',       label: 'Quick Reference' },
@@ -872,6 +873,155 @@ const { clientToken, intentionType, paymentMethod, locationId } = await res.json
   "environment": "sandbox"
 }`,
             }} />
+          </Section>
+
+          {/* Styling Fortis Elements */}
+          <Section id="elements-styling" title="Styling Fortis Elements">
+            <p className="text-sm text-gray-600 mb-4">
+              When you embed Fortis Elements on your own domain (via the <code className="bg-gray-100 px-1 rounded text-xs">clientToken</code> from <code className="bg-gray-100 px-1 rounded text-xs">POST /api/v1/intentions</code>), the card number, expiry, CVV, and bank account fields are cross-origin iframes hosted by Fortis — you cannot reach them with CSS. Instead, pass an <code className="bg-gray-100 px-1 rounded text-xs">appearance</code> object when creating the element to control colors, fonts, and shape.
+            </p>
+            <p className="text-sm text-gray-600 mb-4">
+              If you use LunarPay's hosted checkout pages (payment links, invoices, <code className="bg-gray-100 px-1 rounded text-xs">/v1/checkout/sessions</code>), these styles are applied automatically based on the merchant's branding settings — no work needed on your side.
+            </p>
+
+            <SubSection id="elements-appearance" title="Appearance options">
+              <div className="overflow-x-auto">
+                <table className="text-xs w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 text-left">
+                      <th className="p-2 border border-gray-200 font-medium">Option</th>
+                      <th className="p-2 border border-gray-200 font-medium">Type</th>
+                      <th className="p-2 border border-gray-200 font-medium">LunarPay Default</th>
+                      <th className="p-2 border border-gray-200 font-medium">What it affects</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      ['colorButtonSelectedBackground', 'string', 'Merchant primary color', 'CC/ACH tab background when selected (main brand color)'],
+                      ['colorButtonSelectedText', 'string', 'Merchant button text color', 'Text on the selected CC/ACH tab'],
+                      ['colorButtonText', 'string', '#4a5568', 'Text on unselected tabs'],
+                      ['colorButtonBackground', 'string', '#f7fafc', 'Background of unselected tabs'],
+                      ['colorBackground', 'string', '#ffffff', 'Form background'],
+                      ['colorText', 'string', '#1a202c', 'Input text and label color'],
+                      ['fontFamily', 'string', 'Roboto', 'Font inside the iframes'],
+                      ['fontSize', 'string', '16px', 'Text size'],
+                      ['borderRadius', 'string', '8px', 'Corner rounding on inputs and container'],
+                    ].map(([opt, type, def, desc], i) => (
+                      <tr key={i} className="odd:bg-white even:bg-gray-50">
+                        <td className="p-2 border border-gray-200 font-mono">{opt}</td>
+                        <td className="p-2 border border-gray-200">{type}</td>
+                        <td className="p-2 border border-gray-200">{def}</td>
+                        <td className="p-2 border border-gray-200">{desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </SubSection>
+
+            <SubSection id="elements-config-options" title="Configuration options">
+              <div className="overflow-x-auto">
+                <table className="text-xs w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 text-left">
+                      <th className="p-2 border border-gray-200 font-medium">Option</th>
+                      <th className="p-2 border border-gray-200 font-medium">Default</th>
+                      <th className="p-2 border border-gray-200 font-medium">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      ['container', 'required', 'CSS selector for the mount div (e.g. "#payment-form")'],
+                      ['theme', '"default"', 'Fortis theme preset'],
+                      ['environment', '"sandbox"', '"sandbox" or "production" — must match the clientToken'],
+                      ['view', '"default"', 'Layout style'],
+                      ['language', '"en-us"', 'Language for labels and validation messages'],
+                      ['defaultCountry', '"US"', 'Default country for phone/address fields'],
+                      ['floatingLabels', 'true', 'Labels animate above inputs on focus'],
+                      ['showSubmitButton', 'true', 'Show the built-in Fortis pay button (hide to use your own)'],
+                      ['showValidationAnimation', 'true', 'Red/green borders on field validation'],
+                      ['hideTotal', 'false', 'Hide the amount display above the form'],
+                      ['hideAgreementCheckbox', 'false', 'Hide the terms agreement checkbox'],
+                      ['showReceipt', 'false', 'Show a receipt after successful payment'],
+                    ].map(([opt, def, desc], i) => (
+                      <tr key={i} className="odd:bg-white even:bg-gray-50">
+                        <td className="p-2 border border-gray-200 font-mono">{opt}</td>
+                        <td className="p-2 border border-gray-200 font-mono">{def}</td>
+                        <td className="p-2 border border-gray-200">{desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </SubSection>
+
+            <SubSection id="elements-styling-example" title="Full example">
+              <Code>{`// 1. Create a client token from your backend
+const intention = await fetch("/api/v1/intentions", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer lp_pk_...",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({ amount: 4999, paymentMethods: ["cc", "ach"] })
+});
+const { clientToken } = await intention.json();
+
+// 2. Load the Fortis SDK
+const script = document.createElement("script");
+script.src = "https://js.fortis.tech/commercejs-v1.0.0.min.js";
+// Use sandbox URL for testing:
+// script.src = "https://js.sandbox.fortis.tech/commercejs-v1.0.0.min.js";
+document.head.appendChild(script);
+
+// 3. Create the payment form with your brand colors
+const elements = Commerce.elements(clientToken, { environment: "production" });
+const form = elements.create({
+  container: "#payment-form",
+  theme: "default",
+  environment: "production",
+  view: "default",
+  language: "en-us",
+  defaultCountry: "US",
+  floatingLabels: true,
+  showSubmitButton: false,        // use your own button
+  showValidationAnimation: true,
+  hideTotal: true,
+  hideAgreementCheckbox: true,
+  appearance: {
+    colorButtonSelectedBackground: "#your-brand-color",
+    colorButtonSelectedText: "#ffffff",
+    colorButtonText: "#4a5568",
+    colorButtonBackground: "#f7fafc",
+    colorBackground: "#ffffff",
+    colorText: "#1a202c",
+    fontFamily: "Inter",
+    fontSize: "16px",
+    borderRadius: "8px",
+  },
+});
+
+// 4. Listen for the result
+elements.eventBus.on("ticket_success", (payload) => {
+  // Send payload to your server to complete the charge
+  fetch("/api/your-charge-endpoint", {
+    method: "POST",
+    body: JSON.stringify({ ticketId: payload }),
+  });
+});
+
+elements.eventBus.on("error", (err) => {
+  console.error("Payment error:", err.message);
+});
+
+// 5. Submit on your own button click
+document.getElementById("pay-btn").addEventListener("click", () => {
+  form.submit();
+});`}</Code>
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-900">
+                <strong>Important:</strong> The <code className="bg-blue-100 px-1 rounded">appearance</code> object is the only way to style the card fields — they are cross-origin iframes. CSS on your page cannot reach them. If you use LunarPay hosted checkout (<code className="bg-blue-100 px-1 rounded">/v1/checkout/sessions</code>), styling is automatic based on the merchant's branding settings.
+              </div>
+            </SubSection>
           </Section>
 
           {/* Payment Schedules */}
