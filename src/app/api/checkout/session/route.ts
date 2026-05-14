@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
       `SELECT cs.id, cs.token, cs.amount, cs.currency, cs.description,
               cs.customer_email, cs.customer_name, cs.status,
               cs.success_url, cs.cancel_url, cs.expires_at, cs.payment_methods,
+              cs.mode, cs.mode_config,
               cs.organization_id,
               cd.church_name as org_name, cd.logo as org_logo,
               cd.primary_color, cd.background_color, cd.button_text_color
@@ -94,6 +95,8 @@ export async function GET(request: NextRequest) {
         background_color: s.background_color || '#f8fafc',
         button_text_color: s.button_text_color || '#ffffff',
         payment_methods: paymentMethods,
+        mode: s.mode || 'payment',
+        mode_config: s.mode_config || null,
       },
     });
   } catch (error) {
@@ -105,15 +108,15 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { token, ticketId, amount, customerEmail, customerFirstName, customerLastName, paymentMethod } = body;
+    const { token, ticketId, tokenizeId, amount, customerEmail, customerFirstName, customerLastName, paymentMethod } = body;
     const isAch = paymentMethod === 'ach';
 
     if (!token || !token.startsWith('cs_')) {
       return NextResponse.json({ error: 'Invalid session token' }, { status: 400 });
     }
 
-    if (!ticketId) {
-      return NextResponse.json({ error: 'Ticket ID is required' }, { status: 400 });
+    if (!ticketId && !tokenizeId) {
+      return NextResponse.json({ error: 'Ticket ID or tokenize ID is required' }, { status: 400 });
     }
 
     const session = await prisma.checkoutSession.findUnique({
@@ -193,23 +196,13 @@ export async function POST(request: NextRequest) {
     const account_holder_name = cFirstName + ' ' + cLastName;
 
     if (isTrialSubscription) {
-      // ── TRIAL FLOW: save card only, no charge ──────────────────────────
-      const vaultResult = await fortisClient.createAccountVault({
-        ticket_id: ticketId,
-        location_id: organization.fortisOnboarding.locationId || '',
-        payment_method: isAch ? 'ach' : 'cc',
-        account_holder_name: account_holder_name.trim(),
-        accountvault_c1: `LP-trial-${session.id}`,
-      });
-
-      if (!vaultResult.status) {
-        return NextResponse.json({
-          success: false,
-          error: vaultResult.message || 'Failed to save payment method',
-        });
+      // ── TRIAL FLOW: card already vaulted by Fortis Elements (tokenization
+      // intention). `tokenizeId` is the account vault ID returned by Fortis in
+      // the tokenize_success event. No server-side API call to Fortis needed.
+      const tokenId = tokenizeId || ticketId; // tokenizeId preferred; ticketId is a fallback
+      if (!tokenId) {
+        return NextResponse.json({ success: false, error: 'No vault token received from payment form' });
       }
-
-      const tokenId = vaultResult.tokenId;
       const payment_method = isAch ? 'ach' : 'cc';
 
       // Find or create donor (same logic as regular flow)
@@ -245,7 +238,7 @@ export async function POST(request: NextRequest) {
             organizationId,
             sourceType: payment_method,
             bankType: null,
-            lastDigits: vaultResult.lastFour || '',
+            lastDigits: '',
             nameHolder: account_holder_name.trim(),
             isDefault: true,
             isActive: true,

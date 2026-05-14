@@ -23,6 +23,12 @@ interface SessionData {
   background_color: string;
   button_text_color: string;
   payment_methods: string[];
+  mode?: string;
+  mode_config?: { recurring?: { trial?: boolean; frequency?: string; start_on?: string; amount?: number } } | null;
+}
+
+function isTrialSubscription(s: SessionData | null): boolean {
+  return s?.mode === 'subscription' && s?.mode_config?.recurring?.trial === true;
 }
 
 export default function HostedCheckoutPage() {
@@ -62,7 +68,7 @@ export default function HostedCheckoutPage() {
 
       if (data.session.status === 'completed') return;
 
-      await getPaymentToken(data.session.organization_id, data.session.amount);
+      await getPaymentToken(data.session.organization_id, data.session.amount, data.session);
     } catch (err) {
       setError('Failed to load payment session.');
     } finally {
@@ -70,18 +76,20 @@ export default function HostedCheckoutPage() {
     }
   }, [token]);
 
-  const getPaymentToken = async (orgId: number, amount: number) => {
+  const getPaymentToken = async (orgId: number, amount: number, sessionData?: SessionData) => {
     try {
+      const trial = isTrialSubscription(sessionData || null);
+      // Trial subscriptions tokenize the card without charging — use a tokenization
+      // transaction intention (Fortis creates the vault via Elements internally, no
+      // server-side POST /v1/accountvaults call needed which requires platform creds).
+      const body = trial
+        ? { organizationId: orgId, savePaymentMethod: true, type: 'checkout' }
+        : { organizationId: orgId, amount, action: 'sale', type: 'checkout', hasRecurring: true };
+
       const res = await fetch('/api/public/fortis/transaction-intention', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          organizationId: orgId,
-          amount,
-          action: 'sale',
-          type: 'checkout',
-          hasRecurring: true, // Always use ticket intention to save card for installments
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -214,14 +222,23 @@ export default function HostedCheckoutPage() {
     setPaymentError('');
 
     try {
+      // For tokenization flow (trials): Fortis fires tokenize_success with account_vault id.
+      // For ticket flow (regular): Fortis fires ticket_success with ticket id.
       const ticketId =
-        fortisResponse?.data?.id ||
         fortisResponse?.ticket?.id ||
         fortisResponse?.ticket_id ||
         fortisResponse?.ticketId ||
         fortisResponse?.data?.ticket?.id ||
-        fortisResponse?.data?.ticket_id ||
-        fortisResponse?.id;
+        fortisResponse?.data?.ticket_id;
+
+      // Account vault ID from tokenization flow (trial subscriptions)
+      const tokenizeId =
+        !ticketId
+          ? (fortisResponse?.data?.id ||
+             fortisResponse?.id ||
+             fortisResponse?.account_vault_id ||
+             fortisResponse?.data?.account_vault_id)
+          : undefined;
 
       // Fortis tells us which tab the customer used: 'cc' or 'ach'.
       const paymentMethod =
@@ -230,8 +247,8 @@ export default function HostedCheckoutPage() {
         fortisResponse?.data?.ticket?.payment_method ||
         'cc';
 
-      if (!ticketId) {
-        console.error('[Checkout] Could not extract ticket_id from response:', fortisResponse);
+      if (!ticketId && !tokenizeId) {
+        console.error('[Checkout] Could not extract ticket_id or tokenize_id from response:', fortisResponse);
         setPaymentError('Payment tokenization failed. Please try again.');
         setProcessing(false);
         return;
@@ -245,7 +262,8 @@ export default function HostedCheckoutPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
-          ticketId,
+          ticketId: ticketId || undefined,
+          tokenizeId: tokenizeId || undefined,
           amount: amountInCents,
           paymentMethod,
           customerEmail: session?.customer_email,
