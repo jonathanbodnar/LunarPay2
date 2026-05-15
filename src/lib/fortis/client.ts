@@ -529,6 +529,159 @@ export class FortisClient {
   }
 
   /**
+   * 3B. CREDIT CARD AUTH ONLY WITH TOKEN
+   * POST /v1/transactions/cc/auth-only/token
+   *
+   * Place an authorization hold on a saved card without settling the charge.
+   * The merchant must call captureAuthorization (auth-complete) within their
+   * authorization window (typically 7 days) to actually capture the funds,
+   * or voidTransaction to release the hold.
+   */
+  async processCreditCardAuthOnly(data: CreditCardSaleData): Promise<{
+    status: boolean;
+    transaction?: TransactionResponse['data'];
+    message?: string;
+    reasonCode?: string;
+  }> {
+    try {
+      const response = await this.client.post<TransactionResponse>(
+        'transactions/cc/auth-only/token',
+        data
+      );
+
+      const txData = response.data.data;
+
+      console.log('[Fortis CC Auth-Only] Response:', {
+        id: txData.id,
+        status_code: txData.status_code,
+        reason_code_id: txData.reason_code_id,
+        transaction_amount: txData.transaction_amount,
+      });
+
+      // Auth-only is approved when reason_code_id is 1000.
+      // Fortis returns status_code 102 (Sale, AuthOnly) for held authorizations.
+      const hasTransactionId = !!txData.id;
+
+      if (hasTransactionId && txData.reason_code_id === 1000) {
+        return {
+          status: true,
+          transaction: txData,
+        };
+      }
+
+      const reasonMessage = FORTIS_REASON_CODES[txData.reason_code_id?.toString()] || 'Unknown error';
+      return {
+        status: false,
+        transaction: txData,
+        message: `Authorization declined: ${reasonMessage}`,
+        reasonCode: txData.reason_code_id?.toString(),
+      };
+    } catch (error) {
+      console.error('[Fortis CC Auth-Only] Error:', error);
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
+   * 3C. CAPTURE AUTH (Auth Complete)
+   * PATCH /v1/transactions/{id}/auth-complete
+   *
+   * Settle a previously authorized transaction. The capture amount can be less
+   * than the original authorization (partial capture is allowed and is the
+   * normal pattern for things like service industries).
+   */
+  async captureAuthorization(
+    transactionId: string,
+    amount: number // in cents
+  ): Promise<{
+    status: boolean;
+    transaction?: TransactionResponse['data'];
+    message?: string;
+    reasonCode?: string;
+  }> {
+    try {
+      const response = await this.client.patch<TransactionResponse>(
+        `transactions/${transactionId}/auth-complete`,
+        { transaction_amount: amount }
+      );
+
+      const txData = response.data.data;
+      console.log('[Fortis Auth-Complete] Response:', {
+        id: txData.id,
+        status_code: txData.status_code,
+        reason_code_id: txData.reason_code_id,
+        transaction_amount: txData.transaction_amount,
+      });
+
+      if (txData.reason_code_id === 1000) {
+        return { status: true, transaction: txData };
+      }
+
+      const reasonMessage = FORTIS_REASON_CODES[txData.reason_code_id?.toString()] || 'Unknown error';
+      return {
+        status: false,
+        transaction: txData,
+        message: `Capture failed: ${reasonMessage}`,
+        reasonCode: txData.reason_code_id?.toString(),
+      };
+    } catch (error) {
+      console.error('[Fortis Auth-Complete] Error:', error);
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
+   * 3D. VOID TRANSACTION
+   * PATCH /v1/transactions/{id}/void
+   *
+   * Cancel a transaction before it has settled. Used to release an auth-only
+   * hold or to cancel a sale that hasn't been batched out yet. After settlement
+   * use refundTransaction instead.
+   */
+  async voidTransaction(transactionId: string): Promise<{
+    status: boolean;
+    transaction?: TransactionResponse['data'];
+    message?: string;
+  }> {
+    try {
+      const response = await this.client.patch<TransactionResponse>(
+        `transactions/${transactionId}/void`,
+        {}
+      );
+
+      const txData = response.data.data;
+      console.log('[Fortis Void] Response:', {
+        id: txData.id,
+        status_code: txData.status_code,
+        reason_code_id: txData.reason_code_id,
+      });
+
+      if (txData.reason_code_id === 1000) {
+        return { status: true, transaction: txData };
+      }
+
+      const reasonMessage = FORTIS_REASON_CODES[txData.reason_code_id?.toString()] || 'Unknown error';
+      return {
+        status: false,
+        transaction: txData,
+        message: `Void failed: ${reasonMessage}`,
+      };
+    } catch (error) {
+      console.error('[Fortis Void] Error:', error);
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
    * 4. ACH DEBIT WITH TOKEN
    * POST /v1/transactions/ach/debit/token
    * 

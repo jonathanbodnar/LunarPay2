@@ -139,6 +139,7 @@ const NAV = [
   { id: 'customers',       label: 'Customers' },
   { id: 'payment-methods', label: 'Payment Methods' },
   { id: 'charges',         label: 'Charges' },
+  { id: 'holds',           label: 'Holds & Captures' },
   { id: 'refunds',         label: 'Refunds' },
   { id: 'subscriptions',   label: 'Subscriptions' },
   { id: 'schedules',       label: 'Payment Schedules' },
@@ -529,10 +530,11 @@ curl -X POST ${BASE}/api/v1/customers/123/payment-methods \\
               method: 'POST', path: '/api/v1/charges', key: 'secret',
               desc: 'Charge a customer\'s saved payment method. Works for both credit card and ACH payment methods.',
               body: [
-                { name: 'customerId',      type: 'number', required: true,  desc: 'Customer ID to charge' },
-                { name: 'paymentMethodId', type: 'number', required: true,  desc: 'Payment method ID to charge (CC or ACH)' },
-                { name: 'amount',          type: 'number', required: true,  desc: 'Amount in cents (e.g. 4999 = $49.99). Minimum 50.' },
-                { name: 'description',     type: 'string', required: false, desc: 'Optional description shown on the transaction' },
+                { name: 'customerId',      type: 'number',  required: true,  desc: 'Customer ID to charge' },
+                { name: 'paymentMethodId', type: 'number',  required: true,  desc: 'Payment method ID to charge (CC or ACH)' },
+                { name: 'amount',          type: 'number',  required: true,  desc: 'Amount in cents (e.g. 4999 = $49.99). Minimum 50.' },
+                { name: 'description',     type: 'string',  required: false, desc: 'Optional description shown on the transaction' },
+                { name: 'capture',         type: 'boolean', required: false, desc: 'Default true. Set false to place an authorization hold without settling. CC only — ACH rejects capture: false.' },
               ],
               example: `curl -X POST ${BASE}/api/v1/charges \\
   -H "Authorization: Bearer lp_sk_..." \\
@@ -547,7 +549,8 @@ curl -X POST ${BASE}/api/v1/customers/123/payment-methods \\
   "data": {
     "id": "789",
     "amount": 4999,
-    "status": "paid",            // "paid" for CC, "pending" for ACH
+    "status": "paid",            // "paid" | "pending" | "authorized"
+    "captured": true,            // false for auth-only holds
     "paymentMethod": "cc",       // "cc" or "ach"
     "customerId": 123,
     "paymentMethodId": 456,
@@ -557,6 +560,113 @@ curl -X POST ${BASE}/api/v1/customers/123/payment-methods \\
   }
 }`,
             }} />
+          </Section>
+
+          {/* Holds & Captures */}
+          <Section id="holds" title="Holds & Captures">
+            <p className="text-sm text-gray-600 mb-4">
+              Place an authorization hold (also called an auth-only) to reserve funds on a card without settling the charge. The funds are not actually moved until you call <code className="bg-gray-100 px-1 rounded text-xs">/capture</code>. Use this for hotel deposits, equipment rentals, deferred shipping, or any flow where the final amount or fulfillment is unknown at the time of payment.
+            </p>
+
+            <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl text-sm text-amber-900 mb-4">
+              <strong>Authorization window:</strong> Fortis holds typically expire after <strong>7 days</strong> if not captured. After expiry the hold drops off the customer&apos;s card on its own — but you should still capture or void explicitly so the customer&apos;s available balance is freed immediately. Auth-only is <strong>credit card only</strong>; ACH does not support holds.
+            </div>
+
+            <SubSection id="holds-flow" title="The flow">
+              <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside mb-2">
+                <li>Save a card via <code className="bg-gray-100 px-1 rounded text-xs">POST /api/v1/customers/:id/payment-methods</code></li>
+                <li>Authorize a hold: <code className="bg-gray-100 px-1 rounded text-xs">POST /api/v1/charges</code> with <code className="bg-gray-100 px-1 rounded text-xs">capture: false</code> — returns a charge with <code className="bg-gray-100 px-1 rounded text-xs">status: &quot;authorized&quot;</code></li>
+                <li>Either <code className="bg-gray-100 px-1 rounded text-xs">POST /api/v1/charges/:id/capture</code> to settle (full or partial), OR <code className="bg-gray-100 px-1 rounded text-xs">POST /api/v1/charges/:id/void</code> to release the hold</li>
+              </ol>
+            </SubSection>
+
+            <SubSection id="holds-authorize" title="1. Place an authorization hold">
+              <Endpoint ep={{
+                method: 'POST', path: '/api/v1/charges', key: 'secret',
+                desc: 'Same endpoint as a normal charge — just pass capture: false. Returns a charge with status "authorized" instead of "paid".',
+                body: [
+                  { name: 'customerId',      type: 'number',  required: true,  desc: 'Customer ID' },
+                  { name: 'paymentMethodId', type: 'number',  required: true,  desc: 'Credit card payment method ID (ACH is rejected)' },
+                  { name: 'amount',          type: 'number',  required: true,  desc: 'Amount to hold in cents. You can capture less than this; you cannot capture more.' },
+                  { name: 'description',     type: 'string',  required: false, desc: 'Optional description' },
+                  { name: 'capture',         type: 'boolean', required: true,  desc: 'Must be false for auth-only' },
+                ],
+                example: `curl -X POST ${BASE}/api/v1/charges \\
+  -H "Authorization: Bearer lp_sk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "customerId": 123,
+    "paymentMethodId": 456,
+    "amount": 10000,
+    "description": "Equipment deposit",
+    "capture": false
+  }'`,
+                response: `{
+  "data": {
+    "id": "789",
+    "amount": 10000,
+    "status": "authorized",
+    "captured": false,
+    "paymentMethod": "cc",
+    "customerId": 123,
+    "paymentMethodId": 456,
+    "fortisTransactionId": "fts_txn_abc123",
+    "description": "Equipment deposit",
+    "createdAt": "2026-02-10T12:00:00.000Z",
+    "note": "Hold placed. Capture within your authorization window (typically 7 days) via POST /api/v1/charges/:id/capture, or release the hold via POST /api/v1/charges/:id/void."
+  }
+}`,
+              }} />
+            </SubSection>
+
+            <SubSection id="holds-capture" title="2. Capture (settle) the hold">
+              <Endpoint ep={{
+                method: 'POST', path: '/api/v1/charges/:id/capture', key: 'secret',
+                desc: 'Settle a previously authorized charge. Omit amount to capture the full authorized amount; pass amount for a partial capture. The captured amount becomes the charge\'s final totalAmount.',
+                params: [{ name: 'id', type: 'string', required: true, desc: 'Charge ID returned from the auth-only call' }],
+                body: [
+                  { name: 'amount', type: 'number', required: false, desc: 'Amount to capture in cents. Must be ≤ authorized amount. Omit for full capture.' },
+                ],
+                example: `# Full capture of the held amount
+curl -X POST ${BASE}/api/v1/charges/789/capture \\
+  -H "Authorization: Bearer lp_sk_..."
+
+# Partial capture — held $100, capturing $80
+curl -X POST ${BASE}/api/v1/charges/789/capture \\
+  -H "Authorization: Bearer lp_sk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{ "amount": 8000 }'`,
+                response: `{
+  "data": {
+    "id": "789",
+    "capturedAmount": 8000,
+    "authorizedAmount": 10000,
+    "partial": true,
+    "status": "paid"
+  }
+}`,
+              }} />
+            </SubSection>
+
+            <SubSection id="holds-void" title="3. Void (release) the hold">
+              <Endpoint ep={{
+                method: 'POST', path: '/api/v1/charges/:id/void', key: 'secret',
+                desc: 'Release an authorization hold without capturing any funds, or cancel a captured sale that hasn\'t settled yet. Voids carry no Fortis fee and do not appear on the customer\'s statement. After settlement, use refund instead.',
+                params: [{ name: 'id', type: 'string', required: true, desc: 'Charge ID' }],
+                example: `curl -X POST ${BASE}/api/v1/charges/789/void \\
+  -H "Authorization: Bearer lp_sk_..."`,
+                response: `{
+  "data": {
+    "id": "789",
+    "status": "voided",
+    "priorStatus": "authorized"   // "authorized" or "paid"
+  }
+}`,
+              }} />
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-900">
+                <strong>Void vs refund:</strong> A void cancels a transaction before it settles (same business day for captured sales, anytime within the auth window for holds). It&apos;s free and invisible to the customer. A refund happens after settlement, costs a processor fee, and shows up on the customer&apos;s statement as a separate credit. The void endpoint automatically returns a helpful error if the charge has already settled, prompting you to use refund instead.
+              </div>
+            </SubSection>
           </Section>
 
           {/* Refunds */}
@@ -1409,8 +1519,10 @@ Authorization: Bearer lp_agency_your_key`}</Code>
                 { method: 'POST', path: '/api/v1/customers/:id/payment-methods', desc: 'Save a payment method (CC or ACH)', auth: 'secret' },
                 { method: 'GET',  path: '/api/v1/customers/:id/payment-methods', desc: 'List payment methods', auth: 'secret' },
                 { method: 'DELETE', path: '/api/v1/customers/:id/payment-methods/:pmId', desc: 'Remove a payment method', auth: 'secret' },
-                { method: 'POST', path: '/api/v1/charges', desc: 'Charge a saved payment method (CC or ACH)', auth: 'secret' },
-                { method: 'POST', path: '/api/v1/charges/:id/refund', desc: 'Refund a charge', auth: 'secret' },
+                { method: 'POST', path: '/api/v1/charges', desc: 'Charge a saved payment method (CC or ACH) — capture: false for auth-only hold', auth: 'secret' },
+                { method: 'POST', path: '/api/v1/charges/:id/capture', desc: 'Capture (settle) an authorized hold, full or partial', auth: 'secret' },
+                { method: 'POST', path: '/api/v1/charges/:id/void', desc: 'Void an authorization hold or unsettled sale', auth: 'secret' },
+                { method: 'POST', path: '/api/v1/charges/:id/refund', desc: 'Refund a settled charge', auth: 'secret' },
                 { method: 'POST', path: '/api/v1/subscriptions', desc: 'Create a subscription', auth: 'secret' },
                 { method: 'GET',  path: '/api/v1/subscriptions', desc: 'List subscriptions', auth: 'secret' },
                 { method: 'PATCH', path: '/api/v1/subscriptions/:id', desc: 'Update a subscription', auth: 'secret' },
