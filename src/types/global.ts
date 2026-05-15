@@ -25,15 +25,25 @@ export interface FortisElementsConfig {
   floatingLabels?: boolean;
   showValidationAnimation?: boolean;
   appearance?: {
+    colorButtonActionBackground?: string;
+    colorButtonActionText?: string;
     colorButtonSelectedBackground?: string;
     colorButtonSelectedText?: string;
     colorButtonText?: string;
     colorButtonBackground?: string;
     colorBackground?: string;
+    colorFieldBackground?: string;
+    colorFieldBorder?: string;
     colorText?: string;
-    fontFamily?: string;
+    colorTitleText?: string;
+    colorLink?: string;
+    fontFamily?: 'Roboto' | 'Montserrat' | 'OpenSans' | 'Raleway' | 'SourceCode' | 'SourceSans';
     fontSize?: string;
+    marginSpacing?: string;
+    rowMarginSpacing?: string;
+    trimWhitespace?: boolean;
     borderRadius?: string;
+    borderWidth?: string;
   };
 }
 

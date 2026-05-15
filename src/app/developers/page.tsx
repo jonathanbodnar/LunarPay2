@@ -897,15 +897,22 @@ const { clientToken, intentionType, paymentMethod, locationId } = await res.json
                   </thead>
                   <tbody>
                     {[
-                      ['colorButtonSelectedBackground', 'string', 'Merchant primary color', 'Submit button background AND selected CC/ACH tab background — this is your brand color'],
-                      ['colorButtonSelectedText', 'string', 'Merchant button text color', 'Submit button text color AND text on the selected CC/ACH tab'],
+                      ['colorButtonActionBackground', 'string', 'Merchant primary color', '⭐ Submit / Pay button background — this is the main CTA button color'],
+                      ['colorButtonActionText', 'string', 'Merchant button text color', '⭐ Submit / Pay button text color'],
+                      ['colorButtonSelectedBackground', 'string', 'Merchant primary color', 'Selected CC/ACH payment method tab background'],
+                      ['colorButtonSelectedText', 'string', 'Merchant button text color', 'Text on the selected CC/ACH payment method tab'],
                       ['colorButtonText', 'string', '#4a5568', 'Text on unselected payment method tabs'],
                       ['colorButtonBackground', 'string', '#f7fafc', 'Background of unselected payment method tabs'],
                       ['colorBackground', 'string', '#ffffff', 'Form background'],
+                      ['colorFieldBackground', 'string', '', 'Input field background color'],
+                      ['colorFieldBorder', 'string', '', 'Input field border color'],
                       ['colorText', 'string', '#1a202c', 'Input text and label color'],
-                      ['fontFamily', 'string', 'Source Sans Pro', 'Font inside the iframes'],
+                      ['colorTitleText', 'string', '', 'Section title text color'],
+                      ['colorLink', 'string', '', 'Link color'],
+                      ['fontFamily', 'string', 'SourceSans', 'Font inside the iframes. Must be one of: Roboto, Montserrat, OpenSans, Raleway, SourceCode, SourceSans'],
                       ['fontSize', 'string', '16px', 'Text size'],
                       ['borderRadius', 'string', '8px', 'Corner rounding on inputs and container'],
+                      ['borderWidth', 'string', '', 'Input field border width'],
                     ].map(([opt, type, def, desc], i) => (
                       <tr key={i} className="odd:bg-white even:bg-gray-50">
                         <td className="p-2 border border-gray-200 font-mono">{opt}</td>
@@ -992,13 +999,15 @@ elements.create({
   hideTotal: true,
   hideAgreementCheckbox: true,
   appearance: {
+    colorButtonActionBackground: "#your-brand-color", // Pay button background
+    colorButtonActionText: "#ffffff",                  // Pay button text
     colorButtonSelectedBackground: "#your-brand-color",
     colorButtonSelectedText: "#ffffff",
     colorButtonText: "#4a5568",
     colorButtonBackground: "#f7fafc",
     colorBackground: "#ffffff",
     colorText: "#1a202c",
-    fontFamily: "Source Sans Pro",
+    fontFamily: "SourceSans",   // exact SDK value — "Source Sans Pro" is NOT valid
     fontSize: "16px",
     borderRadius: "8px",
   },

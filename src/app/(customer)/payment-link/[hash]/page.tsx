@@ -246,6 +246,8 @@ export default function PaymentLinkPage() {
         hideAgreementCheckbox: true,
         appearance: {
           // Only use Fortis-supported appearance options
+          colorButtonActionBackground: primaryColor,
+          colorButtonActionText: buttonTextColor,
           colorButtonSelectedBackground: primaryColor,
           colorButtonSelectedText: buttonTextColor,
           colorButtonText: '#4a5568',
@@ -253,7 +255,7 @@ export default function PaymentLinkPage() {
           colorBackground: '#ffffff',
           colorText: '#1a202c',
           // fontFamily must be one of: Roboto, Montserrat, OpenSans, Raleway, SourceCode, SourceSans
-          fontFamily: 'Source Sans Pro',
+          fontFamily: 'SourceSans',
           fontSize: '16px',
           borderRadius: '8px',
         },
