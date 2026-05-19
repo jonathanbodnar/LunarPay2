@@ -85,6 +85,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── TOKENIZATION intention (preferred card-save path — no charge) ──────
+    // Fortis does NOT allow `product_transaction_id` on tokenization actions —
+    // it will respond with `"product_transaction_id" is not allowed`. The
+    // resulting clientToken includes every payment method enabled on the
+    // merchant's location; tab filtering ("cc only" vs "cc+ach") is handled
+    // client-side via Fortis Elements config, not at the intention level.
+    if (action === 'tokenization') {
+      const result = await fortisClient.createTransactionIntention({
+        location_id: locationId,
+        action: 'tokenization',
+      });
+      if (!result.status || !result.clientToken) {
+        return apiError(result.message || 'Failed to create tokenization intention', 400);
+      }
+      return Response.json({
+        clientToken: result.clientToken,
+        intentionType: 'tokenization',
+        paymentMethod,
+        locationId,
+        productTransactionId: null,
+        environment: env,
+      });
+    }
+
     // Resolve the product_transaction_id for the requested payment method.
     // When paymentMethod is 'any' we don't pass one, letting Fortis Elements
     // render the tabs for every product enabled on the merchant's location.
@@ -105,28 +129,6 @@ export async function POST(request: NextRequest) {
           400
         );
       }
-    }
-
-    // ── TOKENIZATION intention (preferred card-save path — no charge) ──────
-    if (action === 'tokenization') {
-      const intentionData: {
-        location_id: string;
-        action: 'tokenization';
-        product_transaction_id?: string;
-      } = { location_id: locationId, action: 'tokenization' };
-      if (productTransactionId) intentionData.product_transaction_id = productTransactionId;
-      const result = await fortisClient.createTransactionIntention(intentionData);
-      if (!result.status || !result.clientToken) {
-        return apiError(result.message || 'Failed to create tokenization intention', 400);
-      }
-      return Response.json({
-        clientToken: result.clientToken,
-        intentionType: 'tokenization',
-        paymentMethod,
-        locationId,
-        productTransactionId: productTransactionId || null,
-        environment: env,
-      });
     }
 
     // ── TICKET intention (legacy — $0.01 charge + refund) ────────────────

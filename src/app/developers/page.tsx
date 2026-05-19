@@ -1000,17 +1000,20 @@ window.open(session.url, '_blank', 'width=500,height=700');`}</Code>
                 { name: 'action',         type: 'string',  required: false, desc: '"tokenization" — vault card with no charge (preferred for saving). "sale" — one-time charge. Omit for legacy behavior.' },
                 { name: 'amount',         type: 'number',  required: false, desc: 'Amount in cents for a one-time sale. Omit when action is "tokenization".' },
                 { name: 'hasRecurring',   type: 'boolean', required: false, desc: 'Legacy: set true to use ticket intention ($0.01 charge). Use action:"tokenization" instead.' },
-                { name: 'paymentMethods', type: 'array',   required: false, desc: 'Array of methods to expose: ["cc"], ["ach"], or ["cc","ach"] (default). Use ["cc"] to hide ACH.' },
+                { name: 'paymentMethods', type: 'array',   required: false, desc: 'Array of methods to expose for "sale" or ticket intentions: ["cc"], ["ach"], or ["cc","ach"] (default). Ignored for tokenization — Fortis returns all methods enabled on the location; filter tabs client-side via Fortis Elements config.' },
                 { name: 'paymentMethod',  type: 'string',  required: false, desc: 'Legacy shorthand: "cc", "ach", or "any". paymentMethods (plural) takes precedence.' },
               ],
               example: `// Tokenization intention — vault card with NO charge (recommended)
+// Note: paymentMethods is ignored for tokenization. The clientToken includes
+// every method enabled on the merchant's location. To restrict the form to
+// CC only, scope it client-side when you mount Fortis Elements.
 const res = await fetch("${BASE}/api/v1/intentions", {
   method: "POST",
   headers: {
     "Authorization": "Bearer lp_pk_your_publishable_key",
     "Content-Type": "application/json"
   },
-  body: JSON.stringify({ action: "tokenization", paymentMethods: ["cc"] })
+  body: JSON.stringify({ action: "tokenization" })
 });
 const { clientToken } = await res.json();
 
