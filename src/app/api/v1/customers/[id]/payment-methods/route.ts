@@ -1,6 +1,12 @@
 /**
  * GET  /api/v1/customers/:id/payment-methods  — List saved payment methods
- * POST /api/v1/customers/:id/payment-methods  — Save a card via ticket intention token
+ * POST /api/v1/customers/:id/payment-methods  — Save a payment method
+ *
+ * Accepts either:
+ *   - tokenizeId: account vault ID from a Fortis Elements tokenization intention
+ *     (no charge to customer — preferred method)
+ *   - ticketId: ticket ID from a Fortis Elements ticket intention
+ *     ($0.01 charge + immediate refund for CC; legacy method)
  */
 
 import { NextRequest } from 'next/server';
@@ -10,19 +16,33 @@ import { createFortisClient } from '@/lib/fortis/client';
 import { requireSecretKey, ApiAuthError, apiError } from '@/lib/api-auth';
 
 const saveSchema = z.object({
-  ticketId: z.string().min(1, 'ticketId from Fortis Elements is required'),
+  /**
+   * Account vault ID returned by Fortis Elements `tokenize_success` event.
+   * No charge is made when this is provided — preferred over ticketId.
+   */
+  tokenizeId: z.string().min(1).optional(),
+  /**
+   * Ticket ID from a Fortis Elements ticket intention (hasRecurring: true).
+   * Results in a $0.01 verification charge + refund. Use tokenizeId instead
+   * when possible.
+   */
+  ticketId: z.string().min(1).optional(),
   nameHolder: z.string().max(255).optional(),
   setDefault: z.boolean().optional().default(false),
   /**
    * Payment method to save.
-   * - 'cc'   — credit card (default)
-   * - 'ach'  — bank account / eCheck
-   *
-   * When not provided, defaults to 'cc' for backwards compatibility.
-   * For ACH the customer must complete the bank-account tab of Fortis Elements
-   * (the resulting ticketId must be an ACH ticket).
+   * - 'cc'  — credit card (default)
+   * - 'ach' — bank account / eCheck
    */
   paymentMethod: z.enum(['cc', 'ach']).optional().default('cc'),
+  /** Card last 4 digits — optional, sourced from the tokenize_success event data. */
+  lastFour: z.string().length(4).optional(),
+  /** Card expiry month (2 digits) — optional. */
+  expMonth: z.string().length(2).optional(),
+  /** Card expiry year (2 or 4 digits) — optional. */
+  expYear: z.string().min(2).max(4).optional(),
+}).refine((d) => d.tokenizeId || d.ticketId, {
+  message: 'Either tokenizeId or ticketId must be provided',
 });
 
 export async function GET(
@@ -79,7 +99,8 @@ export async function POST(
       return apiError('Validation error', 400, parsed.error.flatten().fieldErrors);
     }
 
-    const { ticketId, nameHolder, setDefault, paymentMethod } = parsed.data;
+    const { tokenizeId, ticketId, nameHolder, setDefault, paymentMethod,
+            lastFour: lastFourParam, expMonth: expMonthParam, expYear: expYearParam } = parsed.data;
 
     const fortisEnv = process.env.fortis_environment || 'dev';
     const env = fortisEnv === 'prd' ? 'production' : 'sandbox';
@@ -90,50 +111,68 @@ export async function POST(
       `${customer.firstName || ''} ${customer.lastName || ''}`.trim() ||
       (paymentMethod === 'ach' ? 'Bank Account' : 'Card');
 
-    // Fortis requires transaction_amount >= 1 cent for ticket sales. We charge
-    // $0.01 to save the token, then immediately refund it (for CC). For ACH we
-    // don't refund because bank debits don't clear instantly — we simply mark the
-    // verification transaction as internal (Fortis will auto-return it).
-    let ticketResult;
-    if (paymentMethod === 'ach') {
-      ticketResult = await fortisClient.processACHTicketSale({
-        ticket_id: ticketId,
-        transaction_amount: 1,
-        save_account: true,
-        transaction_c1: holderLabel,
-      });
+    let tokenId: string | undefined;
+    let lastDigits: string | undefined;
+    let expMonth: string | undefined;
+    let expYear: string | undefined;
+    let sourceType = paymentMethod;
+    let bankType: string | null = null;
+
+    if (tokenizeId) {
+      // ── TOKENIZATION PATH ──────────────────────────────────────────────────
+      // Card was already vaulted by Fortis Elements (tokenization intention).
+      // tokenizeId IS the account_vault_id — no server-side charge needed.
+      tokenId = tokenizeId;
+      lastDigits = lastFourParam;
+      expMonth = expMonthParam;
+      expYear = expYearParam;
+      // sourceType and bankType remain as set from paymentMethod
     } else {
-      ticketResult = await fortisClient.processTicketSale({
-        ticket_id: ticketId,
-        transaction_amount: 1,
-        save_account: true,
-        transaction_c1: holderLabel,
-      });
+      // ── TICKET PATH (legacy) ───────────────────────────────────────────────
+      // Fortis requires transaction_amount >= 1 cent for ticket sales. We charge
+      // $0.01 to save the token, then immediately refund it (for CC). For ACH we
+      // don't refund because bank debits don't clear instantly.
+      let ticketResult;
+      if (paymentMethod === 'ach') {
+        ticketResult = await fortisClient.processACHTicketSale({
+          ticket_id: ticketId!,
+          transaction_amount: 1,
+          save_account: true,
+          transaction_c1: holderLabel,
+        });
+      } else {
+        ticketResult = await fortisClient.processTicketSale({
+          ticket_id: ticketId!,
+          transaction_amount: 1,
+          save_account: true,
+          transaction_c1: holderLabel,
+        });
+      }
+
+      if (!ticketResult.status) {
+        return apiError(ticketResult.message || 'Failed to save payment method', 400);
+      }
+
+      const tx = ticketResult.transaction as Record<string, unknown> | undefined;
+      tokenId = ticketResult.tokenId || (tx?.token_id as string) || (tx?.account_vault_id as string) || (tx?.id as string);
+
+      // Refund the $0.01 verification charge only for CC.
+      const verificationTxId = (tx?.id as string) || null;
+      if (paymentMethod !== 'ach' && verificationTxId) {
+        fortisClient.refundTransaction(verificationTxId, 1).catch((e) =>
+          console.error('[v1/payment-methods] Failed to void $0.01 verification charge:', e)
+        );
+      }
+
+      lastDigits = (tx?.last_four as string) || (tx?.account_number as string)?.slice(-4);
+      expMonth = (tx?.exp_month as string) || (tx?.exp_date as string)?.slice(0, 2);
+      expYear = (tx?.exp_year as string) || (tx?.exp_date as string)?.slice(2);
+      const resolvedPaymentMethod = (tx?.payment_method as string) || paymentMethod;
+      sourceType = resolvedPaymentMethod === 'ach' ? 'ach' : 'cc';
+      bankType = sourceType === 'ach' ? ((tx?.account_type as string) || null) : null;
     }
 
-    if (!ticketResult.status) {
-      return apiError(ticketResult.message || 'Failed to save payment method', 400);
-    }
-
-    const tx = ticketResult.transaction as Record<string, unknown> | undefined;
-    const tokenId = ticketResult.tokenId || (tx?.token_id as string) || (tx?.account_vault_id as string) || (tx?.id as string);
-
-    // Refund the $0.01 verification charge only for CC (ACH refunds aren't instant).
-    const verificationTxId = (tx?.id as string) || null;
-    if (paymentMethod !== 'ach' && verificationTxId) {
-      fortisClient.refundTransaction(verificationTxId, 1).catch((e) =>
-        console.error('[v1/payment-methods] Failed to void $0.01 verification charge:', e)
-      );
-    }
-
-    const lastDigits = (tx?.last_four as string) || (tx?.account_number as string)?.slice(-4);
-    const expMonth = (tx?.exp_month as string) || (tx?.exp_date as string)?.slice(0, 2);
-    const expYear = (tx?.exp_year as string) || (tx?.exp_date as string)?.slice(2);
-    const fortisCustomerId = (tx?.customer_id as string) || tokenId;
-    // Prefer explicit paymentMethod from the caller; fall back to Fortis response.
-    const sourceType =
-      paymentMethod === 'ach' || (tx?.payment_method as string) === 'ach' ? 'ach' : 'cc';
-    const bankType = sourceType === 'ach' ? ((tx?.account_type as string) || null) : null;
+    const fortisCustomerId = tokenId;
 
     if (!tokenId) {
       return apiError('Failed to retrieve token from payment processor', 502);

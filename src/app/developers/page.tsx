@@ -257,17 +257,22 @@ export default function DevelopersPage() {
                 <p className="text-sm text-gray-600 mb-2">
                   Create a payment intention with your publishable key, then use Fortis Elements to collect card data. Card numbers go directly from the browser to Fortis — LunarPay never sees them.
                 </p>
-                <Code>{`// 1. Get a clientToken from your server
+                <Code>{`// 1. Get a clientToken from your server (tokenization = no $0.01 charge)
 const res = await fetch("${BASE}/api/v1/intentions", {
   method: "POST",
   headers: { "Authorization": "Bearer lp_pk_your_publishable_key" },
-  body: JSON.stringify({ hasRecurring: true }) // for saving cards
+  body: JSON.stringify({ action: "tokenization" })
 });
 const { clientToken } = await res.json();
 
-// 2. Initialize Fortis Elements with the clientToken
-// (see Fortis Elements docs for full integration)
-// Fortis returns a ticket_id when the user enters their card`}</Code>
+// 2. Initialize Fortis Elements — fires tokenize_success with vault ID
+const elements = window.Commerce.elements(clientToken);
+elements.create({ container: "#payment-form" });
+elements.on("tokenize_success", async (e) => {
+  // e.id is the account vault ID — pass to your backend
+  await saveCard({ tokenizeId: e.id, lastFour: e.last_four,
+                   expMonth: e.exp_date?.slice(0,2), expYear: e.exp_date?.slice(2) });
+});`}</Code>
               </div>
 
               <div>
@@ -276,7 +281,10 @@ const { clientToken } = await res.json();
   -H "Authorization: Bearer lp_sk_your_secret_key" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "ticketId": "ticket_abc123from_fortis_elements",
+    "tokenizeId": "31f1538e382f4f428b015092",
+    "lastFour": "4242",
+    "expMonth": "12",
+    "expYear": "2028",
     "setDefault": true
   }'`}</Code>
               </div>
@@ -446,25 +454,72 @@ const { clientToken } = await res.json();
 
           {/* Payment Methods */}
           <Section id="payment-methods" title="Payment Methods">
-            <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-800 mb-6">
-              <strong>How card &amp; bank saving works:</strong> You never pass raw card numbers or bank account details to the LunarPay API. Instead, use the Fortis Elements iframe (via a payment intention) to collect payment data directly in the customer&apos;s browser. Fortis returns a <code className="bg-blue-100 px-1 rounded text-xs">ticket_id</code> — pass that to this endpoint to vault the card or bank account and get back a reusable <code className="bg-blue-100 px-1 rounded text-xs">paymentMethodId</code>.
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-800 mb-4">
+              <strong>How card &amp; bank saving works:</strong> You never pass raw card numbers to the LunarPay API. Use the Fortis Elements iframe (via a payment intention) to collect payment data in the customer&apos;s browser. Fortis returns either a <code className="bg-blue-100 px-1 rounded text-xs">tokenizeId</code> (preferred — no charge) or a <code className="bg-blue-100 px-1 rounded text-xs">ticketId</code> (legacy). Pass one of these to vault the card and receive a reusable <code className="bg-blue-100 px-1 rounded text-xs">paymentMethodId</code>.
+            </div>
+
+            <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-900 mb-4">
+              <strong>Recommended: tokenization intention (no $0.01 charge)</strong><br/>
+              Create an intention with <code className="bg-green-100 px-1 rounded text-xs">action: &quot;tokenization&quot;</code>. Fortis Elements fires a <code className="bg-green-100 px-1 rounded text-xs">tokenize_success</code> event with an <code className="bg-green-100 px-1 rounded text-xs">id</code> field — that is your <code className="bg-green-100 px-1 rounded text-xs">tokenizeId</code>. Pass it to <code className="bg-green-100 px-1 rounded text-xs">POST /api/v1/customers/:id/payment-methods</code>. No money changes hands.
+              <pre className="mt-2 bg-green-100 rounded p-2 text-xs overflow-x-auto">{`// Frontend: create tokenization intention
+const { clientToken } = await fetch("/api/v1/intentions", {
+  method: "POST",
+  headers: { "Authorization": "Bearer lp_pk_..." },
+  body: JSON.stringify({ action: "tokenization" })
+}).then(r => r.json());
+
+// Initialize Fortis Elements
+const elements = window.Commerce.elements(clientToken);
+elements.create({ container: "#payment-form" });
+
+// Listen for vault creation — no charge
+elements.on("tokenize_success", async (e) => {
+  const tokenizeId = e.id; // account vault ID
+  const lastFour   = e.last_four;
+  const expMonth   = e.exp_date?.slice(0, 2);
+  const expYear    = e.exp_date?.slice(2);
+  await saveToBackend({ tokenizeId, lastFour, expMonth, expYear });
+});`}</pre>
+            </div>
+
+            <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl text-sm text-amber-900 mb-6">
+              <strong>Legacy: ticket intention ($0.01 verification charge)</strong><br/>
+              Create an intention with <code className="bg-amber-100 px-1 rounded text-xs">hasRecurring: true</code>. Fortis charges $0.01 and immediately refunds it to verify the card. The customer briefly sees the $0.01 on their statement. Use the tokenization path above to avoid this.
             </div>
 
             <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-900 mb-6">
-              <strong>Credit cards vs ACH (eCheck):</strong> LunarPay supports both. To save a bank account instead of a card, request an ACH intention (<code className="bg-emerald-100 px-1 rounded text-xs">paymentMethod: &quot;ach&quot;</code>) and pass <code className="bg-emerald-100 px-1 rounded text-xs">paymentMethod: &quot;ach&quot;</code> when saving the payment method. ACH requires the merchant to have ACH enabled on their Fortis account during onboarding.
+              <strong>Credit cards vs ACH (eCheck):</strong> LunarPay supports both. To save a bank account instead of a card, use <code className="bg-emerald-100 px-1 rounded text-xs">paymentMethod: &quot;ach&quot;</code>. ACH requires the merchant to have ACH enabled on their Fortis account during onboarding.
             </div>
 
             <Endpoint ep={{
               method: 'POST', path: '/api/v1/customers/:id/payment-methods', key: 'secret',
-              desc: 'Save a payment method (credit card or bank account) for a customer using a ticket_id returned by Fortis Elements.',
+              desc: 'Save a payment method (credit card or bank account) for a customer. Accepts either a tokenizeId (preferred, no charge) or a ticketId (legacy, $0.01 verification).',
               params: [{ name: 'id', type: 'number', required: true, desc: 'Customer ID' }],
               body: [
-                { name: 'ticketId',      type: 'string',  required: true,  desc: 'ticket_id from Fortis Elements callback' },
-                { name: 'paymentMethod', type: 'string',  required: false, desc: '"cc" (default) or "ach". Must match the tab the customer used in Fortis Elements.' },
+                { name: 'tokenizeId',    type: 'string',  required: false, desc: 'Account vault ID from Fortis Elements tokenize_success event. No charge. Preferred method.' },
+                { name: 'ticketId',      type: 'string',  required: false, desc: 'ticket_id from Fortis Elements done event (hasRecurring intention). Results in $0.01 charge + refund. Legacy.' },
+                { name: 'paymentMethod', type: 'string',  required: false, desc: '"cc" (default) or "ach". Must match the tab used in Fortis Elements.' },
                 { name: 'nameHolder',    type: 'string',  required: false, desc: 'Name on card or account' },
                 { name: 'setDefault',    type: 'boolean', required: false, desc: 'Set as default payment method (default: false)' },
+                { name: 'lastFour',      type: 'string',  required: false, desc: 'Last 4 digits of card (from tokenize_success event data). Stored for display only.' },
+                { name: 'expMonth',      type: 'string',  required: false, desc: 'Card expiry month (2 digits, e.g. "12"). From tokenize_success event data.' },
+                { name: 'expYear',       type: 'string',  required: false, desc: 'Card expiry year (2 or 4 digits). From tokenize_success event data.' },
               ],
-              example: `# Save a credit card
+              example: `# Recommended: tokenization path (no charge)
+curl -X POST ${BASE}/api/v1/customers/123/payment-methods \\
+  -H "Authorization: Bearer lp_sk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "tokenizeId": "31f1538e382f4f428b015092",
+    "paymentMethod": "cc",
+    "nameHolder": "Jane Smith",
+    "lastFour": "4242",
+    "expMonth": "12",
+    "expYear": "2028",
+    "setDefault": true
+  }'
+
+# Legacy: ticket path ($0.01 verification)
 curl -X POST ${BASE}/api/v1/customers/123/payment-methods \\
   -H "Authorization: Bearer lp_sk_..." \\
   -H "Content-Type: application/json" \\
@@ -473,17 +528,6 @@ curl -X POST ${BASE}/api/v1/customers/123/payment-methods \\
     "paymentMethod": "cc",
     "nameHolder": "Jane Smith",
     "setDefault": true
-  }'
-
-# Save a bank account (ACH / eCheck)
-curl -X POST ${BASE}/api/v1/customers/123/payment-methods \\
-  -H "Authorization: Bearer lp_sk_..." \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "ticketId": "ticket_fts_ach_xyz",
-    "paymentMethod": "ach",
-    "nameHolder": "Jane Smith",
-    "setDefault": false
   }'`,
               response: `{
   "data": {
@@ -929,13 +973,13 @@ window.open(session.url, '_blank', 'width=500,height=700');`}</Code>
               This returns a <code className="bg-gray-100 px-1 rounded text-xs">clientToken</code> you pass to the Fortis Elements iframe so customers can enter card details directly — without card data ever touching your servers.
             </p>
 
-            <SubSection id="intentions-flow" title="Integration flow">
+            <SubSection id="intentions-flow" title="Integration flow (tokenization — recommended)">
               <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside mb-4">
-                <li>Your frontend calls <code className="bg-gray-100 px-1 rounded text-xs">POST /api/v1/intentions</code> with the publishable key</li>
-                <li>Mount the Fortis Elements iframe using the returned <code className="bg-gray-100 px-1 rounded text-xs">clientToken</code> — always use <code className="bg-gray-100 px-1 rounded text-xs">showSubmitButton: true</code></li>
-                <li>Customer enters card — data goes directly browser → Fortis</li>
-                <li>Customer clicks the Fortis Pay button; on success Fortis fires <code className="bg-gray-100 px-1 rounded text-xs">ticket_success</code> with a <code className="bg-gray-100 px-1 rounded text-xs">ticket_id</code> — show your loading overlay here</li>
-                <li>Send <code className="bg-gray-100 px-1 rounded text-xs">ticket_id</code> to your backend, then call <code className="bg-gray-100 px-1 rounded text-xs">POST /api/v1/customers/:id/payment-methods</code></li>
+                <li>Your frontend calls <code className="bg-gray-100 px-1 rounded text-xs">POST /api/v1/intentions</code> with <code className="bg-gray-100 px-1 rounded text-xs">action: &quot;tokenization&quot;</code> and publishable key</li>
+                <li>Mount the Fortis Elements iframe with the returned <code className="bg-gray-100 px-1 rounded text-xs">clientToken</code> — use <code className="bg-gray-100 px-1 rounded text-xs">showSubmitButton: true</code></li>
+                <li>Customer enters card — data goes directly browser → Fortis (never touches your server)</li>
+                <li>Fortis fires <code className="bg-gray-100 px-1 rounded text-xs">tokenize_success</code> with the account vault <code className="bg-gray-100 px-1 rounded text-xs">id</code>, <code className="bg-gray-100 px-1 rounded text-xs">last_four</code>, <code className="bg-gray-100 px-1 rounded text-xs">exp_date</code> — <strong>no charge to the customer</strong></li>
+                <li>Send <code className="bg-gray-100 px-1 rounded text-xs">tokenizeId</code> (+ optional card details) to your backend, call <code className="bg-gray-100 px-1 rounded text-xs">POST /api/v1/customers/:id/payment-methods</code></li>
               </ol>
             </SubSection>
 
@@ -953,33 +997,38 @@ window.open(session.url, '_blank', 'width=500,height=700');`}</Code>
               method: 'POST', path: '/api/v1/intentions', key: 'publishable',
               desc: 'Create a Fortis Elements payment intention. Use your publishable key on the frontend.',
               body: [
-                { name: 'amount',         type: 'number',  required: false, desc: 'Amount in cents for a one-time charge. Omit if only saving a payment method.' },
-                { name: 'hasRecurring',   type: 'boolean', required: false, desc: 'Set true when saving a card/bank for future use or subscriptions (uses ticket intention).' },
-                { name: 'paymentMethods', type: 'array',   required: false, desc: 'Array of methods to expose: ["cc"], ["ach"], or ["cc","ach"] (default). Use ["cc"] to hide ACH from Elements.' },
-                { name: 'paymentMethod',  type: 'string',  required: false, desc: 'Legacy shorthand: "cc", "ach", or "any" (default). paymentMethods (plural) takes precedence if both are sent.' },
+                { name: 'action',         type: 'string',  required: false, desc: '"tokenization" — vault card with no charge (preferred for saving). "sale" — one-time charge. Omit for legacy behavior.' },
+                { name: 'amount',         type: 'number',  required: false, desc: 'Amount in cents for a one-time sale. Omit when action is "tokenization".' },
+                { name: 'hasRecurring',   type: 'boolean', required: false, desc: 'Legacy: set true to use ticket intention ($0.01 charge). Use action:"tokenization" instead.' },
+                { name: 'paymentMethods', type: 'array',   required: false, desc: 'Array of methods to expose: ["cc"], ["ach"], or ["cc","ach"] (default). Use ["cc"] to hide ACH.' },
+                { name: 'paymentMethod',  type: 'string',  required: false, desc: 'Legacy shorthand: "cc", "ach", or "any". paymentMethods (plural) takes precedence.' },
               ],
-              example: `// From your frontend — hide ACH, show card only
+              example: `// Tokenization intention — vault card with NO charge (recommended)
 const res = await fetch("${BASE}/api/v1/intentions", {
   method: "POST",
   headers: {
     "Authorization": "Bearer lp_pk_your_publishable_key",
     "Content-Type": "application/json"
   },
-  body: JSON.stringify({
-    amount: 4999,
-    paymentMethods: ["cc"]   // ACH tab will not appear in Elements
-  })
+  body: JSON.stringify({ action: "tokenization", paymentMethods: ["cc"] })
 });
+const { clientToken } = await res.json();
 
-const { clientToken, intentionType, paymentMethod, locationId } = await res.json();
-// intentionType: "ticket" (for saving) or "transaction" (one-time)
-// paymentMethod: "cc", "ach", or "any" — reflects what the intention was scoped to`,
+// One-time charge intention
+const res2 = await fetch("${BASE}/api/v1/intentions", {
+  method: "POST",
+  headers: { "Authorization": "Bearer lp_pk_your_publishable_key", "Content-Type": "application/json" },
+  body: JSON.stringify({ action: "sale", amount: 4999, paymentMethods: ["cc"] })
+});
+const { clientToken: saleToken } = await res2.json();
+
+// intentionType: "tokenization" | "transaction" | "ticket"`,
               response: `{
   "clientToken": "eyJ...",
-  "intentionType": "transaction",
+  "intentionType": "tokenization",   // "tokenization" | "transaction" | "ticket"
   "paymentMethod": "cc",
   "locationId": "loc_abc123",
-  "productTransactionId": "pt_cc_xyz",  // set when you pinned a method
+  "productTransactionId": "pt_cc_xyz",
   "environment": "sandbox"
 }`,
             }} />

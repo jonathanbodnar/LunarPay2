@@ -5,8 +5,13 @@
  * Returns a clientToken to initialize the Fortis Elements iframe.
  *
  * Body:
- *   amount          number                — Amount in cents (required for one-time)
- *   hasRecurring    boolean               — If true, returns a ticket intention for saving a payment method
+ *   action          'tokenization' | 'sale'  — Intention type:
+ *                     'tokenization' — vault card with NO charge (preferred for saving cards)
+ *                     'sale'         — one-time transaction (requires amount)
+ *                     omit           — defaults based on other fields (legacy)
+ *
+ *   amount          number                — Amount in cents (required for sale/one-time)
+ *   hasRecurring    boolean               — Legacy: if true, ticket intention ($0.01 charge). Use action:'tokenization' instead.
  *
  *   // Preferred: declare which payment methods Elements should expose
  *   paymentMethods  ['cc'] | ['ach'] | ['cc','ach']
@@ -27,6 +32,7 @@ import { createFortisClient } from '@/lib/fortis/client';
 import { requirePublishableKey, ApiAuthError, apiError } from '@/lib/api-auth';
 
 const intentionSchema = z.object({
+  action: z.enum(['tokenization', 'sale']).optional(),
   amount: z.number().int().min(0).optional(),
   hasRecurring: z.boolean().optional().default(false),
   paymentMethod: z.enum(['cc', 'ach', 'any']).optional(),
@@ -42,7 +48,7 @@ export async function POST(request: NextRequest) {
       return apiError('Validation error', 400, parsed.error.flatten().fieldErrors);
     }
 
-    const { amount, hasRecurring } = parsed.data;
+    const { action, amount, hasRecurring } = parsed.data;
 
     // Resolve the effective payment-method scope.
     // Precedence: paymentMethods (plural array) > paymentMethod (singular legacy) > 'any'.
@@ -101,6 +107,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── TOKENIZATION intention (preferred card-save path — no charge) ──────
+    if (action === 'tokenization') {
+      const intentionData: {
+        location_id: string;
+        action: 'tokenization';
+        product_transaction_id?: string;
+      } = { location_id: locationId, action: 'tokenization' };
+      if (productTransactionId) intentionData.product_transaction_id = productTransactionId;
+      const result = await fortisClient.createTransactionIntention(intentionData);
+      if (!result.status || !result.clientToken) {
+        return apiError(result.message || 'Failed to create tokenization intention', 400);
+      }
+      return Response.json({
+        clientToken: result.clientToken,
+        intentionType: 'tokenization',
+        paymentMethod,
+        locationId,
+        productTransactionId: productTransactionId || null,
+        environment: env,
+      });
+    }
+
+    // ── TICKET intention (legacy — $0.01 charge + refund) ────────────────
     if (hasRecurring) {
       const ticketData: { location_id: string; product_transaction_id?: string } = { location_id: locationId };
       if (productTransactionId) ticketData.product_transaction_id = productTransactionId;
@@ -119,6 +148,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // ── TRANSACTION (sale) intention ──────────────────────────────────────
     const intentionData: {
       location_id: string;
       action: 'sale';
