@@ -1,0 +1,33 @@
+{
+  "name": "lunarpay",
+  "experimentalServices": {
+    "web": {
+      "routePrefix": "/",
+      "framework": "nextjs",
+      "installCommand": "npm install --include=dev",
+      "buildCommand": "npx prisma generate && next build"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/process-scheduled-payments",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/process-subscriptions",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/onboarding-emails",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/lead-nurturing",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/chat-followup",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}
