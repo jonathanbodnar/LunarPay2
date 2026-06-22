@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { dollarsToCents, calculateFee } from '@/lib/utils';
+import { fireWebhook } from '@/lib/webhook';
 
 const ADMIN_TRIGGER_KEY = process.env.CRON_ADMIN_KEY;
 
@@ -64,6 +65,17 @@ async function processScheduledPayments(request: Request) {
     const results = { total: duePayments.length, successful: 0, failed: 0, skipped: 0, details: [] as any[] };
 
     for (const payment of duePayments) {
+      // Atomically claim this payment — prevents double-processing if two crons run simultaneously
+      const claimed = await prisma.scheduledPayment.updateMany({
+        where: { id: payment.id, status: 'pending' },
+        data: { status: 'processing' },
+      });
+      if (claimed.count === 0) {
+        console.log(`[CRON:SCHEDULED] Payment ${payment.id} already claimed by another process — skipping`);
+        results.skipped++;
+        continue;
+      }
+
       const { schedule } = payment;
       const org = schedule.organization;
       const fortis = org.fortisOnboarding;
@@ -180,6 +192,26 @@ async function processScheduledPayments(request: Request) {
             console.log(`[CRON:SCHEDULED] Schedule ${schedule.id} completed — all payments processed`);
           }
 
+          // Outbound webhook — best-effort, never blocks the cron loop
+          fireWebhook(
+            org.webhookUrl,
+            org.webhookSecret,
+            'payment.succeeded',
+            org.id,
+            {
+              scheduled_payment_id: payment.id,
+              payment_schedule_id: schedule.id,
+              transaction_id: transaction.id,
+              customer_id: schedule.customerId,
+              customer_email: schedule.customer.email || null,
+              amount_cents: dollarsToCents(amountDollars),
+              currency: 'USD',
+              payment_method: schedule.source?.sourceType === 'ach' ? 'ach' : 'cc',
+              fortis_transaction_id: result.transaction?.id || null,
+              schedule_completed: remaining === 0,
+            },
+          );
+
           results.successful++;
           results.details.push({ paymentId: payment.id, status: 'success', transactionId: Number(transaction.id) });
         } else {
@@ -191,6 +223,25 @@ async function processScheduledPayments(request: Request) {
           });
 
           await markFailed(payment.id, schedule.id, result.message || 'Payment declined');
+
+          // Outbound webhook for failure — best-effort
+          fireWebhook(
+            org.webhookUrl,
+            org.webhookSecret,
+            'payment.failed',
+            org.id,
+            {
+              scheduled_payment_id: payment.id,
+              payment_schedule_id: schedule.id,
+              transaction_id: transaction.id,
+              customer_id: schedule.customerId,
+              customer_email: schedule.customer.email || null,
+              amount_cents: dollarsToCents(amountDollars),
+              currency: 'USD',
+              payment_method: schedule.source?.sourceType === 'ach' ? 'ach' : 'cc',
+              error: result.message || 'Payment declined',
+            },
+          );
 
           results.failed++;
           results.details.push({ paymentId: payment.id, status: 'failed', error: result.message });

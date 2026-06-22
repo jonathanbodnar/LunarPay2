@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { requireSecretKey, ApiAuthError, apiError } from '@/lib/api-auth';
+import { fireWebhook } from '@/lib/webhook';
 
 const chargeSchema = z.object({
   customerId: z.number().int().positive('customerId is required'),
@@ -44,6 +45,12 @@ export async function POST(request: NextRequest) {
       where: { id: customerId, organizationId: auth.organizationId },
     });
     if (!customer) return apiError('Customer not found', 404);
+
+    // Fetch org webhook config for event delivery
+    const org = await prisma.organization.findUnique({
+      where: { id: auth.organizationId },
+      select: { webhookUrl: true, webhookSecret: true },
+    });
 
     // Verify payment method belongs to this customer
     const source = await prisma.source.findFirst({
@@ -93,6 +100,21 @@ export async function POST(request: NextRequest) {
           });
 
     if (!result.status) {
+      fireWebhook(
+        org?.webhookUrl,
+        org?.webhookSecret,
+        'charge.failed',
+        auth.organizationId,
+        {
+          customer_id: customerId,
+          payment_method_id: paymentMethodId,
+          amount_cents: amount,
+          currency: 'USD',
+          payment_method: isAch ? 'ach' : 'cc',
+          error: result.message || 'Charge declined',
+          description: description || null,
+        },
+      );
       return apiError(result.message || 'Charge failed', 402);
     }
 
@@ -145,6 +167,26 @@ export async function POST(request: NextRequest) {
         },
       });
     }
+
+    // Outbound webhook for charge success — best-effort
+    fireWebhook(
+      org?.webhookUrl,
+      org?.webhookSecret,
+      'charge.succeeded',
+      auth.organizationId,
+      {
+        transaction_id: transaction.id,
+        customer_id: customerId,
+        payment_method_id: paymentMethodId,
+        amount_cents: amount,
+        currency: 'USD',
+        payment_method: isAch ? 'ach' : 'cc',
+        status: isAch ? 'pending' : capture ? 'paid' : 'authorized',
+        captured: !!capture && !isAch,
+        fortis_transaction_id: fortisTransactionId,
+        description: description || null,
+      },
+    );
 
     const responseStatus = isAch ? 'pending' : capture ? 'paid' : 'authorized';
 

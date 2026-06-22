@@ -7,6 +7,7 @@ import {
   sendPaymentFailedEmail,
   sendSubscriptionCancelledEmail,
 } from '@/lib/email';
+import { fireWebhook } from '@/lib/webhook';
 
 // Admin key for manual triggering (must be set via environment variable)
 const ADMIN_TRIGGER_KEY = process.env.CRON_ADMIN_KEY;
@@ -99,9 +100,22 @@ async function processSubscriptions(request: Request) {
 
     for (const subscription of subscriptions) {
       console.log(`[CRON] Processing subscription ${subscription.id} for ${subscription.email}`);
-      
+
+      // Atomically claim by advancing nextPaymentOn — prevents double-charging if two crons overlap
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const claimed = await prisma.subscription.updateMany({
+        where: { id: subscription.id, status: 'A', nextPaymentOn: { lte: endOfToday } },
+        data: { nextPaymentOn: tomorrow },
+      });
+      if (claimed.count === 0) {
+        console.log(`[CRON] Subscription ${subscription.id} already claimed by another process — skipping`);
+        results.skipped++;
+        continue;
+      }
+
       try {
-        // Get organization with Fortis credentials
+        // Get organization with Fortis credentials and webhook config
         const organization = await prisma.organization.findFirst({
           where: { id: subscription.organizationId },
           include: {
@@ -294,6 +308,25 @@ async function processSubscriptions(request: Request) {
             console.error(`[CRON] Failed to send receipt email for subscription ${subscription.id}:`, emailError);
           }
 
+          // Outbound webhook — best-effort, never blocks the cron loop
+          fireWebhook(
+            organization.webhookUrl,
+            organization.webhookSecret,
+            'payment.succeeded',
+            organization.id,
+            {
+              subscription_id: subscription.id,
+              transaction_id: transaction.id,
+              customer_id: subscription.donorId,
+              customer_email: subscription.email,
+              amount_cents: amountInCents,
+              currency: 'USD',
+              payment_method: subscription.source === 'CC' ? 'cc' : 'ach',
+              fortis_transaction_id: result.transaction?.id || null,
+              next_payment_date: nextPaymentDate.toISOString(),
+            },
+          );
+
           results.successful++;
           results.details.push({
             subscriptionId: subscription.id,
@@ -350,6 +383,26 @@ async function processSubscriptions(request: Request) {
             );
           }
 
+          // Outbound webhook for payment failure — best-effort
+          fireWebhook(
+            organization.webhookUrl,
+            organization.webhookSecret,
+            'payment.failed',
+            organization.id,
+            {
+              subscription_id: subscription.id,
+              transaction_id: transaction.id,
+              customer_id: subscription.donorId,
+              customer_email: subscription.email,
+              amount_cents: amountInCents,
+              currency: 'USD',
+              payment_method: subscription.source === 'CC' ? 'cc' : 'ach',
+              error: result.message || 'Payment declined',
+              consecutive_failures: newConsecutive,
+              auto_cancelled: willCancel,
+            },
+          );
+
           // If we just auto-cancelled, send a separate cancellation notice.
           if (willCancel) {
             console.log(
@@ -370,6 +423,20 @@ async function processSubscriptions(request: Request) {
                 emailError
               );
             }
+            // Outbound webhook for auto-cancellation
+            fireWebhook(
+              organization.webhookUrl,
+              organization.webhookSecret,
+              'subscription.cancelled',
+              organization.id,
+              {
+                subscription_id: subscription.id,
+                customer_id: subscription.donorId,
+                customer_email: subscription.email,
+                reason: `Auto-cancelled after ${newConsecutive} consecutive payment failures`,
+                consecutive_failures: newConsecutive,
+              },
+            );
           }
 
           results.failed++;
