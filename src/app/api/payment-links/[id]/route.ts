@@ -172,7 +172,11 @@ export async function PUT(
 
     console.error('Update payment link error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      {
+        error: 'Internal server error',
+        message: (error as Error).message,
+        code: (error as { code?: string }).code,
+      },
       { status: 500 }
     );
   }

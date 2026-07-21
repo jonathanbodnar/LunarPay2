@@ -167,7 +167,8 @@ export default function EditPaymentLinkPage() {
         router.push('/payment-links');
       } else {
         const data = await response.json();
-        alert(data.error || 'Failed to update payment link');
+        const detail = [data.error, data.message, data.code].filter(Boolean).join(' — ');
+        alert(detail || 'Failed to update payment link');
       }
     } catch (error) {
       alert('Error updating payment link');
