@@ -27,6 +27,7 @@ export async function POST(request: Request) {
       customerEmail,
       customerFirstName,
       customerLastName,
+      clientReferenceId, // Opaque merchant identifier passed via the link URL
       products, // For subscriptions
     } = body;
 
@@ -503,6 +504,7 @@ export async function POST(request: Request) {
               transaction_id: transaction.id.toString(),
               is_subscription: webhookHasSubscription,
               status: 'completed',
+              client_reference_id: clientReferenceId || null,
             },
             webhookHasSubscription ? 'subscription.created' : 'payment.completed',
           );
@@ -525,6 +527,7 @@ export async function POST(request: Request) {
               payment_method: payment_method === 'ach' ? 'ach' : 'cc',
               status: 'paid',
               is_subscription: webhookHasSubscription,
+              client_reference_id: clientReferenceId || null,
               customer: { email: customerEmail || null, name: customerName },
               products: webhookProducts,
             },

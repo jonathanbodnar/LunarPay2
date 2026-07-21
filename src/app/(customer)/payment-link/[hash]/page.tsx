@@ -72,6 +72,10 @@ export default function PaymentLinkPage() {
   const [paymentError, setPaymentError] = useState('');
   const [paidTransactionId, setPaidTransactionId] = useState<string | null>(null);
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
+  // Opaque merchant-supplied identifier, passed in via ?client_reference_id=...
+  // (alias ?ref=). Echoed back on the redirect URL and included in the webhook
+  // so the merchant can reconcile the payment with their own user/account.
+  const [clientReferenceId, setClientReferenceId] = useState<string | null>(null);
   
   // Form state
   const [email, setEmail] = useState('');
@@ -102,6 +106,18 @@ export default function PaymentLinkPage() {
   useEffect(() => {
     fetchPaymentLink();
   }, [hash]);
+
+  // Read passthrough params from the link URL:
+  //   ?email= / ?prefill_email=        → prefill the checkout email
+  //   ?client_reference_id= / ?ref=    → opaque merchant identifier (echoed back)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sp = new URLSearchParams(window.location.search);
+    const prefillEmail = sp.get('email') || sp.get('prefill_email');
+    if (prefillEmail) setEmail(prefillEmail);
+    const ref = sp.get('client_reference_id') || sp.get('ref');
+    if (ref) setClientReferenceId(ref);
+  }, []);
 
   // Load Fortis Elements script based on environment
   // Only load after we have the token and know the environment
@@ -439,6 +455,7 @@ export default function PaymentLinkPage() {
       url.searchParams.set('status', 'success');
       if (paidTransactionId) url.searchParams.set('transactionId', paidTransactionId);
       if (email) url.searchParams.set('email', email);
+      if (clientReferenceId) url.searchParams.set('client_reference_id', clientReferenceId);
       return url.toString();
     } catch {
       // If the stored value isn't a valid absolute URL, don't attempt a redirect
@@ -532,6 +549,7 @@ export default function PaymentLinkPage() {
             ticketId,
             amount: ticketAmount, // Amount in cents
             customerEmail: email,
+            clientReferenceId,
             products: productsToProcess,
           }),
         });
@@ -558,6 +576,7 @@ export default function PaymentLinkPage() {
           referenceId: paymentLink.id,
           organizationId: paymentLink.organizationId,
           customerEmail: email,
+          clientReferenceId,
           fortisResponse,
           savePaymentMethod: shouldSavePaymentMethod,
           products: productsToProcess,

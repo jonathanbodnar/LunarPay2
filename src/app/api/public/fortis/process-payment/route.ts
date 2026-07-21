@@ -22,6 +22,7 @@ export async function POST(request: Request) {
       customerEmail,
       customerFirstName,
       customerLastName,
+      clientReferenceId, // Opaque merchant identifier passed via the link URL
       fortisResponse, // The response from Fortis Elements
       savePaymentMethod = false,
     } = body;
@@ -631,6 +632,7 @@ export async function POST(request: Request) {
               transaction_id: transaction.id.toString(),
               is_subscription: webhookHasSubscription,
               status: isPending ? 'pending' : 'completed',
+              client_reference_id: clientReferenceId || null,
             },
             webhookHasSubscription ? 'subscription.created' : 'payment.completed',
           );
@@ -653,6 +655,7 @@ export async function POST(request: Request) {
               payment_method: payment_method === 'ach' ? 'ach' : 'cc',
               status: isPending ? 'pending' : 'paid',
               is_subscription: webhookHasSubscription,
+              client_reference_id: clientReferenceId || null,
               customer: { email: customerEmail || null, name: customerName },
               products: webhookProducts,
             },
