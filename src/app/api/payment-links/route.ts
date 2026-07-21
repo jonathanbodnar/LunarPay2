@@ -12,6 +12,7 @@ const createPaymentLinkSchema = z.object({
   status: z.enum(['active', 'inactive']).default('active'),
   coverFee: z.boolean().default(false),
   webhookUrl: z.string().url().optional().or(z.literal('')),
+  redirectUrl: z.string().url().optional().or(z.literal('')),
   products: z.array(z.object({
     productId: z.number(),
     qty: z.number().nullable(),
@@ -146,6 +147,7 @@ export async function POST(request: Request) {
         paymentMethods: validatedData.paymentMethods,
         coverFee: validatedData.coverFee,
         webhookUrl: validatedData.webhookUrl || null,
+        redirectUrl: validatedData.redirectUrl || null,
         products: {
           create: validatedData.products.map((product) => ({
             productId: product.productId,

@@ -27,6 +27,7 @@ export default function EditPaymentLinkPage() {
     paymentMethods: 'both',
     status: 'active',
     webhookUrl: '',
+    redirectUrl: '',
     organizationName: '',
   });
 
@@ -57,6 +58,7 @@ export default function EditPaymentLinkPage() {
           paymentMethods: link.paymentMethods || 'both',
           status: link.status || 'active',
           webhookUrl: link.webhookUrl || '',
+          redirectUrl: link.redirectUrl || '',
           organizationName: link.organization?.name || '',
         });
         setPaymentLinkHash(link.hash || '');
@@ -146,6 +148,7 @@ export default function EditPaymentLinkPage() {
           paymentMethods: formData.paymentMethods,
           status: formData.status,
           webhookUrl: formData.webhookUrl || undefined,
+          redirectUrl: formData.redirectUrl || undefined,
           products: selectedProducts
             .filter(p => p.productId !== null)
             .map(p => ({
@@ -290,6 +293,20 @@ export default function EditPaymentLinkPage() {
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Redirect URL after payment</label>
+              <Input
+                type="url"
+                value={formData.redirectUrl}
+                onChange={(e) => setFormData({ ...formData, redirectUrl: e.target.value })}
+                placeholder="https://your-app.com/thank-you"
+              />
+              <p className="text-xs text-muted-foreground">
+                Optional. After a successful payment, the customer is redirected here. We append{' '}
+                <code className="text-[11px]">?status=success&amp;transactionId=...&amp;email=...</code> so your app can confirm the payment.
+              </p>
             </div>
           </CardContent>
         </Card>

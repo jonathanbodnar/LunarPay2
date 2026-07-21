@@ -14,6 +14,7 @@ interface PaymentLink {
   status: string;
   coverFee: boolean;
   paymentMethods: string | null;
+  redirectUrl: string | null;
   organizationId: number;
   organization: {
     name: string;
@@ -69,6 +70,8 @@ export default function PaymentLinkPage() {
   const [processing, setProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentError, setPaymentError] = useState('');
+  const [paidTransactionId, setPaidTransactionId] = useState<string | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
   
   // Form state
   const [email, setEmail] = useState('');
@@ -427,6 +430,42 @@ export default function PaymentLinkPage() {
     }
   }, [cart, paymentLink]);
 
+  // Build the merchant's redirect URL with payment context appended as query params
+  const buildRedirectUrl = (): string | null => {
+    const base = paymentLink?.redirectUrl?.trim();
+    if (!base) return null;
+    try {
+      const url = new URL(base);
+      url.searchParams.set('status', 'success');
+      if (paidTransactionId) url.searchParams.set('transactionId', paidTransactionId);
+      if (email) url.searchParams.set('email', email);
+      return url.toString();
+    } catch {
+      // If the stored value isn't a valid absolute URL, don't attempt a redirect
+      return null;
+    }
+  };
+
+  // After a successful payment, redirect back to the merchant's app (if configured)
+  useEffect(() => {
+    if (!paymentSuccess) return;
+    const target = buildRedirectUrl();
+    if (!target) return;
+
+    setRedirectCountdown(3);
+    const interval = setInterval(() => {
+      setRedirectCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : prev));
+    }, 1000);
+    const timeout = setTimeout(() => {
+      window.location.href = target;
+    }, 3000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [paymentSuccess, paidTransactionId]);
+
   const processPayment = async (fortisResponse: any) => {
     if (!paymentLink) return;
 
@@ -500,6 +539,7 @@ export default function PaymentLinkPage() {
         const data = await response.json();
 
         if (data.success) {
+          setPaidTransactionId(data.transactionId ? String(data.transactionId) : null);
           setPaymentSuccess(true);
           setProcessing(false);
         } else {
@@ -527,6 +567,7 @@ export default function PaymentLinkPage() {
       const data = await response.json();
 
       if (data.success) {
+        setPaidTransactionId(data.transactionId ? String(data.transactionId) : null);
         setPaymentSuccess(true);
         setProcessing(false);
       } else {
@@ -614,6 +655,7 @@ export default function PaymentLinkPage() {
 
   // Show success state
   if (paymentSuccess) {
+    const redirectTarget = buildRedirectUrl();
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor }}>
         <div className="flex-1 flex items-center justify-center p-4">
@@ -632,6 +674,25 @@ export default function PaymentLinkPage() {
             <p className="text-sm text-gray-500">
               A receipt has been sent to {email}
             </p>
+
+            {redirectTarget && (
+              <div className="mt-6 pt-6 border-t border-gray-100">
+                <p className="text-sm text-gray-500 mb-3">
+                  Redirecting you back to {paymentLink.organization.name}
+                  {redirectCountdown !== null && redirectCountdown > 0
+                    ? ` in ${redirectCountdown}...`
+                    : '...'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { window.location.href = redirectTarget; }}
+                  className="w-full py-3 rounded-lg font-medium transition-all hover:opacity-90"
+                  style={{ backgroundColor: primaryColor, color: buttonTextColor }}
+                >
+                  Continue
+                </button>
+              </div>
+            )}
           </div>
         </div>
         

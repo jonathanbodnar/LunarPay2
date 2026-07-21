@@ -23,6 +23,7 @@ export default function NewPaymentLinkPage() {
     status: 'active',
     coverFee: false,
     webhookUrl: '',
+    redirectUrl: '',
   });
 
   const [selectedProducts, setSelectedProducts] = useState<Array<{
@@ -124,6 +125,7 @@ export default function NewPaymentLinkPage() {
         status: formData.status,
         coverFee: formData.coverFee,
         webhookUrl: formData.webhookUrl || undefined,
+        redirectUrl: formData.redirectUrl || undefined,
         products: selectedProducts
           .filter(p => p.productId !== null)
           .map(p => ({
@@ -236,6 +238,20 @@ export default function NewPaymentLinkPage() {
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Redirect URL after payment</label>
+              <Input
+                type="url"
+                value={formData.redirectUrl}
+                onChange={(e) => setFormData({ ...formData, redirectUrl: e.target.value })}
+                placeholder="https://your-app.com/thank-you"
+              />
+              <p className="text-xs text-muted-foreground">
+                Optional. After a successful payment, the customer is redirected here. We append{' '}
+                <code className="text-[11px]">?status=success&amp;transactionId=...&amp;email=...</code> so your app can confirm the payment.
+              </p>
             </div>
           </CardContent>
         </Card>
