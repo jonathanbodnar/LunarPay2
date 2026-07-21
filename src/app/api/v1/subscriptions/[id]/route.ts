@@ -8,6 +8,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireSecretKey, ApiAuthError, apiError } from '@/lib/api-auth';
+import { deliverWebhook } from '@/lib/webhook';
 
 const updateSchema = z.object({
   amount: z.number().int().min(50).optional(),
@@ -144,8 +145,27 @@ export async function DELETE(
 
     await prisma.subscription.update({
       where: { id: subId },
-      data: { status: 'D' },
+      data: { status: 'D', cancelledAt: new Date() },
     });
+
+    // Notify the merchant's webhook so its mirror learns about the cancel
+    // even when the API caller isn't the system that keeps the mirror.
+    const org = await prisma.organization.findUnique({
+      where: { id: auth.organizationId },
+      select: { webhookUrl: true, webhookSecret: true },
+    });
+    await deliverWebhook(
+      org?.webhookUrl,
+      org?.webhookSecret,
+      'subscription.cancelled',
+      auth.organizationId,
+      {
+        subscription_id: subId,
+        customer_id: existing.donorId,
+        customer_email: existing.email,
+        reason: 'Cancelled via API',
+      },
+    );
 
     return Response.json({ success: true, status: 'cancelled' });
   } catch (e) {

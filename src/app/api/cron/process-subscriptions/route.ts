@@ -7,7 +7,7 @@ import {
   sendPaymentFailedEmail,
   sendSubscriptionCancelledEmail,
 } from '@/lib/email';
-import { fireWebhook } from '@/lib/webhook';
+import { deliverWebhook } from '@/lib/webhook';
 
 // Admin key for manual triggering (must be set via environment variable)
 const ADMIN_TRIGGER_KEY = process.env.CRON_ADMIN_KEY;
@@ -308,15 +308,17 @@ async function processSubscriptions(request: Request) {
             console.error(`[CRON] Failed to send receipt email for subscription ${subscription.id}:`, emailError);
           }
 
-          // Outbound webhook — best-effort, never blocks the cron loop
-          fireWebhook(
+          // Outbound webhook — awaited: the cron process exits when the loop
+          // ends, and an un-awaited fetch is killed with it (deliveries were
+          // silently lost for months this way).
+          await deliverWebhook(
             organization.webhookUrl,
             organization.webhookSecret,
             'payment.succeeded',
             organization.id,
             {
               subscription_id: subscription.id,
-              transaction_id: transaction.id,
+              transaction_id: transaction.id.toString(),
               customer_id: subscription.donorId,
               customer_email: subscription.email,
               amount_cents: amountInCents,
@@ -383,15 +385,15 @@ async function processSubscriptions(request: Request) {
             );
           }
 
-          // Outbound webhook for payment failure — best-effort
-          fireWebhook(
+          // Outbound webhook for payment failure — awaited (see success path)
+          await deliverWebhook(
             organization.webhookUrl,
             organization.webhookSecret,
             'payment.failed',
             organization.id,
             {
               subscription_id: subscription.id,
-              transaction_id: transaction.id,
+              transaction_id: transaction.id.toString(),
               customer_id: subscription.donorId,
               customer_email: subscription.email,
               amount_cents: amountInCents,
@@ -423,8 +425,8 @@ async function processSubscriptions(request: Request) {
                 emailError
               );
             }
-            // Outbound webhook for auto-cancellation
-            fireWebhook(
+            // Outbound webhook for auto-cancellation — awaited (see above)
+            await deliverWebhook(
               organization.webhookUrl,
               organization.webhookSecret,
               'subscription.cancelled',

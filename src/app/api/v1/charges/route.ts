@@ -29,6 +29,97 @@ const chargeSchema = z.object({
   capture: z.boolean().optional().default(true),
 });
 
+// Map the single-char DB status codes to the API vocabulary.
+function chargeStatusLabel(status: string): string {
+  switch (status) {
+    case 'P': return 'paid';
+    case 'N': return 'failed';
+    case 'R': return 'refunded';
+    case 'U': return 'pending';
+    case 'A': return 'authorized';
+    case 'V': return 'voided';
+    // Dashboard-written legacy string statuses pass through as-is.
+    default: return status;
+  }
+}
+
+/**
+ * GET /api/v1/charges — list charges for the merchant, filterable by
+ * customer_id, status, and created_after/created_before (ISO dates).
+ * Gives merchants a way to reconcile their mirrors charge-by-charge —
+ * previously there was no read access to charges at all.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await requireSecretKey(request);
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '20')));
+    const customerId = searchParams.get('customer_id');
+    const status = searchParams.get('status');
+    const createdAfter = searchParams.get('created_after');
+    const createdBefore = searchParams.get('created_before');
+
+    const statusCode =
+      status === 'paid' ? 'P'
+      : status === 'failed' ? 'N'
+      : status === 'refunded' ? 'R'
+      : status === 'pending' ? 'U'
+      : status === 'authorized' ? 'A'
+      : status === 'voided' ? 'V'
+      : null;
+
+    const where = {
+      organizationId: auth.organizationId,
+      ...(customerId ? { donorId: parseInt(customerId) } : {}),
+      ...(statusCode ? { status: statusCode } : {}),
+      ...(createdAfter || createdBefore
+        ? {
+            createdAt: {
+              ...(createdAfter ? { gte: new Date(createdAfter) } : {}),
+              ...(createdBefore ? { lte: new Date(createdBefore) } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const [transactions, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true, donorId: true, totalAmount: true, subTotalAmount: true,
+          status: true, source: true, subscriptionId: true,
+          fortisTransactionId: true, createdAt: true, refundedAt: true,
+        },
+      }),
+      prisma.transaction.count({ where }),
+    ]);
+
+    return Response.json({
+      data: transactions.map((t) => ({
+        id: t.id.toString(),
+        customerId: t.donorId,
+        amount: Math.round(Number(t.totalAmount) * 100),
+        subTotalAmount: Math.round(Number(t.subTotalAmount) * 100),
+        status: chargeStatusLabel(t.status),
+        paymentMethod: t.source === 'BNK' ? 'ach' : 'cc',
+        subscriptionId: t.subscriptionId,
+        fortisTransactionId: t.fortisTransactionId,
+        createdAt: t.createdAt,
+        refundedAt: t.refundedAt,
+      })),
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    });
+  } catch (e) {
+    if (e instanceof ApiAuthError) return apiError(e.message, e.statusCode);
+    console.error('[v1/charges GET]', e);
+    return apiError('Internal server error', 500);
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireSecretKey(request);
@@ -100,12 +191,41 @@ export async function POST(request: NextRequest) {
           });
 
     if (!result.status) {
+      // Persist the decline as a transaction row (status N) — declined API
+      // charges used to leave no record at all, so neither the dashboard nor
+      // merchant reconciliation could see them, and the charge.failed webhook
+      // had no id merchants could dedupe on.
+      let declinedTxId: string | null = null;
+      try {
+        const declined = await prisma.transaction.create({
+          data: {
+            userId: auth.userId,
+            donorId: customerId,
+            organizationId: auth.organizationId,
+            totalAmount: amount / 100,
+            subTotalAmount: amount / 100,
+            fee: 0,
+            firstName: customer.firstName || '',
+            lastName: customer.lastName || '',
+            email: customer.email || '',
+            phone: customer.phone || null,
+            source: isAch ? 'BNK' : 'CC',
+            status: 'N',
+            givingSource: 'api',
+            requestResponse: JSON.stringify(result),
+          },
+        });
+        declinedTxId = declined.id.toString();
+      } catch (err) {
+        console.error('[v1/charges] Failed to record declined transaction:', err);
+      }
       fireWebhook(
         org?.webhookUrl,
         org?.webhookSecret,
         'charge.failed',
         auth.organizationId,
         {
+          transaction_id: declinedTxId,
           customer_id: customerId,
           payment_method_id: paymentMethodId,
           amount_cents: amount,
@@ -175,7 +295,7 @@ export async function POST(request: NextRequest) {
       'charge.succeeded',
       auth.organizationId,
       {
-        transaction_id: transaction.id,
+        transaction_id: transaction.id.toString(),
         customer_id: customerId,
         payment_method_id: paymentMethodId,
         amount_cents: amount,

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { dollarsToCents, calculateFee } from '@/lib/utils';
-import { fireWebhook } from '@/lib/webhook';
+import { deliverWebhook } from '@/lib/webhook';
 
 const ADMIN_TRIGGER_KEY = process.env.CRON_ADMIN_KEY;
 
@@ -82,6 +82,12 @@ async function processScheduledPayments(request: Request) {
 
       if (!fortis?.authUserId || !fortis?.authUserApiKey) {
         console.log(`[CRON:SCHEDULED] Skipping payment ${payment.id} — no Fortis credentials`);
+        // Release the claim — otherwise the item is stranded at 'processing'
+        // forever and never retried once credentials are fixed.
+        await prisma.scheduledPayment.updateMany({
+          where: { id: payment.id, status: 'processing' },
+          data: { status: 'pending' },
+        });
         results.skipped++;
         results.details.push({ paymentId: payment.id, status: 'skipped', reason: 'No Fortis credentials' });
         continue;
@@ -90,6 +96,25 @@ async function processScheduledPayments(request: Request) {
       if (!schedule.source?.isActive) {
         console.log(`[CRON:SCHEDULED] Skipping payment ${payment.id} — inactive payment method`);
         await markFailed(payment.id, schedule.id, 'Payment method is no longer active');
+        // This failure never reached Fortis, but the merchant's mirror still
+        // needs to hear about it like any other declined installment.
+        await deliverWebhook(
+          org.webhookUrl,
+          org.webhookSecret,
+          'payment.failed',
+          org.id,
+          {
+            scheduled_payment_id: payment.id,
+            payment_schedule_id: schedule.id,
+            transaction_id: null,
+            customer_id: schedule.customerId,
+            customer_email: schedule.customer.email || null,
+            amount_cents: Math.round(Number(payment.amount) * 100),
+            currency: 'USD',
+            payment_method: schedule.source?.sourceType === 'ach' ? 'ach' : 'cc',
+            error: 'Payment method is no longer active',
+          },
+        );
         results.failed++;
         results.details.push({ paymentId: payment.id, status: 'failed', reason: 'Inactive payment method' });
         continue;
@@ -192,8 +217,9 @@ async function processScheduledPayments(request: Request) {
             console.log(`[CRON:SCHEDULED] Schedule ${schedule.id} completed — all payments processed`);
           }
 
-          // Outbound webhook — best-effort, never blocks the cron loop
-          fireWebhook(
+          // Outbound webhook — awaited: the cron process exits when the loop
+          // ends, and an un-awaited fetch is killed with it.
+          await deliverWebhook(
             org.webhookUrl,
             org.webhookSecret,
             'payment.succeeded',
@@ -201,7 +227,7 @@ async function processScheduledPayments(request: Request) {
             {
               scheduled_payment_id: payment.id,
               payment_schedule_id: schedule.id,
-              transaction_id: transaction.id,
+              transaction_id: transaction.id.toString(),
               customer_id: schedule.customerId,
               customer_email: schedule.customer.email || null,
               amount_cents: dollarsToCents(amountDollars),
@@ -224,8 +250,8 @@ async function processScheduledPayments(request: Request) {
 
           await markFailed(payment.id, schedule.id, result.message || 'Payment declined');
 
-          // Outbound webhook for failure — best-effort
-          fireWebhook(
+          // Outbound webhook for failure — awaited (see success path)
+          await deliverWebhook(
             org.webhookUrl,
             org.webhookSecret,
             'payment.failed',
@@ -233,7 +259,7 @@ async function processScheduledPayments(request: Request) {
             {
               scheduled_payment_id: payment.id,
               payment_schedule_id: schedule.id,
-              transaction_id: transaction.id,
+              transaction_id: transaction.id.toString(),
               customer_id: schedule.customerId,
               customer_email: schedule.customer.email || null,
               amount_cents: dollarsToCents(amountDollars),

@@ -26,6 +26,10 @@ const putSchema = z.object({
     (u) => u.startsWith('https://'),
     'Webhook URL must use HTTPS',
   ),
+  // Opt-in secret rotation. Re-registering the same URL (idempotent deploy
+  // scripts etc.) must NOT silently invalidate the stored secret — that
+  // breaks every subsequent signature check on the merchant side.
+  rotate_secret: z.boolean().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -60,19 +64,36 @@ export async function PUT(request: NextRequest) {
       return apiError('Validation error', 400, parsed.error.flatten().fieldErrors);
     }
 
-    // Generate a new signing secret on every PUT so merchants can rotate easily
-    const secret = 'whsec_' + crypto.randomBytes(24).toString('hex');
+    // Rotate only when explicitly requested, or when no secret exists yet.
+    const existing = await prisma.organization.findUnique({
+      where: { id: auth.organizationId },
+      select: { webhookSecret: true },
+    });
+    const shouldRotate = parsed.data.rotate_secret === true || !existing?.webhookSecret;
+    const secret = shouldRotate
+      ? 'whsec_' + crypto.randomBytes(24).toString('hex')
+      : null;
 
     await prisma.organization.update({
       where: { id: auth.organizationId },
-      data: { webhookUrl: parsed.data.url, webhookSecret: secret },
+      data: {
+        webhookUrl: parsed.data.url,
+        ...(secret ? { webhookSecret: secret } : {}),
+      },
     });
 
     return Response.json({
       data: {
         url: parsed.data.url,
-        secret,
-        note: 'Store this secret securely — it will not be shown again. Use it to verify the X-LunarPay-Signature header on incoming webhook deliveries.',
+        ...(secret
+          ? {
+              secret,
+              note: 'Store this secret securely — it will not be shown again. Use it to verify the X-LunarPay-Signature header on incoming webhook deliveries.',
+            }
+          : {
+              secret_rotated: false,
+              note: 'Existing signing secret kept. Pass rotate_secret:true to generate a new one.',
+            }),
       },
     });
   } catch (e) {

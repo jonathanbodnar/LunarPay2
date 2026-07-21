@@ -78,11 +78,16 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
-    // Upsert by email if provided
+    // Upsert by email if provided. Case-insensitive: "Jane@x.com" on a return
+    // visit must match the "jane@x.com" donor instead of minting a duplicate
+    // that silently collects the vaulted card and the money.
     let customer;
     if (data.email) {
       customer = await prisma.donor.findFirst({
-        where: { organizationId: auth.organizationId, email: data.email },
+        where: {
+          organizationId: auth.organizationId,
+          email: { equals: data.email.trim(), mode: 'insensitive' },
+        },
       });
       if (customer) {
         customer = await prisma.donor.update({

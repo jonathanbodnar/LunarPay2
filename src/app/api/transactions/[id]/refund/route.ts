@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { dollarsToCents } from '@/lib/utils';
 import { logPaymentEvent } from '@/lib/payment-logger';
+import { deliverWebhook } from '@/lib/webhook';
 
 export async function POST(
   request: Request,
@@ -180,6 +181,27 @@ export async function POST(
         refundId: result.refund?.id,
       },
     });
+
+    // Notify the merchant's webhook — a dashboard refund is otherwise
+    // invisible to the merchant's own system.
+    const orgWebhook = await prisma.organization.findUnique({
+      where: { id: transaction.organizationId },
+      select: { webhookUrl: true, webhookSecret: true },
+    });
+    await deliverWebhook(
+      orgWebhook?.webhookUrl,
+      orgWebhook?.webhookSecret,
+      'payment.refunded',
+      transaction.organizationId,
+      {
+        transaction_id: transaction.id.toString(),
+        customer_id: transaction.donorId,
+        refunded_amount_cents: dollarsToCents(amountToRefund),
+        amount_cents: dollarsToCents(totalAmount),
+        full_refund: !isPartialRefund,
+        currency: 'USD',
+      },
+    );
 
     return NextResponse.json({
       success: true,

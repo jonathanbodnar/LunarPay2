@@ -20,6 +20,7 @@ import crypto from 'crypto';
 export type WebhookEventType =
   | 'payment.succeeded'
   | 'payment.failed'
+  | 'payment.refunded'
   | 'subscription.cancelled'
   | 'charge.succeeded'
   | 'charge.failed';
@@ -42,13 +43,27 @@ function sign(secret: string, timestamp: string, body: string): string {
 
 // ── Core delivery ─────────────────────────────────────────────────────────────
 
+const DELIVERY_TIMEOUT_MS = 10_000;
+const RETRY_DELAYS_MS = [1_000, 5_000];
+
+// Payloads may carry Prisma BigInt ids (Transaction.id). Plain JSON.stringify
+// THROWS on BigInt — which historically killed every payment.succeeded /
+// payment.failed / charge.succeeded delivery before the HTTP request was even
+// made. Serialize BigInt as a string, matching how ids appear elsewhere in
+// the API.
+function safeStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, v) =>
+    typeof v === 'bigint' ? v.toString() : v,
+  );
+}
+
 export async function sendOrgWebhook(
   webhookUrl: string,
   webhookSecret: string | null | undefined,
   payload: WebhookPayload,
-): Promise<void> {
+): Promise<boolean> {
   const timestamp = payload.timestamp;
-  const body = JSON.stringify(payload);
+  const body = safeStringify(payload);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': 'LunarPay-Webhook/1.0',
@@ -59,17 +74,46 @@ export async function sendOrgWebhook(
     headers['X-LunarPay-Signature'] = sign(webhookSecret, timestamp, body);
   }
 
-  const res = await fetch(webhookUrl, { method: 'POST', headers, body });
-  if (!res.ok) {
-    console.error(`[Webhook] Delivery failed (${res.status}) to ${webhookUrl} for event ${payload.event}`);
-  } else {
-    console.log(`[Webhook] Delivered ${payload.event} to ${webhookUrl}`);
+  // A merchant endpoint being down must not lose the event on the first
+  // hiccup: retry transient failures (network errors / 5xx / 429) a couple of
+  // times with backoff. 4xx responses are the receiver rejecting the event —
+  // retrying those won't help.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers,
+        body,
+        signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
+      });
+      if (res.ok) {
+        console.log(`[Webhook] Delivered ${payload.event} to ${webhookUrl}`);
+        return true;
+      }
+      const retryable = res.status >= 500 || res.status === 429;
+      console.error(
+        `[Webhook] Delivery failed (${res.status}) to ${webhookUrl} for event ${payload.event}` +
+          (retryable && attempt < RETRY_DELAYS_MS.length ? ' — retrying' : ''),
+      );
+      if (!retryable || attempt >= RETRY_DELAYS_MS.length) return false;
+    } catch (err) {
+      console.error(
+        `[Webhook] Delivery error to ${webhookUrl} for event ${payload.event}:`,
+        err,
+      );
+      if (attempt >= RETRY_DELAYS_MS.length) return false;
+    }
+    await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
   }
 }
 
 /**
  * Fire-and-forget delivery. Never throws — webhook failure must never block
  * the calling payment flow.
+ *
+ * IMPORTANT: in cron/short-lived contexts the process may exit right after
+ * the loop finishes, killing any pending fetch. Cron callers must use
+ * `deliverWebhook` (awaited) instead.
  */
 export function fireWebhook(
   webhookUrl: string | null | undefined,
@@ -78,16 +122,35 @@ export function fireWebhook(
   organizationId: number,
   data: Record<string, unknown>,
 ): void {
-  if (!webhookUrl) return;
+  deliverWebhook(webhookUrl, webhookSecret, event, organizationId, data).catch(
+    (err) => console.error('[Webhook] Unexpected delivery error:', err),
+  );
+}
+
+/**
+ * Awaitable delivery with the same never-throws contract. Resolves true when
+ * the receiver acknowledged the event with a 2xx.
+ */
+export async function deliverWebhook(
+  webhookUrl: string | null | undefined,
+  webhookSecret: string | null | undefined,
+  event: WebhookEventType,
+  organizationId: number,
+  data: Record<string, unknown>,
+): Promise<boolean> {
+  if (!webhookUrl) return false;
   const payload: WebhookPayload = {
     event,
     timestamp: new Date().toISOString(),
     organization_id: organizationId,
     data,
   };
-  sendOrgWebhook(webhookUrl, webhookSecret, payload).catch((err) =>
-    console.error('[Webhook] Unexpected delivery error:', err),
-  );
+  try {
+    return await sendOrgWebhook(webhookUrl, webhookSecret, payload);
+  } catch (err) {
+    console.error('[Webhook] Unexpected delivery error:', err);
+    return false;
+  }
 }
 
 // ── Legacy payment-link webhook (kept for backward compat) ────────────────────

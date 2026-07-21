@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { deliverWebhook } from '@/lib/webhook';
 
 // POST /api/subscriptions/[id]/cancel - Cancel a subscription
 export async function POST(
@@ -44,6 +45,25 @@ export async function POST(
         cancelledAt: new Date(),
       },
     });
+
+    // A dashboard cancel is invisible to the merchant's own system unless we
+    // send the same webhook the auto-cancel path sends.
+    const org = await prisma.organization.findUnique({
+      where: { id: subscription.organizationId },
+      select: { webhookUrl: true, webhookSecret: true },
+    });
+    await deliverWebhook(
+      org?.webhookUrl,
+      org?.webhookSecret,
+      'subscription.cancelled',
+      subscription.organizationId,
+      {
+        subscription_id: subscription.id,
+        customer_id: subscription.donorId,
+        customer_email: subscription.email,
+        reason: 'Cancelled from LunarPay dashboard',
+      },
+    );
 
     return NextResponse.json({
       success: true,

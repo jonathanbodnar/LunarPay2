@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getPortalSession } from '@/lib/portal-auth';
+import { deliverWebhook } from '@/lib/webhook';
 
 // GET /api/portal/subscriptions - Get customer's subscriptions
 export async function GET() {
@@ -95,6 +96,25 @@ export async function PUT(request: Request) {
       });
 
       // TODO: Cancel with Fortis API if applicable
+
+      // Tell the merchant's webhook — a customer self-cancel must reach the
+      // merchant's mirror like any other cancellation.
+      const org = await prisma.organization.findUnique({
+        where: { id: session.organizationId },
+        select: { webhookUrl: true, webhookSecret: true },
+      });
+      await deliverWebhook(
+        org?.webhookUrl,
+        org?.webhookSecret,
+        'subscription.cancelled',
+        session.organizationId,
+        {
+          subscription_id: subscription.id,
+          customer_id: subscription.donorId,
+          customer_email: subscription.email,
+          reason: 'Cancelled by customer from portal',
+        },
+      );
 
       return NextResponse.json({ success: true, message: 'Subscription cancelled' });
     }

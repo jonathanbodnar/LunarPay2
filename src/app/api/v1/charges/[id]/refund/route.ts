@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { requireSecretKey, ApiAuthError, apiError } from '@/lib/api-auth';
+import { deliverWebhook } from '@/lib/webhook';
 
 const refundSchema = z.object({
   amount: z.number().int().positive().optional(),
@@ -71,6 +72,28 @@ export async function POST(
         data: { amountAcum: { decrement: Number(transaction.totalAmount) } },
       });
     }
+
+    // Notify the merchant's webhook so mirrors track refunds (full AND
+    // partial — LunarPay's own row only records full refunds today, so the
+    // event is the merchant's only signal for partials).
+    const org = await prisma.organization.findUnique({
+      where: { id: auth.organizationId },
+      select: { webhookUrl: true, webhookSecret: true },
+    });
+    await deliverWebhook(
+      org?.webhookUrl,
+      org?.webhookSecret,
+      'payment.refunded',
+      auth.organizationId,
+      {
+        transaction_id: transactionId.toString(),
+        customer_id: transaction.donorId,
+        refunded_amount_cents: refundCents,
+        amount_cents: totalCents,
+        full_refund: isFullRefund,
+        currency: 'USD',
+      },
+    );
 
     return Response.json({
       data: {
