@@ -124,22 +124,53 @@ export async function PUT(
       },
     });
 
-    // Update products if provided
+    // Reconcile products if provided.
+    //
+    // We must NOT blindly delete-and-recreate the link's products: once a link
+    // has sales, payment_link_products_paid references payment_link_products via
+    // a RESTRICT foreign key, so deleting a purchased product throws (which
+    // surfaced as a 500 when editing any link that already had a payment).
+    // Instead: upsert the incoming products, and only delete removed products
+    // that have no recorded sales.
     if (validatedData.products) {
-      // Delete existing products
-      await prisma.paymentLinkProduct.deleteMany({
+      const incoming = validatedData.products;
+      const existingProducts = await prisma.paymentLinkProduct.findMany({
         where: { paymentLinkId },
       });
 
-      // Create new products
-      await prisma.paymentLinkProduct.createMany({
-        data: validatedData.products.map((product) => ({
-          paymentLinkId,
-          productId: product.productId,
-          qty: product.qty,
-          unlimitedQty: product.unlimitedQty,
-        })),
-      });
+      for (const product of incoming) {
+        const match = existingProducts.find((e) => e.productId === product.productId);
+        if (match) {
+          await prisma.paymentLinkProduct.update({
+            where: { id: match.id },
+            data: { qty: product.qty, unlimitedQty: product.unlimitedQty },
+          });
+        } else {
+          await prisma.paymentLinkProduct.create({
+            data: {
+              paymentLinkId,
+              productId: product.productId,
+              qty: product.qty,
+              unlimitedQty: product.unlimitedQty,
+            },
+          });
+        }
+      }
+
+      const incomingProductIds = new Set(incoming.map((p) => p.productId));
+      const removable = existingProducts.filter((e) => !incomingProductIds.has(e.productId));
+      for (const e of removable) {
+        const paidCount = await prisma.paymentLinkProductPaid.count({
+          where: { paymentLinkProductId: e.id },
+        });
+        if (paidCount === 0) {
+          await prisma.paymentLinkProduct.delete({ where: { id: e.id } });
+        } else {
+          console.warn(
+            `[payment-links] Keeping product ${e.productId} on link ${paymentLinkId}: ${paidCount} sale(s) reference it`,
+          );
+        }
+      }
     }
 
     // Fetch updated payment link with products
