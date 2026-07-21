@@ -27,6 +27,7 @@ export default function EditPaymentLinkPage() {
     paymentMethods: 'both',
     status: 'active',
     webhookUrl: '',
+    webhookFormat: 'lunarpay',
     redirectUrl: '',
     organizationName: '',
   });
@@ -58,6 +59,7 @@ export default function EditPaymentLinkPage() {
           paymentMethods: link.paymentMethods || 'both',
           status: link.status || 'active',
           webhookUrl: link.webhookUrl || '',
+          webhookFormat: link.webhookFormat || 'lunarpay',
           redirectUrl: link.redirectUrl || '',
           organizationName: link.organization?.name || '',
         });
@@ -148,6 +150,7 @@ export default function EditPaymentLinkPage() {
           paymentMethods: formData.paymentMethods,
           status: formData.status,
           webhookUrl: formData.webhookUrl || undefined,
+          webhookFormat: formData.webhookFormat,
           redirectUrl: formData.redirectUrl || undefined,
           products: selectedProducts
             .filter(p => p.productId !== null)
@@ -414,6 +417,21 @@ export default function EditPaymentLinkPage() {
               />
               <p className="text-xs text-muted-foreground">
                 We'll send a POST request with customer and payment data to this URL after each successful payment.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Payload Format</label>
+              <select
+                className="w-full h-10 px-3 rounded-lg border border-border bg-background"
+                value={formData.webhookFormat}
+                onChange={(e) => setFormData({ ...formData, webhookFormat: e.target.value })}
+              >
+                <option value="lunarpay">LunarPay (default)</option>
+                <option value="stripe">Stripe-compatible event</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Choose <code className="text-[11px]">Stripe-compatible</code> if your endpoint already expects Stripe-style webhook events.
               </p>
             </div>
           </CardContent>

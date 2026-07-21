@@ -9,6 +9,7 @@ const updatePaymentLinkSchema = z.object({
   status: z.enum(['active', 'inactive']).optional(),
   paymentMethods: z.enum(['cc', 'ach', 'both']).optional(),
   webhookUrl: z.string().url().optional().or(z.literal('')).or(z.null()),
+  webhookFormat: z.enum(['lunarpay', 'stripe']).optional(),
   redirectUrl: z.string().url().optional().or(z.literal('')).or(z.null()),
   products: z.array(z.object({
     productId: z.number(),
@@ -118,6 +119,7 @@ export async function PUT(
         status: validatedData.status,
         paymentMethods: validatedData.paymentMethods,
         webhookUrl: validatedData.webhookUrl || null,
+        webhookFormat: validatedData.webhookFormat,
         redirectUrl: validatedData.redirectUrl || null,
       },
     });

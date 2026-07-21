@@ -23,6 +23,7 @@ export default function NewPaymentLinkPage() {
     status: 'active',
     coverFee: false,
     webhookUrl: '',
+    webhookFormat: 'lunarpay',
     redirectUrl: '',
   });
 
@@ -125,6 +126,7 @@ export default function NewPaymentLinkPage() {
         status: formData.status,
         coverFee: formData.coverFee,
         webhookUrl: formData.webhookUrl || undefined,
+        webhookFormat: formData.webhookFormat,
         redirectUrl: formData.redirectUrl || undefined,
         products: selectedProducts
           .filter(p => p.productId !== null)
@@ -378,6 +380,21 @@ export default function NewPaymentLinkPage() {
                 />
                 <p className="text-xs text-muted-foreground">
                   We&apos;ll send a POST request with customer and payment data to this URL after each successful payment.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Payload Format</label>
+                <select
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-background"
+                  value={formData.webhookFormat}
+                  onChange={(e) => setFormData({ ...formData, webhookFormat: e.target.value })}
+                >
+                  <option value="lunarpay">LunarPay (default)</option>
+                  <option value="stripe">Stripe-compatible event</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Choose <code className="text-[11px]">Stripe-compatible</code> if your endpoint already expects Stripe-style webhook events (<code className="text-[11px]">object: &quot;event&quot;</code>, <code className="text-[11px]">type</code>, <code className="text-[11px]">data.object</code>).
                 </p>
               </div>
               

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { calculatePlatformFee, formatCurrency, formatDate } from '@/lib/utils';
 import { logPaymentEvent } from '@/lib/payment-logger';
 import { sendPaymentConfirmation, sendMerchantPaymentNotification } from '@/lib/email';
-import { createPaymentWebhookPayload, deliverPaymentLinkWebhook, deliverWebhook } from '@/lib/webhook';
+import { deliverPaymentLinkEvent, deliverWebhook } from '@/lib/webhook';
 
 /**
  * PUBLIC API - No authentication required
@@ -329,6 +329,7 @@ export async function POST(request: Request) {
     // Collected for the payment-link webhook payload below
     const webhookProducts: Array<{ name: string; qty: number; price: number }> = [];
     let webhookHasSubscription = false;
+    let createdSubscriptionId: number | null = null;
 
     // Handle payment link product tracking and subscriptions
     if (type === 'payment_link' && referenceId && body.products) {
@@ -441,7 +442,7 @@ export async function POST(request: Request) {
             }
 
             // Create subscription record
-            await prisma.subscription.create({
+            const createdSubscription = await prisma.subscription.create({
               data: {
                 organizationId,
                 donorId: donor.id,
@@ -458,6 +459,7 @@ export async function POST(request: Request) {
                 nextPaymentOn: nextBillingDate,
               },
             });
+            createdSubscriptionId = createdSubscription.id;
 
             console.log('[Process Payment] Created subscription:', {
               productId: product.productId,
@@ -609,7 +611,7 @@ export async function POST(request: Request) {
       try {
         const link = await prisma.paymentLink.findUnique({
           where: { id: referenceId },
-          select: { name: true, hash: true, webhookUrl: true },
+          select: { name: true, hash: true, webhookUrl: true, webhookFormat: true },
         });
 
         const customerName =
@@ -619,24 +621,25 @@ export async function POST(request: Request) {
         const txIdForWebhook = fortisTransactionId || transaction.id.toString();
         const methodLabel = payment_method === 'ach' ? 'ach' : 'card';
 
-        // Payment-link-level webhook (documented payload the merchant configured)
+        // Payment-link-level webhook (format configured on the link)
         if (link?.webhookUrl) {
-          const payload = createPaymentWebhookPayload(
-            referenceId,
-            link.name,
-            { email: customerEmail || '', name: customerName },
-            { amount: amountInDollars, method: methodLabel, transactionId: txIdForWebhook },
-            webhookProducts,
-            {
-              payment_link_hash: link.hash,
-              transaction_id: transaction.id.toString(),
-              is_subscription: webhookHasSubscription,
-              status: isPending ? 'pending' : 'completed',
-              client_reference_id: clientReferenceId || null,
-            },
-            webhookHasSubscription ? 'subscription.created' : 'payment.completed',
-          );
-          await deliverPaymentLinkWebhook(link.webhookUrl, payload);
+          await deliverPaymentLinkEvent({
+            webhookUrl: link.webhookUrl,
+            format: link.webhookFormat,
+            isSubscription: webhookHasSubscription,
+            paymentLinkId: referenceId,
+            paymentLinkName: link.name,
+            paymentLinkHash: link.hash,
+            customer: { email: customerEmail || '', name: customerName },
+            amountDollars: amountInDollars,
+            method: methodLabel,
+            gatewayTransactionId: txIdForWebhook,
+            lunarTransactionId: transaction.id.toString(),
+            subscriptionId: createdSubscriptionId,
+            clientReferenceId: clientReferenceId || null,
+            products: webhookProducts,
+            status: isPending ? 'pending' : 'completed',
+          });
         }
 
         // Org-level webhook (signed, standard event shape) if configured

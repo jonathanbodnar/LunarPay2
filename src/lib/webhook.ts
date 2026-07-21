@@ -253,3 +253,125 @@ export async function queueWebhook(webhookUrl: string, payload: LegacyWebhookPay
     console.error('Queued webhook failed:', error);
   });
 }
+
+// ── Stripe-compatible payment-link webhook ────────────────────────────────────
+//
+// Some merchants built their receiver against Stripe's event shape (top-level
+// `id` + `object: "event"` + `type` + `data.object`). A payment link with
+// webhookFormat = 'stripe' emits that envelope instead of the native LunarPay
+// payload, so those endpoints accept it. The merchant-supplied
+// client_reference_id (passed in via the link URL) is echoed in standard Stripe
+// locations so the receiver can reconcile the payment with its own user.
+
+export type PaymentLinkWebhookFormat = 'lunarpay' | 'stripe';
+
+export interface StripeStyleEvent {
+  id: string;
+  object: 'event';
+  api_version: string;
+  created: number;
+  type: string;
+  data: { object: Record<string, unknown> };
+}
+
+export async function deliverStripeWebhook(
+  webhookUrl: string | null | undefined,
+  event: StripeStyleEvent,
+): Promise<boolean> {
+  if (!webhookUrl) return false;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'LunarPay-Webhook/1.0',
+    'X-LunarPay-Event': event.type,
+    'X-LunarPay-Timestamp': new Date(event.created * 1000).toISOString(),
+  };
+  try {
+    return await postWithRetry(webhookUrl, headers, JSON.stringify(event), event.type);
+  } catch (err) {
+    console.error('[Webhook] Unexpected Stripe-format delivery error:', err);
+    return false;
+  }
+}
+
+export interface PaymentLinkEventInput {
+  webhookUrl?: string | null;
+  format?: string | null; // 'lunarpay' (default) | 'stripe'
+  isSubscription: boolean;
+  paymentLinkId: number;
+  paymentLinkName: string;
+  paymentLinkHash: string;
+  customer: { email: string; name: string };
+  amountDollars: number;
+  method: string; // 'card' | 'ach'
+  gatewayTransactionId: string; // Fortis transaction id
+  lunarTransactionId: string; // LunarPay transaction row id (used for idempotency)
+  subscriptionId?: number | null;
+  clientReferenceId?: string | null;
+  products: Array<{ name: string; qty: number; price: number }>;
+  status: string; // 'completed' | 'pending'
+}
+
+/**
+ * Deliver a payment-link webhook in the format the merchant configured on the
+ * link. Never throws; retries transient failures.
+ */
+export async function deliverPaymentLinkEvent(opts: PaymentLinkEventInput): Promise<boolean> {
+  if (!opts.webhookUrl) return false;
+  const format = (opts.format || 'lunarpay').toLowerCase();
+
+  if (format === 'stripe') {
+    const amountCents = Math.round(opts.amountDollars * 100);
+    const metadata = {
+      source: 'lunarpay',
+      client_reference_id: opts.clientReferenceId || null,
+      email: opts.customer.email || null,
+      name: opts.customer.name || null,
+      lunarpay_payment_link_id: String(opts.paymentLinkId),
+      lunarpay_payment_link_hash: opts.paymentLinkHash,
+      lunarpay_transaction_id: opts.lunarTransactionId,
+      lunarpay_subscription_id: opts.subscriptionId != null ? String(opts.subscriptionId) : null,
+    };
+    const object: Record<string, unknown> = {
+      id: opts.subscriptionId ? `sub_${opts.subscriptionId}` : opts.lunarTransactionId,
+      object: opts.isSubscription ? 'subscription' : 'payment_intent',
+      customer: null,
+      customer_email: opts.customer.email || null,
+      client_reference_id: opts.clientReferenceId || null,
+      status: opts.isSubscription ? 'active' : 'succeeded',
+      amount: amountCents,
+      amount_total: amountCents,
+      currency: 'usd',
+      description: opts.paymentLinkName,
+      metadata,
+    };
+    const event: StripeStyleEvent = {
+      // Deterministic id gives the receiver a natural idempotency key.
+      id: `evt_lp_${opts.lunarTransactionId}`,
+      object: 'event',
+      api_version: '2024-06-20',
+      created: Math.floor(Date.now() / 1000),
+      type: opts.isSubscription ? 'customer.subscription.created' : 'payment_intent.succeeded',
+      data: { object },
+    };
+    return deliverStripeWebhook(opts.webhookUrl, event);
+  }
+
+  // Default: native LunarPay payload (documented on the create/edit form).
+  const payload = createPaymentWebhookPayload(
+    opts.paymentLinkId,
+    opts.paymentLinkName,
+    { email: opts.customer.email, name: opts.customer.name },
+    { amount: opts.amountDollars, method: opts.method, transactionId: opts.gatewayTransactionId },
+    opts.products,
+    {
+      payment_link_hash: opts.paymentLinkHash,
+      transaction_id: opts.lunarTransactionId,
+      subscription_id: opts.subscriptionId != null ? String(opts.subscriptionId) : null,
+      is_subscription: opts.isSubscription,
+      status: opts.status,
+      client_reference_id: opts.clientReferenceId || null,
+    },
+    opts.isSubscription ? 'subscription.created' : 'payment.completed',
+  );
+  return deliverPaymentLinkWebhook(opts.webhookUrl, payload);
+}
