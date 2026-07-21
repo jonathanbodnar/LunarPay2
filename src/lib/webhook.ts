@@ -57,6 +57,47 @@ function safeStringify(value: unknown): string {
   );
 }
 
+/**
+ * POST with bounded retry. A merchant endpoint being down must not lose the
+ * event on the first hiccup: retry transient failures (network errors / 5xx /
+ * 429) a couple of times with backoff. 4xx responses are the receiver
+ * rejecting the event — retrying those won't help.
+ */
+async function postWithRetry(
+  url: string,
+  headers: Record<string, string>,
+  body: string,
+  eventLabel: string,
+): Promise<boolean> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body,
+        signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
+      });
+      if (res.ok) {
+        console.log(`[Webhook] Delivered ${eventLabel} to ${url}`);
+        return true;
+      }
+      const retryable = res.status >= 500 || res.status === 429;
+      console.error(
+        `[Webhook] Delivery failed (${res.status}) to ${url} for event ${eventLabel}` +
+          (retryable && attempt < RETRY_DELAYS_MS.length ? ' — retrying' : ''),
+      );
+      if (!retryable || attempt >= RETRY_DELAYS_MS.length) return false;
+    } catch (err) {
+      console.error(
+        `[Webhook] Delivery error to ${url} for event ${eventLabel}:`,
+        err,
+      );
+      if (attempt >= RETRY_DELAYS_MS.length) return false;
+    }
+    await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+  }
+}
+
 export async function sendOrgWebhook(
   webhookUrl: string,
   webhookSecret: string | null | undefined,
@@ -73,38 +114,7 @@ export async function sendOrgWebhook(
   if (webhookSecret) {
     headers['X-LunarPay-Signature'] = sign(webhookSecret, timestamp, body);
   }
-
-  // A merchant endpoint being down must not lose the event on the first
-  // hiccup: retry transient failures (network errors / 5xx / 429) a couple of
-  // times with backoff. 4xx responses are the receiver rejecting the event —
-  // retrying those won't help.
-  for (let attempt = 0; ; attempt++) {
-    try {
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers,
-        body,
-        signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
-      });
-      if (res.ok) {
-        console.log(`[Webhook] Delivered ${payload.event} to ${webhookUrl}`);
-        return true;
-      }
-      const retryable = res.status >= 500 || res.status === 429;
-      console.error(
-        `[Webhook] Delivery failed (${res.status}) to ${webhookUrl} for event ${payload.event}` +
-          (retryable && attempt < RETRY_DELAYS_MS.length ? ' — retrying' : ''),
-      );
-      if (!retryable || attempt >= RETRY_DELAYS_MS.length) return false;
-    } catch (err) {
-      console.error(
-        `[Webhook] Delivery error to ${webhookUrl} for event ${payload.event}:`,
-        err,
-      );
-      if (attempt >= RETRY_DELAYS_MS.length) return false;
-    }
-    await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
-  }
+  return postWithRetry(webhookUrl, headers, body, payload.event);
 }
 
 /**
@@ -190,6 +200,33 @@ export async function sendWebhook(
   }
 }
 
+/**
+ * Deliver a payment-link webhook using the documented payload shape (the one
+ * merchants see on the payment-link create/edit form). Retries transient
+ * failures and never throws. Awaited by the payment routes so the delivery
+ * actually runs to completion before the request handler returns (fire-and-
+ * forget would be dropped when the serverless function terminates after
+ * responding).
+ */
+export async function deliverPaymentLinkWebhook(
+  webhookUrl: string | null | undefined,
+  payload: LegacyWebhookPayload,
+): Promise<boolean> {
+  if (!webhookUrl) return false;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'LunarPay-Webhook/1.0',
+    'X-LunarPay-Event': payload.event,
+    'X-LunarPay-Timestamp': payload.timestamp,
+  };
+  try {
+    return await postWithRetry(webhookUrl, headers, JSON.stringify(payload), payload.event);
+  } catch (err) {
+    console.error('[Webhook] Unexpected payment-link delivery error:', err);
+    return false;
+  }
+}
+
 export function createPaymentWebhookPayload(
   paymentLinkId: number,
   paymentLinkName: string,
@@ -197,9 +234,10 @@ export function createPaymentWebhookPayload(
   payment: { amount: number; method: string; transactionId: string },
   products: Array<{ name: string; qty: number; price: number }>,
   metadata?: Record<string, unknown>,
+  event: LegacyWebhookPayload['event'] = 'payment.completed',
 ): LegacyWebhookPayload {
   return {
-    event: 'payment.completed',
+    event,
     payment_link_id: paymentLinkId,
     payment_link_name: paymentLinkName,
     customer,

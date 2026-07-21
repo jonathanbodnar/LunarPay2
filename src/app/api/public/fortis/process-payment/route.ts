@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { calculatePlatformFee, formatCurrency, formatDate } from '@/lib/utils';
 import { logPaymentEvent } from '@/lib/payment-logger';
 import { sendPaymentConfirmation, sendMerchantPaymentNotification } from '@/lib/email';
+import { createPaymentWebhookPayload, deliverPaymentLinkWebhook, deliverWebhook } from '@/lib/webhook';
 
 /**
  * PUBLIC API - No authentication required
@@ -150,6 +151,8 @@ export async function POST(request: Request) {
         userId: true,
         name: true,
         email: true,
+        webhookUrl: true,
+        webhookSecret: true,
       },
     });
 
@@ -322,6 +325,10 @@ export async function POST(request: Request) {
       }
     }
 
+    // Collected for the payment-link webhook payload below
+    const webhookProducts: Array<{ name: string; qty: number; price: number }> = [];
+    let webhookHasSubscription = false;
+
     // Handle payment link product tracking and subscriptions
     if (type === 'payment_link' && referenceId && body.products) {
       const products = body.products as Array<{
@@ -368,6 +375,13 @@ export async function POST(request: Request) {
               transactionId: transaction.id,
             },
           });
+
+          webhookProducts.push({
+            name: productRecord?.name || 'Product',
+            qty: product.qtyReq,
+            price: Number(product.productPrice),
+          });
+          if (productRecord?.isSubscription) webhookHasSubscription = true;
 
           // Create subscription if product is a subscription
           if (productRecord?.isSubscription && donor && token_id) {
@@ -584,6 +598,68 @@ export async function POST(request: Request) {
       } catch (emailError) {
         console.error('[Process Payment] Failed to send emails:', emailError);
         // Don't fail the payment if emails fail
+      }
+    }
+
+    // Fire outbound webhooks for the completed payment. Awaited (not fire-and-
+    // forget) so delivery isn't dropped when the serverless function returns.
+    // Best-effort: never blocks/fails the payment response.
+    if (type === 'payment_link' && referenceId) {
+      try {
+        const link = await prisma.paymentLink.findUnique({
+          where: { id: referenceId },
+          select: { name: true, hash: true, webhookUrl: true },
+        });
+
+        const customerName =
+          `${customerFirstName || ''} ${customerLastName || ''}`.trim() ||
+          account_holder_name ||
+          'Customer';
+        const txIdForWebhook = fortisTransactionId || transaction.id.toString();
+        const methodLabel = payment_method === 'ach' ? 'ach' : 'card';
+
+        // Payment-link-level webhook (documented payload the merchant configured)
+        if (link?.webhookUrl) {
+          const payload = createPaymentWebhookPayload(
+            referenceId,
+            link.name,
+            { email: customerEmail || '', name: customerName },
+            { amount: amountInDollars, method: methodLabel, transactionId: txIdForWebhook },
+            webhookProducts,
+            {
+              payment_link_hash: link.hash,
+              transaction_id: transaction.id.toString(),
+              is_subscription: webhookHasSubscription,
+              status: isPending ? 'pending' : 'completed',
+            },
+            webhookHasSubscription ? 'subscription.created' : 'payment.completed',
+          );
+          await deliverPaymentLinkWebhook(link.webhookUrl, payload);
+        }
+
+        // Org-level webhook (signed, standard event shape) if configured
+        if (organization.webhookUrl) {
+          await deliverWebhook(
+            organization.webhookUrl,
+            organization.webhookSecret,
+            'payment.succeeded',
+            organizationId,
+            {
+              transaction_id: transaction.id.toString(),
+              fortis_transaction_id: fortisTransactionId || null,
+              payment_link_id: referenceId,
+              amount_cents: Math.round(amountInDollars * 100),
+              currency: 'USD',
+              payment_method: payment_method === 'ach' ? 'ach' : 'cc',
+              status: isPending ? 'pending' : 'paid',
+              is_subscription: webhookHasSubscription,
+              customer: { email: customerEmail || null, name: customerName },
+              products: webhookProducts,
+            },
+          );
+        }
+      } catch (webhookError) {
+        console.error('[Process Payment] Webhook delivery error:', webhookError);
       }
     }
 

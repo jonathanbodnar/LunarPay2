@@ -4,6 +4,7 @@ import { createFortisClient } from '@/lib/fortis/client';
 import { calculatePlatformFee, formatCurrency, formatDate } from '@/lib/utils';
 import { logPaymentEvent } from '@/lib/payment-logger';
 import { sendPaymentConfirmation, sendMerchantPaymentNotification } from '@/lib/email';
+import { createPaymentWebhookPayload, deliverPaymentLinkWebhook, deliverWebhook } from '@/lib/webhook';
 
 /**
  * PUBLIC API - No authentication required
@@ -61,6 +62,8 @@ export async function POST(request: Request) {
         userId: true,
         name: true,
         email: true,
+        webhookUrl: true,
+        webhookSecret: true,
         fortisOnboarding: {
           select: {
             authUserId: true,
@@ -288,6 +291,10 @@ export async function POST(request: Request) {
       }
     }
 
+    // Collected for the payment-link webhook payload below
+    const webhookProducts: Array<{ name: string; qty: number; price: number }> = [];
+    let webhookHasSubscription = false;
+
     // Handle subscriptions
     if (products && donor && savedSourceId) {
       for (const product of products as Array<{
@@ -298,6 +305,7 @@ export async function POST(request: Request) {
         subscriptionInterval?: string;
         subscriptionIntervalCount?: number;
       }>) {
+        if (product.isSubscription) webhookHasSubscription = true;
         if (product.isSubscription) {
           // Calculate next billing date
           const nextBillingDate = new Date();
@@ -362,6 +370,12 @@ export async function POST(request: Request) {
                 qtyReq: product.qtyReq,
                 transactionId: transaction.id,
               },
+            });
+
+            webhookProducts.push({
+              name: productRecord?.name || 'Product',
+              qty: product.qtyReq,
+              price: Number(product.productPrice),
             });
           }
         }
@@ -456,6 +470,68 @@ export async function POST(request: Request) {
         }
       } catch (emailError) {
         console.error('[Process Ticket] Email error:', emailError);
+      }
+    }
+
+    // Fire outbound webhooks for the completed signup. Awaited (not fire-and-
+    // forget) so delivery isn't dropped when the serverless function returns.
+    // Best-effort: never blocks/fails the payment response.
+    if (type === 'payment_link' && referenceId) {
+      try {
+        const link = await prisma.paymentLink.findUnique({
+          where: { id: referenceId },
+          select: { name: true, hash: true, webhookUrl: true },
+        });
+
+        const customerName =
+          `${customerFirstName || ''} ${customerLastName || ''}`.trim() ||
+          account_holder_name ||
+          'Customer';
+        const txIdForWebhook = fortisTransactionId || transaction.id.toString();
+        const methodLabel = payment_method === 'ach' ? 'ach' : 'card';
+
+        // Payment-link-level webhook (documented payload the merchant configured)
+        if (link?.webhookUrl) {
+          const payload = createPaymentWebhookPayload(
+            referenceId,
+            link.name,
+            { email: customerEmail || '', name: customerName },
+            { amount: amountInDollars, method: methodLabel, transactionId: txIdForWebhook },
+            webhookProducts,
+            {
+              payment_link_hash: link.hash,
+              transaction_id: transaction.id.toString(),
+              is_subscription: webhookHasSubscription,
+              status: 'completed',
+            },
+            webhookHasSubscription ? 'subscription.created' : 'payment.completed',
+          );
+          await deliverPaymentLinkWebhook(link.webhookUrl, payload);
+        }
+
+        // Org-level webhook (signed, standard event shape) if configured
+        if (organization.webhookUrl) {
+          await deliverWebhook(
+            organization.webhookUrl,
+            organization.webhookSecret,
+            'payment.succeeded',
+            organizationId,
+            {
+              transaction_id: transaction.id.toString(),
+              fortis_transaction_id: fortisTransactionId || null,
+              payment_link_id: referenceId,
+              amount_cents: Math.round(amountInDollars * 100),
+              currency: 'USD',
+              payment_method: payment_method === 'ach' ? 'ach' : 'cc',
+              status: 'paid',
+              is_subscription: webhookHasSubscription,
+              customer: { email: customerEmail || null, name: customerName },
+              products: webhookProducts,
+            },
+          );
+        }
+      } catch (webhookError) {
+        console.error('[Process Ticket] Webhook delivery error:', webhookError);
       }
     }
 
