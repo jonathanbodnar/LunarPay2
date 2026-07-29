@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { FortisClient, createFortisClient } from '@/lib/fortis/client';
 import { notifyAgencyOfStatusChange } from '@/lib/agency-webhook';
@@ -121,7 +121,9 @@ export async function POST(request: Request) {
         },
       });
 
-      notifyAgencyOfStatusChange(org.userId, organizationId, 'ACTIVE', previousStatus).catch(() => {});
+      after(() =>
+        notifyAgencyOfStatusChange(org.userId, organizationId, 'ACTIVE', previousStatus)
+      );
 
       return NextResponse.json({
         message: 'Recovered! Status updated to ACTIVE',

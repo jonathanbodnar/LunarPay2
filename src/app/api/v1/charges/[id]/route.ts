@@ -42,15 +42,19 @@ export async function GET(
         id: true, donorId: true, totalAmount: true, subTotalAmount: true,
         fee: true, status: true, source: true, subscriptionId: true,
         fortisTransactionId: true, createdAt: true, refundedAt: true,
+        refundedAmount: true,
       },
     });
     if (!t) return apiError('Charge not found', 404);
+
+    const amountCents = Math.round(Number(t.totalAmount) * 100);
+    const refundedCents = Math.round(Number(t.refundedAmount ?? 0) * 100);
 
     return Response.json({
       data: {
         id: t.id.toString(),
         customerId: t.donorId,
-        amount: Math.round(Number(t.totalAmount) * 100),
+        amount: amountCents,
         subTotalAmount: Math.round(Number(t.subTotalAmount) * 100),
         fee: Math.round(Number(t.fee) * 100),
         status: chargeStatusLabel(t.status),
@@ -59,6 +63,10 @@ export async function GET(
         fortisTransactionId: t.fortisTransactionId,
         createdAt: t.createdAt,
         refundedAt: t.refundedAt,
+        // Running refund state, so a partial is visible here rather than only
+        // in the payment.refunded webhook the caller may have missed.
+        refundedAmount: refundedCents,
+        remainingRefundable: Math.max(0, amountCents - refundedCents),
       },
     });
   } catch (e) {

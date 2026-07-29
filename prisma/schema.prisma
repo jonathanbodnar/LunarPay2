@@ -407,18 +407,30 @@ model Transaction {
   // Audit
   donorIp               String?   @map("donor_ip") @db.VarChar(45)
   fromDomain            String?   @map("from_domain") @db.VarChar(255)
+  // Caller-supplied replay guard. A retried request carrying a key we've
+  // already charged returns the ORIGINAL transaction instead of taking the
+  // money a second time. Nullable so every historical row stays valid, and
+  // unique per org because Postgres treats NULLs as distinct.
+  idempotencyKey        String?   @map("idempotency_key") @db.VarChar(64)
+
   date                  DateTime  @default(now())
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
   refundedAt            DateTime? @map("refunded_at")
-  
+  // Running total refunded so far, in dollars. A partial refund used to leave
+  // no trace on the charge — status stayed 'P' and total_amount was unchanged —
+  // so a second call could refund the full amount again on top of it. Every
+  // refund now accumulates here and is checked against total_amount first.
+  refundedAmount        Decimal   @default(0) @map("refunded_amount") @db.Decimal(10, 2)
+
   donor                 Donor        @relation(fields: [donorId], references: [id])
   invoice               Invoice?     @relation(fields: [invoiceId], references: [id])
   organization          Organization @relation(fields: [organizationId], references: [id])
   transactionFunds      TransactionFund[]
   scheduledPayments     ScheduledPayment[]
   checkoutSessions      CheckoutSession[]
-  
+
+  @@unique([organizationId, idempotencyKey], map: "transaction_org_idempotency_key")
   @@map("epicpay_customer_transactions")
 }
 

@@ -6,7 +6,7 @@
  * secured by the unguessable session token.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { calculatePlatformFee } from '@/lib/utils';
@@ -347,7 +347,10 @@ export async function POST(request: NextRequest) {
             timestamp: new Date().toISOString(),
           };
 
-          sendAgencyWebhook(merchantUser.agencyId, webhookPayload).catch(() => {});
+          // Deferred, not dropped — delivery retries with backoff, and the
+          // customer shouldn't wait on it to see their confirmation.
+          const agencyId = merchantUser.agencyId;
+          after(() => sendAgencyWebhook(agencyId, webhookPayload));
         }
       } catch (whErr) {
         console.error('[Checkout] trial webhook dispatch failed:', whErr);
@@ -734,7 +737,10 @@ export async function POST(request: NextRequest) {
           timestamp: new Date().toISOString(),
         };
 
-        sendAgencyWebhook(merchantUser.agencyId, webhookPayload).catch(() => {});
+        // Deferred, not dropped — delivery retries with backoff, and the
+        // customer shouldn't wait on it to see their confirmation.
+        const agencyId = merchantUser.agencyId;
+        after(() => sendAgencyWebhook(agencyId, webhookPayload));
       }
     } catch (whErr) {
       console.error('[Checkout] checkout.session.completed webhook dispatch failed:', whErr);

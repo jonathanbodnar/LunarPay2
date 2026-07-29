@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
@@ -111,12 +111,14 @@ export async function GET(request: Request) {
       });
 
       const previousStatus = organization.fortisOnboarding.appStatus;
-      notifyAgencyOfStatusChange(
-        organization.userId,
-        parseInt(organizationId),
-        'ACTIVE',
-        previousStatus
-      ).catch(() => {});
+      after(() =>
+        notifyAgencyOfStatusChange(
+          organization.userId,
+          parseInt(organizationId),
+          'ACTIVE',
+          previousStatus
+        )
+      );
 
       return NextResponse.json({
         status: true,
@@ -182,12 +184,14 @@ export async function GET(request: Request) {
           });
 
           const prevStatus = organization.fortisOnboarding.appStatus;
-          notifyAgencyOfStatusChange(
-            organization.userId,
-            parseInt(organizationId),
-            'ACTIVE',
-            prevStatus
-          ).catch(() => {});
+          after(() =>
+            notifyAgencyOfStatusChange(
+              organization.userId,
+              parseInt(organizationId),
+              'ACTIVE',
+              prevStatus
+            )
+          );
 
           return NextResponse.json({
             status: true,

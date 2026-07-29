@@ -63,7 +63,7 @@ function safeStringify(value: unknown): string {
  * 429) a couple of times with backoff. 4xx responses are the receiver
  * rejecting the event — retrying those won't help.
  */
-async function postWithRetry(
+export async function postWithRetry(
   url: string,
   headers: Record<string, string>,
   body: string,

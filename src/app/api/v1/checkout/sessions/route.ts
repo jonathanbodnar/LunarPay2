@@ -22,6 +22,8 @@ const recurringConfigSchema = z.object({
   // payment is a setup fee or partial period that differs from the recurring
   // amount.
   amount: z.number().positive().optional(),
+  // Same value in integer cents. See the note on `amount_cents` below.
+  amount_cents: z.number().int().positive().optional(),
   // ISO date for the FIRST recurring charge after the initial one. Defaults
   // to (today + 1 frequency interval).
   start_on: z.string().datetime({ offset: true }).optional(),
@@ -39,12 +41,22 @@ const installmentsConfigSchema = z.object({
   // Per-installment amount in dollars. Defaults to the session `amount` (i.e.
   // every installment is the same as the first).
   amount: z.number().positive().optional(),
+  // Same value in integer cents. See the note on `amount_cents` below.
+  amount_cents: z.number().int().positive().optional(),
   // ISO date for installment #2. Defaults to (today + 1 frequency interval).
   start_on: z.string().datetime({ offset: true }).optional(),
 });
 
 const createSessionSchema = z.object({
-  amount: z.number().positive('Amount must be positive'),
+  // DOLLARS — 25.00 means $25.00. This endpoint has always taken dollars while
+  // /v1/charges, /v1/subscriptions and /v1/payment-schedules take integer
+  // cents, and nothing validates the difference: a caller sending 2500 here
+  // meaning $25.00 creates a $2,500.00 session and only finds out when the
+  // customer is asked to pay it. Kept as-is for existing integrations.
+  amount: z.number().positive('Amount must be positive').optional(),
+  // CENTS — the unambiguous way in, matching every other money field in the
+  // API. Send this instead of `amount` and the unit is stated by the name.
+  amount_cents: z.number().int().positive('amount_cents must be a positive integer').optional(),
   currency: z.string().length(3).default('USD'),
   description: z.string().max(500).optional(),
   customer_email: z.string().email().optional(),
@@ -76,6 +88,47 @@ const createSessionSchema = z.object({
   recurring: recurringConfigSchema.optional(),
   installments: installmentsConfigSchema.optional(),
 }).superRefine((val, ctx) => {
+  // Exactly one unit per amount. Accepting both invites them to disagree, and
+  // silently picking a winner is how the wrong one ships.
+  const amountPairs: Array<{
+    path: (string | number)[];
+    dollars: number | undefined;
+    cents: number | undefined;
+    label: string;
+  }> = [
+    { path: ['amount_cents'], dollars: val.amount, cents: val.amount_cents, label: 'amount' },
+    {
+      path: ['recurring', 'amount_cents'],
+      dollars: val.recurring?.amount,
+      cents: val.recurring?.amount_cents,
+      label: 'recurring.amount',
+    },
+    {
+      path: ['installments', 'amount_cents'],
+      dollars: val.installments?.amount,
+      cents: val.installments?.amount_cents,
+      label: 'installments.amount',
+    },
+  ];
+
+  for (const p of amountPairs) {
+    if (p.dollars !== undefined && p.cents !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: p.path,
+        message: `Send either ${p.label} (dollars) or ${p.label}_cents (integer cents), not both`,
+      });
+    }
+  }
+
+  if (val.amount === undefined && val.amount_cents === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['amount'],
+      message: 'Either amount (dollars) or amount_cents (integer cents) is required',
+    });
+  }
+
   if (val.mode === 'subscription' && !val.recurring) {
     ctx.addIssue({
       code: 'custom',
@@ -112,6 +165,33 @@ export async function POST(request: NextRequest) {
 
     const paymentMethodsStr = [...new Set(data.payment_methods)].join(',');
 
+    // Collapse both accepted units down to dollars at the edge. Everything
+    // past this point — the stored row, modeConfig, and the completion handler
+    // that reads it back — keeps working in dollars exactly as before.
+    const amountDollars = data.amount_cents !== undefined
+      ? data.amount_cents / 100
+      : data.amount!;
+
+    const recurringConfig = data.recurring
+      ? {
+          ...data.recurring,
+          amount: data.recurring.amount_cents !== undefined
+            ? data.recurring.amount_cents / 100
+            : data.recurring.amount,
+          amount_cents: undefined,
+        }
+      : undefined;
+
+    const installmentsConfig = data.installments
+      ? {
+          ...data.installments,
+          amount: data.installments.amount_cents !== undefined
+            ? data.installments.amount_cents / 100
+            : data.installments.amount,
+          amount_cents: undefined,
+        }
+      : undefined;
+
     // Use the typed Prisma client rather than $queryRawUnsafe so the parameter
     // binding is driver-managed (the raw path was failing on JSON-string values
     // for the metadata column — Prisma's unsafe-raw binder mishandles strings
@@ -121,10 +201,10 @@ export async function POST(request: NextRequest) {
     // Persist the mode-specific config alongside the row so the completion
     // handler can read it back without hitting another store.
     const modeConfig =
-      data.mode === 'subscription' && data.recurring
-        ? { recurring: data.recurring }
-        : data.mode === 'installments' && data.installments
-        ? { installments: data.installments }
+      data.mode === 'subscription' && recurringConfig
+        ? { recurring: recurringConfig }
+        : data.mode === 'installments' && installmentsConfig
+        ? { installments: installmentsConfig }
         : null;
 
     const session = await prisma.checkoutSession.create({
@@ -132,7 +212,7 @@ export async function POST(request: NextRequest) {
         token,
         organizationId: auth.organizationId,
         userId: auth.userId,
-        amount: data.amount,
+        amount: amountDollars,
         currency: data.currency,
         description: data.description ?? null,
         customerEmail: data.customer_email ?? null,
@@ -160,13 +240,16 @@ export async function POST(request: NextRequest) {
       token,
       url: checkoutUrl,
       status: 'open',
-      amount: data.amount,
+      amount: amountDollars,
+      // Echoed back so the caller can assert the unit landed the way they meant
+      // it to, without inferring anything from a decimal that happens to be round.
+      amount_cents: Math.round(amountDollars * 100),
       currency: data.currency,
       description: data.description || null,
       payment_methods: data.payment_methods,
       mode: data.mode,
-      ...(data.mode === 'subscription' ? { recurring: data.recurring } : {}),
-      ...(data.mode === 'installments' ? { installments: data.installments } : {}),
+      ...(data.mode === 'subscription' ? { recurring: recurringConfig } : {}),
+      ...(data.mode === 'installments' ? { installments: installmentsConfig } : {}),
       expires_at: expiresAt.toISOString(),
     }, { status: 201 });
   } catch (e: any) {

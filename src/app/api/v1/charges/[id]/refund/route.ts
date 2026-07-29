@@ -43,10 +43,53 @@ export async function POST(
     }
 
     const totalCents = Math.round(Number(transaction.totalAmount) * 100);
-    const refundCents = parsed.data.amount ?? totalCents;
+    const alreadyRefundedCents = Math.round(Number(transaction.refundedAmount ?? 0) * 100);
+    const remainingCents = totalCents - alreadyRefundedCents;
 
-    if (refundCents > totalCents) {
-      return apiError(`Refund amount ($${(refundCents / 100).toFixed(2)}) exceeds charge amount ($${(totalCents / 100).toFixed(2)})`, 400);
+    // Default to what's LEFT, not the original total — on a charge with an
+    // existing partial refund, an amount-less call used to send the full
+    // amount to Fortis a second time.
+    const refundCents = parsed.data.amount ?? remainingCents;
+
+    if (remainingCents <= 0) {
+      return apiError('This charge has already been fully refunded', 400);
+    }
+
+    if (refundCents > remainingCents) {
+      return apiError(
+        `Refund amount ($${(refundCents / 100).toFixed(2)}) exceeds the refundable balance ` +
+          `($${(remainingCents / 100).toFixed(2)} of $${(totalCents / 100).toFixed(2)} remaining ` +
+          `after $${(alreadyRefundedCents / 100).toFixed(2)} already refunded)`,
+        400,
+      );
+    }
+
+    const totalRefundedCents = alreadyRefundedCents + refundCents;
+    // "Full" means the charge is now exhausted, whether that took one refund or
+    // five — previously only a single-shot full refund ever reached status 'R',
+    // so a charge refunded in two halves stayed 'P' forever.
+    const isFullyRefunded = totalRefundedCents >= totalCents;
+
+    // Reserve the balance BEFORE calling Fortis. Checking the running total and
+    // then writing it back afterwards leaves the window this column exists to
+    // close: two concurrent refunds both read $0 refunded, both pass the
+    // balance check, and both send a full refund to the processor. The
+    // conditional update is the lock — it only matches while refunded_amount is
+    // still the value this request read, so exactly one caller proceeds.
+    const reserved = await prisma.transaction.updateMany({
+      where: {
+        id: transactionId,
+        organizationId: auth.organizationId,
+        refundedAmount: alreadyRefundedCents / 100,
+      },
+      data: { refundedAmount: totalRefundedCents / 100 },
+    });
+
+    if (reserved.count === 0) {
+      return apiError(
+        'Another refund for this charge is already in progress. Re-read the charge and retry.',
+        409,
+      );
     }
 
     const fortisEnv = process.env.fortis_environment || 'dev';
@@ -56,26 +99,37 @@ export async function POST(
     const result = await fortisClient.refundTransaction(transaction.fortisTransactionId, refundCents);
 
     if (!result.status) {
+      // Release the reservation so a corrected retry isn't blocked by a refund
+      // that never happened. Conditional again so a concurrent winner's value
+      // is never clobbered.
+      await prisma.transaction.updateMany({
+        where: { id: transactionId, refundedAmount: totalRefundedCents / 100 },
+        data: { refundedAmount: alreadyRefundedCents / 100 },
+      });
       return apiError(result.message || 'Refund failed', 400);
     }
 
-    const isFullRefund = refundCents === totalCents;
-
     await prisma.transaction.update({
       where: { id: transactionId },
-      data: { status: isFullRefund ? 'R' : 'P' },
+      data: {
+        status: isFullyRefunded ? 'R' : 'P',
+        ...(isFullyRefunded ? { refundedAt: new Date() } : {}),
+      },
     });
 
-    if (transaction.donorId && isFullRefund) {
+    // Back out what was actually returned. This used to fire only on a full
+    // refund, so partials silently overstated the customer's lifetime total.
+    // Incremental decrements sum to the same figure a single full refund gives.
+    if (transaction.donorId) {
       await prisma.donor.update({
         where: { id: transaction.donorId },
-        data: { amountAcum: { decrement: Number(transaction.totalAmount) } },
+        data: { amountAcum: { decrement: refundCents / 100 } },
       });
     }
 
-    // Notify the merchant's webhook so mirrors track refunds (full AND
-    // partial — LunarPay's own row only records full refunds today, so the
-    // event is the merchant's only signal for partials).
+    // Notify the merchant's webhook so mirrors track refunds, full and partial.
+    // The running totals are carried on the event too, so a receiver that
+    // missed an earlier delivery can still reconcile from a single message.
     const org = await prisma.organization.findUnique({
       where: { id: auth.organizationId },
       select: { webhookUrl: true, webhookSecret: true },
@@ -89,8 +143,10 @@ export async function POST(
         transaction_id: transactionId.toString(),
         customer_id: transaction.donorId,
         refunded_amount_cents: refundCents,
+        total_refunded_cents: totalRefundedCents,
+        remaining_refundable_cents: totalCents - totalRefundedCents,
         amount_cents: totalCents,
-        full_refund: isFullRefund,
+        full_refund: isFullyRefunded,
         currency: 'USD',
       },
     );
@@ -99,8 +155,11 @@ export async function POST(
       data: {
         chargeId: id,
         refundedAmount: refundCents,
-        fullRefund: isFullRefund,
-        status: isFullRefund ? 'refunded' : 'partially_refunded',
+        totalRefunded: totalRefundedCents,
+        remainingRefundable: totalCents - totalRefundedCents,
+        amount: totalCents,
+        fullRefund: isFullyRefunded,
+        status: isFullyRefunded ? 'refunded' : 'partially_refunded',
       },
     });
   } catch (e) {

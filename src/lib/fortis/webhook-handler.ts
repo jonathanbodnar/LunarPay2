@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { FortisWebhookPayload } from '@/types/fortis';
 import { logWebhookReceived, logPaymentStatusUpdated } from '@/lib/payment-logger';
@@ -104,7 +104,11 @@ async function handleMerchantOnboardingWebhook(payload: FortisWebhookPayload, ra
       },
     });
 
-    notifyAgencyOfStatusChange(organization.userId, organizationId, 'DENIED', previousStatus).catch(() => {});
+    // Deferred rather than dropped: delivery retries with backoff, so the
+    // promise has to outlive this response instead of being cut short by it.
+    after(() =>
+      notifyAgencyOfStatusChange(organization.userId, organizationId, 'DENIED', previousStatus)
+    );
 
     return NextResponse.json({ status: true, message: 'Merchant declined status recorded' });
   }
@@ -219,7 +223,11 @@ async function handleMerchantOnboardingWebhook(payload: FortisWebhookPayload, ra
 
     console.log('[Fortis Webhook] Org', organizationId, 'updated to ACTIVE');
 
-    notifyAgencyOfStatusChange(organization.userId, organizationId, 'ACTIVE', previousStatus).catch(() => {});
+    // The approval signal agencies depend on — deferred so the retry backoff
+    // survives this response rather than dying with it.
+    after(() =>
+      notifyAgencyOfStatusChange(organization.userId, organizationId, 'ACTIVE', previousStatus)
+    );
 
     return NextResponse.json({
       status: true,

@@ -27,6 +27,10 @@ const chargeSchema = z.object({
   amount: z.number().int().min(50, 'Minimum charge is $0.50 (50 cents)'),
   description: z.string().max(255).optional(),
   capture: z.boolean().optional().default(true),
+  // Replay guard. Send a stable key derived from the thing being paid for
+  // (checkout session + card + amount + day) and a retried request returns the
+  // original charge instead of taking the money twice.
+  idempotencyKey: z.string().min(8).max(64).optional(),
 });
 
 // Map the single-char DB status codes to the API vocabulary.
@@ -93,24 +97,31 @@ export async function GET(request: NextRequest) {
           id: true, donorId: true, totalAmount: true, subTotalAmount: true,
           status: true, source: true, subscriptionId: true,
           fortisTransactionId: true, createdAt: true, refundedAt: true,
+          refundedAmount: true,
         },
       }),
       prisma.transaction.count({ where }),
     ]);
 
     return Response.json({
-      data: transactions.map((t) => ({
-        id: t.id.toString(),
-        customerId: t.donorId,
-        amount: Math.round(Number(t.totalAmount) * 100),
-        subTotalAmount: Math.round(Number(t.subTotalAmount) * 100),
-        status: chargeStatusLabel(t.status),
-        paymentMethod: t.source === 'BNK' ? 'ach' : 'cc',
-        subscriptionId: t.subscriptionId,
-        fortisTransactionId: t.fortisTransactionId,
-        createdAt: t.createdAt,
-        refundedAt: t.refundedAt,
-      })),
+      data: transactions.map((t) => {
+        const amountCents = Math.round(Number(t.totalAmount) * 100);
+        const refundedCents = Math.round(Number(t.refundedAmount ?? 0) * 100);
+        return {
+          id: t.id.toString(),
+          customerId: t.donorId,
+          amount: amountCents,
+          subTotalAmount: Math.round(Number(t.subTotalAmount) * 100),
+          status: chargeStatusLabel(t.status),
+          paymentMethod: t.source === 'BNK' ? 'ach' : 'cc',
+          subscriptionId: t.subscriptionId,
+          fortisTransactionId: t.fortisTransactionId,
+          createdAt: t.createdAt,
+          refundedAt: t.refundedAt,
+          refundedAmount: refundedCents,
+          remainingRefundable: Math.max(0, amountCents - refundedCents),
+        };
+      }),
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     });
   } catch (e) {
@@ -129,7 +140,37 @@ export async function POST(request: NextRequest) {
       return apiError('Validation error', 400, parsed.error.flatten().fieldErrors);
     }
 
-    const { customerId, paymentMethodId, amount, description, capture } = parsed.data;
+    const { customerId, paymentMethodId, amount, description, capture, idempotencyKey } =
+      parsed.data;
+
+    // Replay check, before any money moves. An operator who re-submits — or a
+    // client retrying a request that timed out after we'd already charged —
+    // gets the original transaction back rather than a second charge.
+    if (idempotencyKey) {
+      const prior = await prisma.transaction.findFirst({
+        where: { organizationId: auth.organizationId, idempotencyKey },
+      });
+      if (prior) {
+        return Response.json(
+          {
+            data: {
+              id: prior.id.toString(),
+              amount: Math.round(Number(prior.totalAmount) * 100),
+              status: chargeStatusLabel(prior.status),
+              captured: prior.status === 'P',
+              paymentMethod: prior.source === 'BNK' ? 'ach' : 'cc',
+              customerId: prior.donorId,
+              paymentMethodId,
+              fortisTransactionId: prior.fortisTransactionId,
+              description: description || null,
+              createdAt: prior.createdAt,
+              replayed: true,
+            },
+          },
+          { status: 200 },
+        );
+      }
+    }
 
     // Verify customer belongs to this org
     const customer = await prisma.donor.findFirst({
@@ -272,6 +313,7 @@ export async function POST(request: NextRequest) {
         transactionType: !capture ? 'authonly' : undefined,
         fortisTransactionId,
         requestResponse: JSON.stringify(result.transaction),
+        idempotencyKey: idempotencyKey ?? null,
       },
     });
 

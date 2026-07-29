@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { postWithRetry } from '@/lib/webhook';
 
 export type AgencyWebhookEvent =
   | 'merchant.approved'
@@ -81,25 +82,51 @@ export type AgencyWebhookPayload =
   | MerchantApprovalPayload
   | CheckoutSessionCompletedPayload;
 
-function signPayload(payload: string, secret: string): string {
-  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+/**
+ * Original agency scheme: bare hex HMAC over the raw body alone, no timestamp.
+ * Kept because existing agency receivers verify against exactly this — changing
+ * it would silently 401 every delivery on their side.
+ */
+function signLegacy(body: string, secret: string): string {
+  return crypto.createHmac('sha256', secret).update(body).digest('hex');
 }
 
 /**
- * Send a webhook to an agency when one of their merchants' onboarding status changes.
- * Fire-and-forget: failures are logged but don't block the caller.
+ * The scheme merchant webhooks already use (see lib/webhook.ts): the timestamp
+ * is folded into the signed input so a captured payload can't be replayed with
+ * a fresh timestamp, and the digest is prefixed so the algorithm is explicit.
+ * Sent alongside the legacy header; new receivers should verify this one.
+ */
+function signStandard(body: string, secret: string, timestamp: string): string {
+  return (
+    'sha256=' +
+    crypto.createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')
+  );
+}
+
+/**
+ * Send a webhook to an agency. Never throws.
+ *
+ * Retries transient failures (network error / 5xx / 429) with backoff, the same
+ * contract merchant webhooks get — a single dropped `merchant.approved` used to
+ * be unrecoverable, because Fortis approval has no other push signal.
+ *
+ * IMPORTANT: the retry delays mean this can outlive the HTTP response that
+ * triggered it. Request handlers must either await it or hand it to `after()`
+ * from `next/server`; a bare fire-and-forget call risks the serverless
+ * invocation being torn down mid-backoff.
  */
 export async function sendAgencyWebhook(
   agencyId: number,
   payload: AgencyWebhookPayload
-): Promise<void> {
+): Promise<boolean> {
   try {
     const agency = await prisma.agency.findUnique({
       where: { id: agencyId },
       select: { webhookUrl: true, webhookSecret: true, name: true },
     });
 
-    if (!agency?.webhookUrl) return;
+    if (!agency?.webhookUrl) return false;
 
     const body = JSON.stringify(payload);
     const headers: Record<string, string> = {
@@ -110,27 +137,32 @@ export async function sendAgencyWebhook(
     };
 
     if (agency.webhookSecret) {
-      headers['X-LunarPay-Signature'] = signPayload(body, agency.webhookSecret);
+      headers['X-LunarPay-Signature'] = signLegacy(body, agency.webhookSecret);
+      headers['X-LunarPay-Signature-V2'] = signStandard(
+        body,
+        agency.webhookSecret,
+        payload.timestamp,
+      );
     }
 
-    const res = await fetch(agency.webhookUrl, {
-      method: 'POST',
+    const delivered = await postWithRetry(
+      agency.webhookUrl,
       headers,
       body,
-      signal: AbortSignal.timeout(10_000),
-    });
+      `agency:${payload.event}`,
+    );
 
-    if (!res.ok) {
-      console.error(
-        `[Agency Webhook] Failed to deliver to ${agency.name} (${agency.webhookUrl}): ${res.status} ${res.statusText}`
-      );
+    if (delivered) {
+      console.log(`[Agency Webhook] Delivered ${payload.event} to ${agency.name}`);
     } else {
-      console.log(
-        `[Agency Webhook] Delivered ${payload.event} to ${agency.name}`
+      console.error(
+        `[Agency Webhook] Gave up delivering ${payload.event} to ${agency.name} (${agency.webhookUrl})`
       );
     }
+    return delivered;
   } catch (err) {
     console.error(`[Agency Webhook] Error sending to agency ${agencyId}:`, err);
+    return false;
   }
 }
 
@@ -194,8 +226,9 @@ export async function notifyAgencyOfStatusChange(
       timestamp: new Date().toISOString(),
     };
 
-    // Fire and forget
-    sendAgencyWebhook(user.agencyId, payload).catch(() => {});
+    // Awaited so the retry backoff runs to completion. Callers hand this to
+    // `after()` or await it themselves rather than dropping the promise.
+    await sendAgencyWebhook(user.agencyId, payload);
   } catch (err) {
     console.error('[Agency Webhook] notifyAgencyOfStatusChange error:', err);
   }
