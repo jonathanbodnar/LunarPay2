@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return await routeWebhook(body);
+    return await routeWebhook(body, 'signed');
   } catch (error) {
     console.error('[Fortis Webhook] Error:', error);
     return NextResponse.json({ status: false, message: 'Internal server error' }, { status: 500 });

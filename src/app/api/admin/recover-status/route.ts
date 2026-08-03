@@ -95,14 +95,55 @@ export async function POST(request: Request) {
       const merchantUser = result.data.users[0];
 
       let locationId: string | null = null;
-      let productTransactionId: string | null = null;
+      let ccProductTransactionId: string | null = null;
+      let achProductTransactionId: string | null = null;
 
-      if (merchantUser.location_id) locationId = merchantUser.location_id;
+      // Fortis returns location_id and product_transactions at the TOP LEVEL of
+      // the application record — verified against a real production response.
+      // There is no `locations` array, so the old
+      // `result.data.locations[0].product_transactions[0]` read resolved to
+      // nothing: this route activated merchants with a null product id, and
+      // /v1/intentions then rejected every card and ACH intention with "not
+      // enabled for this merchant" — ACTIVE but unable to take a payment.
+      if (result.data.location_id) locationId = result.data.location_id;
+      if (!locationId && merchantUser.location_id) locationId = merchantUser.location_id;
       if (!locationId && merchantUser.locations?.length) locationId = merchantUser.locations[0].id;
-      if (!locationId && result.data.locations?.length) {
-        locationId = result.data.locations[0].id;
-        if (result.data.locations[0].product_transactions?.length) {
-          productTransactionId = result.data.locations[0].product_transactions[0].id;
+      if (!locationId && result.data.locations?.length) locationId = result.data.locations[0].id;
+
+      // Resolve card and ACH products by payment_method, not by position.
+      for (const pt of result.data.product_transactions ?? []) {
+        const method = pt.payment_method?.toLowerCase();
+        if (method === 'cc' && !ccProductTransactionId) ccProductTransactionId = pt.id;
+        if (method === 'ach' && !achProductTransactionId) achProductTransactionId = pt.id;
+      }
+      for (const loc of result.data.locations ?? []) {
+        for (const pt of loc.product_transactions ?? []) {
+          const method = pt.payment_method?.toLowerCase();
+          if (method === 'cc' && !ccProductTransactionId) ccProductTransactionId = pt.id;
+          if (method === 'ach' && !achProductTransactionId) achProductTransactionId = pt.id;
+        }
+      }
+
+      // Fortis's application record does not always carry payment_method on the
+      // nested products; ask the location directly with the merchant's own
+      // credentials before settling for nothing.
+      if (!ccProductTransactionId && !achProductTransactionId && locationId) {
+        try {
+          const merchantClient = createFortisClient(
+            (process.env.fortis_environment === 'prd' ? 'production' : 'sandbox'),
+            merchantUser.user_id,
+            merchantUser.user_api_key
+          );
+          const loc = await merchantClient.getLocation(locationId, {
+            expand: ['product_transactions'],
+          });
+          for (const pt of loc.location?.product_transactions ?? []) {
+            const method = pt.payment_method?.toLowerCase();
+            if (method === 'cc' && !ccProductTransactionId) ccProductTransactionId = pt.id;
+            if (method === 'ach' && !achProductTransactionId) achProductTransactionId = pt.id;
+          }
+        } catch (e) {
+          console.error('[Admin Recover Status] Location product lookup failed:', e);
         }
       }
 
@@ -113,8 +154,15 @@ export async function POST(request: Request) {
         data: {
           authUserId: merchantUser.user_id,
           authUserApiKey: merchantUser.user_api_key,
-          locationId,
-          productTransactionId,
+          locationId: locationId ?? org.fortisOnboarding.locationId,
+          // Never downgrade an id we already hold to null.
+          productTransactionId:
+            ccProductTransactionId ||
+            achProductTransactionId ||
+            org.fortisOnboarding.productTransactionId ||
+            null,
+          achProductTransactionId:
+            achProductTransactionId || org.fortisOnboarding.achProductTransactionId || null,
           appStatus: 'ACTIVE',
           processorResponse: JSON.stringify(result.data),
           updatedAt: new Date(),

@@ -22,6 +22,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/cron/onboarding-status-poll",
+      "schedule": "0 9 * * *"
+    },
+    {
       "path": "/api/cron/lead-nurturing",
       "schedule": "0 8 * * *"
     },

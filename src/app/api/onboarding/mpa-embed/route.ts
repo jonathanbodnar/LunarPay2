@@ -36,6 +36,7 @@ export async function GET(request: Request) {
                 logo: true,
                 primaryColor: true,
                 hoverColor: true,
+                returnUrl: true,
               },
             },
           },
@@ -67,7 +68,19 @@ export async function GET(request: Request) {
     const agency = organization.user?.agency || null;
 
     const agencyData = agency
-      ? { name: agency.name, logo: agency.logo, primaryColor: agency.primaryColor, hoverColor: agency.hoverColor }
+      ? {
+          name: agency.name,
+          logo: agency.logo,
+          primaryColor: agency.primaryColor,
+          hoverColor: agency.hoverColor,
+          // Only ever an absolute https URL leaves here. This value drives a
+          // navigation on a page merchants reach from an emailed link, so a
+          // malformed or non-https entry is dropped rather than rendered.
+          returnUrl:
+            agency.returnUrl && /^https:\/\//i.test(agency.returnUrl)
+              ? agency.returnUrl
+              : null,
+        }
       : null;
 
     if (appStatus === 'ACTIVE') {

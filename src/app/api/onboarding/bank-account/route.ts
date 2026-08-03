@@ -90,12 +90,28 @@ export async function POST(request: Request) {
 
     // Check if already completed onboarding (future-proof for additional statuses)
     const completedStatuses = ['ACTIVE'];
-    if (fortis.appStatus && 
+    if (fortis.appStatus &&
         completedStatuses.includes(fortis.appStatus)) {
       return NextResponse.json(
         { status: false, message: 'Organization already onboarded' },
         { status: 400 }
       );
+    }
+
+    // An application already exists — hand back the link instead of submitting a
+    // second one. Re-submitting returns E05 "Duplicate Client App ID" from
+    // Fortis, and the failure path below used to overwrite mpa_link with null,
+    // which strands the merchant on "Application Not Ready" with no recovery
+    // path. Same short-circuit the agency onboard route already performs.
+    if (fortis.mpaLink) {
+      return NextResponse.json({
+        status: true,
+        message: 'Application already submitted. Returning existing MPA link.',
+        organizationId: validatedData.organizationId,
+        stepCompleted: 2,
+        mpaLink: fortis.mpaLink,
+        appStatus: fortis.appStatus || 'BANK_INFORMATION_SENT',
+      });
     }
 
     // Encrypt bank account numbers (store full numbers encrypted, last 4 for display)
@@ -219,12 +235,28 @@ export async function POST(request: Request) {
     // Extract mpa_link from Fortis response
     const mpaLink = fortisResult.result?.data?.app_link || null;
 
-    // Update onboarding record with mpa_link and status
-    await prisma.fortisOnboarding.update({
-      where: { organizationId: validatedData.organizationId },
+    // Update onboarding record with mpa_link and status.
+    //
+    // mpaLink is only ever written when Fortis actually returned one. Writing
+    // `mpaLink: mpaLink` unconditionally meant every failed submit — including
+    // a duplicate-application error, which is the most likely failure here —
+    // nulled out a link the merchant still needed.
+    // updateMany + a NOT-ACTIVE guard, not update().
+    //
+    // The ACTIVE precheck above ran before a Fortis round-trip that can take
+    // tens of seconds. If the approval webhook lands inside that window, an
+    // unconditional write would stamp FORM_ERROR over ACTIVE — and api-auth
+    // rejects on appStatus, not on credentials, so that single write would 403
+    // every v1 charge, refund and checkout call for a merchant who is in fact
+    // approved and processing. The guard makes the late write a no-op instead.
+    await prisma.fortisOnboarding.updateMany({
+      where: {
+        organizationId: validatedData.organizationId,
+        appStatus: { not: 'ACTIVE' },
+      },
       data: {
         appStatus: fortisResult.status ? 'BANK_INFORMATION_SENT' : 'FORM_ERROR',
-        mpaLink: mpaLink,
+        ...(mpaLink ? { mpaLink } : {}),
         processorResponse: JSON.stringify(fortisResult.result),
       },
     });

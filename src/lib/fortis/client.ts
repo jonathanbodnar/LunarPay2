@@ -155,17 +155,30 @@ export class FortisClient {
     data?: {
       id: string;
       client_app_id: string;
-      status: string;
+      status?: string;
       status_message?: string;
+      // Verified against a real production response (organization 30): Fortis
+      // returns `location_id` and `product_transactions` at the TOP LEVEL, and
+      // does NOT return a `locations` array. `users[]` entries carry only
+      // { user_id, email, user_api_key } — no nested location. Anything reading
+      // this record must use the top-level fields.
+      location_id?: string;
+      product_transactions?: Array<{ id: string; payment_method?: string }>;
+      // Not present on the responses observed so far, so recovery that depends
+      // on it must degrade gracefully rather than assume it.
+      app_link?: string | null;
+      stage?: string;
       users?: Array<{
         user_id: string;
         user_api_key: string;
+        email?: string;
         location_id?: string;
         locations?: Array<{ id: string }>;
       }>;
+      // Kept for the v1+ response shape; absent on the classic onboarding record.
       locations?: Array<{
         id: string;
-        product_transactions?: Array<{ id: string }>;
+        product_transactions?: Array<{ id: string; payment_method?: string }>;
       }>;
     };
     message?: string;
@@ -771,9 +784,47 @@ export class FortisClient {
   }
 
   /**
+   * 5B. GET TRANSACTION
+   * GET /v1/transactions/{transactionId}
+   *
+   * Reads a transaction back from Fortis. Used to attest an inbound webhook
+   * that arrived on the unsigned legacy endpoint: the payload itself proves
+   * nothing, so the authoritative status/reason codes are fetched here with our
+   * own credentials before any local state is changed.
+   */
+  async getTransaction(transactionId: string): Promise<{
+    status: boolean;
+    transaction?: { id: string; status_code?: number; reason_code_id?: number };
+    message?: string;
+  }> {
+    try {
+      const response = await this.client.get(`transactions/${transactionId}`);
+      const tx = response.data?.data;
+
+      if (!tx?.id) {
+        return { status: false, message: 'Transaction not found' };
+      }
+
+      return {
+        status: true,
+        transaction: {
+          id: tx.id,
+          status_code: tx.status_code,
+          reason_code_id: tx.reason_code_id,
+        },
+      };
+    } catch (error) {
+      return {
+        status: false,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
    * 6. GET LOCATIONS
    * GET /v1/locations
-   * 
+   *
    * Fetches locations for the authenticated user
    * Used when location_id is not provided in onboarding webhook
    */

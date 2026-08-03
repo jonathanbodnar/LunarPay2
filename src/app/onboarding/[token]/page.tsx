@@ -10,6 +10,27 @@ interface AgencyInfo {
   logo: string | null;
   primaryColor: string | null;
   hoverColor: string | null;
+  /** Absolute https URL the agency wants merchants sent back to. */
+  returnUrl: string | null;
+}
+
+/**
+ * Where a merchant goes when they finish, and what the button should say.
+ *
+ * Agency merchants have no LunarPay login, so sending them to
+ * /settings/payment-setup — which every one of these buttons used to do — put
+ * them on a login wall at the exact moment they had just completed their
+ * application. When the agency has configured a return URL they go back into
+ * the agency's own product instead.
+ */
+function returnTarget(agency: AgencyInfo | null | undefined, fallbackLabel: string) {
+  if (agency?.returnUrl) {
+    return {
+      href: agency.returnUrl,
+      label: `Return to ${agency.name}`,
+    };
+  }
+  return { href: '/settings/payment-setup', label: fallbackLabel };
 }
 
 interface MpaData {
@@ -115,8 +136,8 @@ export default function OnboardingMpaPage() {
             <p className="text-gray-500 mb-6">
               {data.organizationName ? `${data.organizationName}'s` : 'Your'} merchant account is approved and ready to accept payments.
             </p>
-            <AgencyButton agency={data?.agency} href="/settings/payment-setup">
-              Go to Dashboard
+            <AgencyButton agency={data?.agency} href={returnTarget(data?.agency, 'Go to Dashboard').href}>
+              {returnTarget(data?.agency, 'Go to Dashboard').label}
             </AgencyButton>
           </div>
         </div>
@@ -135,8 +156,8 @@ export default function OnboardingMpaPage() {
             <p className="text-gray-500 mb-6">
               {data?.message || 'Please complete the earlier onboarding steps in your dashboard first.'}
             </p>
-            <AgencyButton agency={data?.agency} href="/settings/payment-setup">
-              Go to Payment Setup
+            <AgencyButton agency={data?.agency} href={returnTarget(data?.agency, 'Go to Payment Setup').href}>
+              {returnTarget(data?.agency, 'Go to Payment Setup').label}
             </AgencyButton>
           </div>
         </div>
@@ -165,8 +186,8 @@ export default function OnboardingMpaPage() {
               >
                 Need to make changes? View application again
               </button>
-              <AgencyButton agency={data?.agency} href="/settings/payment-setup">
-                Go to Dashboard
+              <AgencyButton agency={data?.agency} href={returnTarget(data?.agency, 'Go to Dashboard').href}>
+                {returnTarget(data?.agency, 'Go to Dashboard').label}
               </AgencyButton>
             </div>
           </div>
@@ -204,7 +225,7 @@ export default function OnboardingMpaPage() {
           <h1 className="text-xl font-semibold mb-2">Complete Your Merchant Application</h1>
           <p className="text-gray-500 text-sm max-w-lg mx-auto">
             Review and fill in any missing information below to finalize your merchant account with Fortis.{' '}
-            <strong>A verification code will be sent to your email.</strong>
+            <strong>Fortis, our banking partner, will email you a verification code — check spam.</strong>
           </p>
         </div>
 

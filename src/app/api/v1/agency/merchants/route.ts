@@ -118,7 +118,15 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '20')));
 
-    const where = { agencyId: agency.agencyId };
+    // Exact-email lookup. Registering a merchant whose email already exists
+    // returns 409, and the only way to find the existing record was to page
+    // through every merchant under the agency. This turns that into one query.
+    const email = searchParams.get('email')?.trim();
+
+    const where = {
+      agencyId: agency.agencyId,
+      ...(email ? { email: { equals: email, mode: 'insensitive' as const } } : {}),
+    };
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({

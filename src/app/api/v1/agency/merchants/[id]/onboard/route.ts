@@ -58,6 +58,59 @@ const onboardSchema = z.object({
   altRoutingNumber: z.string().min(9).max(9).optional(),
   altAccountNumber: z.string().min(4).max(17).optional(),
   altAccountHolderName: z.string().max(255).optional(),
+}).superRefine((val, ctx) => {
+  // A single transaction cannot be larger than the whole month's volume.
+  // Fortis rejects this on the MPA and the onboarding page warns about it
+  // (onboarding/[token]/page.tsx tip panel), but the API accepted it happily
+  // and the merchant only discovered the problem inside the Fortis iframe,
+  // after the application had already been submitted.
+  //
+  // Monthly volume arrives as a 1-7 range; the ceiling is the top of that band.
+  // Bands 4+ start at $50k, above the $30k high-ticket maximum, so in practice
+  // only bands 1-3 can be violated.
+  const MONTHLY_VOLUME_CEILING: Record<number, number> = {
+    1: 5_000,
+    2: 10_000,
+    3: 25_000,
+    4: 50_000,
+    5: 100_000,
+    6: 250_000,
+    7: Number.POSITIVE_INFINITY,
+  };
+
+  const pairs: Array<{
+    highTicket: number;
+    volumeRange: number;
+    highField: 'ccHighTicket' | 'ecHighTicket';
+    label: string;
+  }> = [
+    {
+      highTicket: val.ccHighTicket,
+      volumeRange: val.ccMonthlyVolumeRange,
+      highField: 'ccHighTicket',
+      label: 'card',
+    },
+    {
+      highTicket: val.ecHighTicket,
+      volumeRange: val.ecMonthlyVolumeRange,
+      highField: 'ecHighTicket',
+      label: 'eCheck',
+    },
+  ];
+
+  for (const p of pairs) {
+    const ceiling = MONTHLY_VOLUME_CEILING[p.volumeRange];
+    if (ceiling !== undefined && p.highTicket > ceiling) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [p.highField],
+        message:
+          `${p.highField} ($${p.highTicket.toLocaleString()}) cannot exceed the ${p.label} monthly ` +
+          `volume band ${p.volumeRange} (up to $${ceiling.toLocaleString()}). ` +
+          `Raise the monthly volume range or lower the high ticket.`,
+      });
+    }
+  }
 });
 
 export async function POST(
@@ -178,20 +231,96 @@ export async function POST(
     };
 
     const fortisClient = createFortisClient();
+
+    // Field-level audit of what we actually send, so the volume/percentage
+    // mapping can be checked against Fortis's current spec without asking an
+    // operator to reproduce a submission. The client's own request logging is
+    // development-only, and this payload carries full bank account and routing
+    // numbers — redacted here rather than logged, since the open question is
+    // which FIELD NAMES arrive, not what the values are.
+    console.log('[Agency Onboard] Fortis onboardMerchant payload:', JSON.stringify({
+      ...merchantPayload,
+      bank_account: {
+        ...merchantPayload.bank_account,
+        account_number: '***redacted***',
+        routing_number: '***redacted***',
+      },
+      alt_bank_account: merchantPayload.alt_bank_account
+        ? {
+            ...merchantPayload.alt_bank_account,
+            account_number: '***redacted***',
+            routing_number: '***redacted***',
+          }
+        : undefined,
+      primary_principal: {
+        ...merchantPayload.primary_principal,
+        date_of_birth: merchantPayload.primary_principal.date_of_birth ? '***redacted***' : undefined,
+      },
+      fed_tax_id: merchantPayload.fed_tax_id ? '***redacted***' : undefined,
+    }));
+
     const result = await fortisClient.onboardMerchant(merchantPayload);
+
+    console.log(
+      '[Agency Onboard] Fortis onboardMerchant response:',
+      JSON.stringify({ status: result.status, message: result.message, result: result.result })
+    );
 
     if (!result.status) {
       console.error('[Agency Onboard] Fortis error:', JSON.stringify(result));
 
       const resultStr = JSON.stringify(result);
       if (resultStr.includes('Duplicate Client App ID') || resultStr.includes('E05')) {
+        // Fortis already holds an application for this client_app_id but we
+        // have no link stored (that is the only way execution reaches here —
+        // an existing mpaLink short-circuits above). Recover the link from
+        // Fortis instead of recording BANK_INFORMATION_SENT with mpa_link NULL,
+        // which strands the merchant on "Application Not Ready" permanently
+        // with only a manual DB write to get out.
+        let recoveredLink: string | null = null;
+        try {
+          const existing = await fortisClient.getOnboardingStatus(org.id.toString());
+          recoveredLink = existing.data?.app_link ?? null;
+        } catch (lookupError) {
+          console.error('[Agency Onboard] E05 link recovery failed:', lookupError);
+        }
+
         if (org.fortisOnboarding) {
-          await prisma.fortisOnboarding.update({
-            where: { organizationId: org.id },
-            data: { appStatus: 'BANK_INFORMATION_SENT', processorResponse: JSON.stringify(result) },
+          // Guarded write: the recovery lookup above is a second network call,
+          // widening the window in which the approval webhook could flip this
+          // row to ACTIVE. Stamping BANK_INFORMATION_SENT over ACTIVE would 403
+          // every charging endpoint for a merchant who is already live, because
+          // api-auth gates on appStatus rather than on stored credentials.
+          await prisma.fortisOnboarding.updateMany({
+            where: { organizationId: org.id, appStatus: { not: 'ACTIVE' } },
+            data: {
+              appStatus: 'BANK_INFORMATION_SENT',
+              ...(recoveredLink ? { mpaLink: recoveredLink } : {}),
+              processorResponse: JSON.stringify(result),
+            },
           });
         }
-        return apiError('Application already submitted to Fortis. Check merchant status for MPA link.', 400);
+
+        if (recoveredLink) {
+          return Response.json({
+            data: {
+              status: 'BANK_INFORMATION_SENT',
+              mpaLink: recoveredLink,
+              mpaEmbedUrl: `https://app.lunarpay.com/onboarding/${org.token}`,
+              message: 'Application already existed at Fortis. Recovered the existing MPA link.',
+            },
+          });
+        }
+
+        // Deliberately still a 400 with the same shape as before. Partners
+        // already branch on this status for the duplicate case; recovery adds a
+        // success path above without moving the failure path out from under
+        // them.
+        return apiError(
+          'Application already submitted to Fortis, but the MPA link could not be recovered. ' +
+            'Use POST /api/admin/repair-mpa-link to restore it.',
+          400
+        );
       }
 
       if (org.fortisOnboarding) {

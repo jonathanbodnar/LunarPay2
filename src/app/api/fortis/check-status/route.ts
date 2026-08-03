@@ -88,14 +88,26 @@ export async function GET(request: Request) {
     if (result.data?.users && result.data.users.length > 0) {
       const merchantUser = result.data.users[0];
       
-      // Extract location_id
-      let locationId: string | null = null;
-      if (merchantUser.location_id) {
+      // Fortis returns location_id and product_transactions at the TOP LEVEL of
+      // the application record; there is no `locations` array on it. Reading
+      // only the nested shape left locationId null here.
+      let locationId: string | null = result.data.location_id ?? null;
+      if (!locationId && merchantUser.location_id) {
         locationId = merchantUser.location_id;
-      } else if (merchantUser.locations && merchantUser.locations.length > 0) {
+      } else if (!locationId && merchantUser.locations && merchantUser.locations.length > 0) {
         locationId = merchantUser.locations[0].id;
-      } else if (result.data.locations && result.data.locations.length > 0) {
+      } else if (!locationId && result.data.locations && result.data.locations.length > 0) {
         locationId = result.data.locations[0].id;
+      }
+
+      // Bind the card and ACH products too. Activating without them leaves the
+      // merchant ACTIVE but rejected by /v1/intentions on every checkout.
+      let ccPt: string | null = null;
+      let achPt: string | null = null;
+      for (const pt of result.data.product_transactions ?? []) {
+        const method = pt.payment_method?.toLowerCase();
+        if (method === 'cc' && !ccPt) ccPt = pt.id;
+        if (method === 'ach' && !achPt) achPt = pt.id;
       }
 
       // Update onboarding record
@@ -104,7 +116,11 @@ export async function GET(request: Request) {
         data: {
           authUserId: merchantUser.user_id,
           authUserApiKey: merchantUser.user_api_key,
-          locationId: locationId,
+          locationId: locationId ?? organization.fortisOnboarding.locationId,
+          productTransactionId:
+            ccPt || achPt || organization.fortisOnboarding.productTransactionId || null,
+          achProductTransactionId:
+            achPt || organization.fortisOnboarding.achProductTransactionId || null,
           appStatus: 'ACTIVE',
           updatedAt: new Date(),
         },
@@ -133,8 +149,15 @@ export async function GET(request: Request) {
     // We may have received the webhook but failed to parse it (data was nested)
     console.log('[Fortis Check Status] No credentials from API, checking stored webhooks...');
     
+    // Only webhooks that arrived on the HMAC-verified endpoint are eligible.
+    // Rows tagged 'lunarpay-unsigned' came from the open legacy URL, where the
+    // body is unverified caller input — replaying one here would write whatever
+    // Fortis credentials it contained onto the merchant, turning a merchant's
+    // own "check status" click into the delivery mechanism for a planted
+    // approval.
     const storedWebhook = await prisma.fortisWebhook.findFirst({
       where: {
+        system: { not: 'lunarpay-unsigned' },
         eventJson: {
           contains: `"client_app_id":"${organizationId}"`,
         },

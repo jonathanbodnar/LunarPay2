@@ -5,10 +5,23 @@ import { postWithRetry } from '@/lib/webhook';
 export type AgencyWebhookEvent =
   | 'merchant.approved'
   | 'merchant.denied'
+  /**
+   * Fortis has the application and has moved it into underwriting. In practice
+   * this is the first signal that the merchant finished signing the MPA, so it
+   * closes the blind window an agency previously sat in between
+   * BANK_INFORMATION_SENT and a final decision — during which nothing was
+   * emitted at all.
+   *
+   * It is named for what we can actually observe (Fortis pended the
+   * application) rather than for what we infer (the merchant signed). If Fortis
+   * later exposes an explicit signed/submitted signal, that becomes its own
+   * event rather than changing the meaning of this one.
+   */
+  | 'merchant.application.pending_review'
   | 'checkout.session.completed';
 
 interface MerchantApprovalPayload {
-  event: 'merchant.approved' | 'merchant.denied';
+  event: 'merchant.approved' | 'merchant.denied' | 'merchant.application.pending_review';
   merchant: {
     id: number;
     email: string;
@@ -129,34 +142,36 @@ export async function sendAgencyWebhook(
     if (!agency?.webhookUrl) return false;
 
     const body = JSON.stringify(payload);
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'User-Agent': 'LunarPay-Webhook/1.0',
-      'X-LunarPay-Event': payload.event,
-      'X-LunarPay-Timestamp': payload.timestamp,
-    };
 
-    if (agency.webhookSecret) {
-      headers['X-LunarPay-Signature'] = signLegacy(body, agency.webhookSecret);
-      headers['X-LunarPay-Signature-V2'] = signStandard(
-        body,
-        agency.webhookSecret,
-        payload.timestamp,
-      );
-    }
-
-    const delivered = await postWithRetry(
-      agency.webhookUrl,
-      headers,
+    // Record the attempt before making it. If the process dies mid-delivery the
+    // row survives as `pending`, which is the whole point: an event that never
+    // reached the agency is now visible and replayable instead of being a line
+    // in a log nobody read.
+    const deliveryId = await openDeliveryRecord({
+      agencyId,
+      event: payload.event,
+      url: agency.webhookUrl,
       body,
-      `agency:${payload.event}`,
+      organizationId:
+        'merchant' in payload ? payload.merchant?.organizationId ?? null : null,
+    });
+
+    const delivered = await deliverToAgency(
+      agency.webhookUrl,
+      agency.webhookSecret,
+      payload.event,
+      payload.timestamp,
+      body,
     );
+
+    await closeDeliveryRecord(deliveryId, delivered);
 
     if (delivered) {
       console.log(`[Agency Webhook] Delivered ${payload.event} to ${agency.name}`);
     } else {
       console.error(
-        `[Agency Webhook] Gave up delivering ${payload.event} to ${agency.name} (${agency.webhookUrl})`
+        `[Agency Webhook] Gave up delivering ${payload.event} to ${agency.name} ` +
+          `(${agency.webhookUrl}) — delivery #${deliveryId ?? 'unrecorded'} is replayable`
       );
     }
     return delivered;
@@ -167,13 +182,96 @@ export async function sendAgencyWebhook(
 }
 
 /**
+ * Sign and POST a pre-serialized agency payload.
+ *
+ * Split out so a replay re-sends the byte-identical body with the identical
+ * signature — both schemes derive from the timestamp carried inside the
+ * payload, so re-signing a stored body reproduces the original headers exactly
+ * and the receiver's verification still passes.
+ */
+export async function deliverToAgency(
+  url: string,
+  secret: string | null,
+  event: string,
+  timestamp: string,
+  body: string,
+): Promise<boolean> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'LunarPay-Webhook/1.0',
+    'X-LunarPay-Event': event,
+    'X-LunarPay-Timestamp': timestamp,
+  };
+
+  if (secret) {
+    headers['X-LunarPay-Signature'] = signLegacy(body, secret);
+    headers['X-LunarPay-Signature-V2'] = signStandard(body, secret, timestamp);
+  }
+
+  return postWithRetry(url, headers, body, `agency:${event}`);
+}
+
+/**
+ * Persistence helpers. Both swallow their own errors: the delivery log is
+ * diagnostic, and a problem writing it must never take down the delivery it is
+ * describing.
+ */
+async function openDeliveryRecord(input: {
+  agencyId: number;
+  organizationId: number | null;
+  event: string;
+  url: string;
+  body: string;
+}): Promise<bigint | null> {
+  try {
+    const row = await prisma.webhookDelivery.create({
+      data: {
+        target: 'agency',
+        agencyId: input.agencyId,
+        organizationId: input.organizationId,
+        event: input.event,
+        url: input.url,
+        payload: input.body,
+        status: 'pending',
+        attempts: 1,
+      },
+      select: { id: true },
+    });
+    return row.id;
+  } catch (err) {
+    console.error('[Agency Webhook] Could not record delivery attempt:', err);
+    return null;
+  }
+}
+
+async function closeDeliveryRecord(
+  deliveryId: bigint | null,
+  delivered: boolean,
+  note?: string,
+): Promise<void> {
+  if (deliveryId === null) return;
+  try {
+    await prisma.webhookDelivery.update({
+      where: { id: deliveryId },
+      data: {
+        status: delivered ? 'delivered' : 'failed',
+        deliveredAt: delivered ? new Date() : null,
+        lastError: delivered ? null : note ?? 'Delivery failed after retries',
+      },
+    });
+  } catch (err) {
+    console.error('[Agency Webhook] Could not finalize delivery record:', err);
+  }
+}
+
+/**
  * Look up the merchant's agency and fire the webhook if one is configured.
  * `userId` is the merchant's User.id.
  */
 export async function notifyAgencyOfStatusChange(
   userId: number,
   organizationId: number,
-  newStatus: 'ACTIVE' | 'DENIED',
+  newStatus: 'ACTIVE' | 'DENIED' | 'PENDING_REVIEW',
   previousStatus: string | null
 ): Promise<void> {
   try {
@@ -201,8 +299,15 @@ export async function notifyAgencyOfStatusChange(
       { publishable_key: string | null; secret_key: string | null }[]
     >`SELECT publishable_key, secret_key FROM users WHERE id = ${userId}`;
 
+    const eventName: MerchantApprovalPayload['event'] =
+      newStatus === 'ACTIVE'
+        ? 'merchant.approved'
+        : newStatus === 'DENIED'
+        ? 'merchant.denied'
+        : 'merchant.application.pending_review';
+
     const payload: AgencyWebhookPayload = {
-      event: newStatus === 'ACTIVE' ? 'merchant.approved' : 'merchant.denied',
+      event: eventName,
       merchant: {
         id: user.id,
         email: user.email,

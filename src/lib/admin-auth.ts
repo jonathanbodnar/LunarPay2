@@ -156,11 +156,40 @@ export async function clearAdminCookie(): Promise<void> {
  */
 export async function requireAdmin(): Promise<AdminJWTPayload> {
   const admin = await getCurrentAdmin();
-  
+
   if (!admin) {
     throw new Error('AdminUnauthorized');
   }
 
   return admin;
+}
+
+/**
+ * Admin cookie OR an operations secret, for repair endpoints that have to be
+ * usable out-of-band — from a shell during an incident, not only from a
+ * browser session. Mirrors the scheme /api/admin/recover-status already uses.
+ *
+ * Returns false rather than throwing so callers control the response shape.
+ */
+export async function isAdminOrOpsAuthorized(request: Request): Promise<boolean> {
+  const cronSecret = process.env.CRON_SECRET;
+  const cronAdminKey = process.env.CRON_ADMIN_KEY;
+
+  const authHeader = request.headers.get('authorization');
+  if (cronSecret && authHeader === `Bearer ${cronSecret}`) return true;
+
+  try {
+    const adminKey = new URL(request.url).searchParams.get('admin_key');
+    if (cronAdminKey && adminKey === cronAdminKey) return true;
+  } catch {
+    // Unparseable URL — fall through to the cookie check.
+  }
+
+  try {
+    await requireAdmin();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
