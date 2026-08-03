@@ -199,6 +199,7 @@ export async function POST(request: Request) {
       contact: {
         first_name: signFirstName,
         last_name: signLastName,
+        email,
         phone_number: cleanedPhone,
       },
       client_app_id: organizationId.toString(),

@@ -82,10 +82,12 @@ export interface MerchantOnboardingData {
     deposit_type: 'fees_adjustments'; // Required - indicates this account is for fees/adjustments
   };
   
-  // Contact information (email not allowed via API)
+  // Contact information. Per Fortis's v1OnboardingRequest spec, contact.email
+  // IS accepted and pre-fills the MPA form's contact email.
   contact: {
     first_name?: string;
     last_name?: string;
+    email?: string;
     phone_number: string;
   };
   

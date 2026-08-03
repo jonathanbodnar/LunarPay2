@@ -172,6 +172,7 @@ export async function POST(
       contact: {
         first_name: data.firstName,
         last_name: data.lastName,
+        email: data.email,
         phone_number: cleanedPhone,
       },
       client_app_id: org.id.toString(),
