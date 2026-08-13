@@ -150,6 +150,7 @@ export async function sendAgencyWebhook(
       headers,
       body,
       `agency:${payload.event}`,
+      { target: 'agency', agencyId, event: payload.event },
     );
 
     if (delivered) {

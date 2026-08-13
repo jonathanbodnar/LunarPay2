@@ -14,6 +14,7 @@
  */
 
 import crypto from 'crypto';
+import { prisma } from '@/lib/prisma';
 
 // ── Event types ───────────────────────────────────────────────────────────────
 
@@ -58,18 +59,121 @@ function safeStringify(value: unknown): string {
 }
 
 /**
+ * Who a delivery was for. Supplied by callers that know their own context so
+ * the delivery log can be queried per merchant / per agency.
+ */
+export interface DeliveryContext {
+  target: 'organization' | 'agency' | 'payment_link';
+  organizationId?: number | null;
+  agencyId?: number | null;
+  event: string;
+}
+
+/**
+ * Record the outcome of a delivery. Best-effort by construction: it runs only
+ * after the outcome is already decided, and it swallows its own errors, so a
+ * logging failure can never turn a delivered webhook into a failed one or
+ * block the caller. A delivery that happens without a log row is strictly
+ * better than a log row that costs us the delivery.
+ */
+async function recordDelivery(
+  ctx: DeliveryContext,
+  url: string,
+  body: string,
+  outcome: { delivered: boolean; attempts: number; lastError: string | null },
+): Promise<void> {
+  try {
+    await prisma.webhookDelivery.create({
+      data: {
+        target: ctx.target,
+        organizationId: ctx.organizationId ?? null,
+        agencyId: ctx.agencyId ?? null,
+        event: ctx.event.slice(0, 64),
+        url: url.slice(0, 500),
+        payload: body,
+        status: outcome.delivered ? 'delivered' : 'failed',
+        attempts: outcome.attempts,
+        lastError: outcome.lastError?.slice(0, 2000) ?? null,
+        deliveredAt: outcome.delivered ? new Date() : null,
+      },
+    });
+  } catch (err) {
+    console.error('[Webhook] Could not record delivery log (delivery itself unaffected):', err);
+  }
+}
+
+/**
+ * Last 4 characters of a secret — enough to tell two secrets apart when
+ * reconciling against what a merchant has deployed, useless to an attacker.
+ * The full secret is never written to the audit log.
+ */
+function secretHint(secret: string | null | undefined): string | null {
+  return secret ? '••••' + secret.slice(-4) : null;
+}
+
+/**
+ * Record a change to a webhook URL or signing secret.
+ *
+ * A silent rotation breaks every subsequent delivery to a receiver that is
+ * still verifying with the old secret, and until now left no trace at all —
+ * identifying one took reconstructing intent from `updated_at` timestamps.
+ * Best-effort: never throws, never blocks the config change itself.
+ */
+export async function recordWebhookConfigChange(entry: {
+  target: 'organization' | 'agency';
+  organizationId?: number | null;
+  agencyId?: number | null;
+  action: 'set' | 'rotate' | 'delete';
+  actor: string;
+  oldUrl?: string | null;
+  newUrl?: string | null;
+  oldSecret?: string | null;
+  newSecret?: string | null;
+}): Promise<void> {
+  try {
+    await prisma.webhookConfigAudit.create({
+      data: {
+        target: entry.target,
+        organizationId: entry.organizationId ?? null,
+        agencyId: entry.agencyId ?? null,
+        action: entry.action,
+        actor: entry.actor.slice(0, 50),
+        oldUrl: entry.oldUrl?.slice(0, 500) ?? null,
+        newUrl: entry.newUrl?.slice(0, 500) ?? null,
+        secretChanged: !!entry.newSecret && entry.newSecret !== entry.oldSecret,
+        oldSecretHint: secretHint(entry.oldSecret),
+        newSecretHint: secretHint(entry.newSecret),
+      },
+    });
+  } catch (err) {
+    console.error('[Webhook] Could not record config audit (change itself applied):', err);
+  }
+}
+
+/**
  * POST with bounded retry. A merchant endpoint being down must not lose the
  * event on the first hiccup: retry transient failures (network errors / 5xx /
  * 429) a couple of times with backoff. 4xx responses are the receiver
  * rejecting the event — retrying those won't help.
+ *
+ * Pass `ctx` to have the outcome written to `webhook_deliveries`. A 4xx is
+ * terminal and used to vanish silently, which is how a merchant's signature
+ * mismatch went unnoticed for ten days; the response body is captured on
+ * failure because that is where receivers explain *why* they rejected it.
  */
 export async function postWithRetry(
   url: string,
   headers: Record<string, string>,
   body: string,
   eventLabel: string,
+  ctx?: DeliveryContext,
 ): Promise<boolean> {
+  let delivered = false;
+  let attempts = 0;
+  let lastError: string | null = null;
+
   for (let attempt = 0; ; attempt++) {
+    attempts = attempt + 1;
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -79,23 +183,37 @@ export async function postWithRetry(
       });
       if (res.ok) {
         console.log(`[Webhook] Delivered ${eventLabel} to ${url}`);
-        return true;
+        delivered = true;
+        break;
       }
+      // The receiver's own explanation of the rejection — the single most
+      // useful thing to have when diagnosing this later. Bounded and optional.
+      let detail = '';
+      try {
+        detail = (await res.text()).slice(0, 500);
+      } catch {
+        /* body unreadable — the status alone still tells us plenty */
+      }
+      lastError = `HTTP ${res.status}${detail ? `: ${detail}` : ''}`;
       const retryable = res.status >= 500 || res.status === 429;
       console.error(
         `[Webhook] Delivery failed (${res.status}) to ${url} for event ${eventLabel}` +
           (retryable && attempt < RETRY_DELAYS_MS.length ? ' — retrying' : ''),
       );
-      if (!retryable || attempt >= RETRY_DELAYS_MS.length) return false;
+      if (!retryable || attempt >= RETRY_DELAYS_MS.length) break;
     } catch (err) {
+      lastError = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       console.error(
         `[Webhook] Delivery error to ${url} for event ${eventLabel}:`,
         err,
       );
-      if (attempt >= RETRY_DELAYS_MS.length) return false;
+      if (attempt >= RETRY_DELAYS_MS.length) break;
     }
     await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
   }
+
+  if (ctx) await recordDelivery(ctx, url, body, { delivered, attempts, lastError });
+  return delivered;
 }
 
 export async function sendOrgWebhook(
@@ -114,7 +232,11 @@ export async function sendOrgWebhook(
   if (webhookSecret) {
     headers['X-LunarPay-Signature'] = sign(webhookSecret, timestamp, body);
   }
-  return postWithRetry(webhookUrl, headers, body, payload.event);
+  return postWithRetry(webhookUrl, headers, body, payload.event, {
+    target: 'organization',
+    organizationId: payload.organization_id,
+    event: payload.event,
+  });
 }
 
 /**
@@ -220,7 +342,11 @@ export async function deliverPaymentLinkWebhook(
     'X-LunarPay-Timestamp': payload.timestamp,
   };
   try {
-    return await postWithRetry(webhookUrl, headers, JSON.stringify(payload), payload.event);
+    return await postWithRetry(webhookUrl, headers, JSON.stringify(payload), payload.event, {
+      target: 'payment_link',
+      // Payment links carry no org on this path; the link id is in the payload.
+      event: payload.event,
+    });
   } catch (err) {
     console.error('[Webhook] Unexpected payment-link delivery error:', err);
     return false;

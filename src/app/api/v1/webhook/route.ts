@@ -20,6 +20,7 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireSecretKey, ApiAuthError, apiError } from '@/lib/api-auth';
+import { recordWebhookConfigChange } from '@/lib/webhook';
 
 const putSchema = z.object({
   url: z.string().url('Must be a valid HTTPS URL').refine(
@@ -67,7 +68,7 @@ export async function PUT(request: NextRequest) {
     // Rotate only when explicitly requested, or when no secret exists yet.
     const existing = await prisma.organization.findUnique({
       where: { id: auth.organizationId },
-      select: { webhookSecret: true },
+      select: { webhookUrl: true, webhookSecret: true },
     });
     const shouldRotate = parsed.data.rotate_secret === true || !existing?.webhookSecret;
     const secret = shouldRotate
@@ -80,6 +81,17 @@ export async function PUT(request: NextRequest) {
         webhookUrl: parsed.data.url,
         ...(secret ? { webhookSecret: secret } : {}),
       },
+    });
+
+    await recordWebhookConfigChange({
+      target: 'organization',
+      organizationId: auth.organizationId,
+      action: shouldRotate ? 'rotate' : 'set',
+      actor: 'api_v1_webhook',
+      oldUrl: existing?.webhookUrl,
+      newUrl: parsed.data.url,
+      oldSecret: existing?.webhookSecret,
+      newSecret: secret ?? existing?.webhookSecret,
     });
 
     return Response.json({
@@ -105,9 +117,23 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const auth = await requireSecretKey(request);
+    const existing = await prisma.organization.findUnique({
+      where: { id: auth.organizationId },
+      select: { webhookUrl: true, webhookSecret: true },
+    });
     await prisma.organization.update({
       where: { id: auth.organizationId },
       data: { webhookUrl: null, webhookSecret: null },
+    });
+    await recordWebhookConfigChange({
+      target: 'organization',
+      organizationId: auth.organizationId,
+      action: 'delete',
+      actor: 'api_v1_webhook',
+      oldUrl: existing?.webhookUrl,
+      newUrl: null,
+      oldSecret: existing?.webhookSecret,
+      newSecret: null,
     });
     return Response.json({ data: { removed: true } });
   } catch (e) {

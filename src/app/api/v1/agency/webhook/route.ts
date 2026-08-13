@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAgencyKey, ApiAuthError, apiError } from '@/lib/api-auth';
+import { recordWebhookConfigChange } from '@/lib/webhook';
 import crypto from 'crypto';
 
 const updateSchema = z.object({
@@ -53,7 +54,7 @@ export async function PUT(request: NextRequest) {
 
     const existing = await prisma.agency.findUnique({
       where: { id: agency.agencyId },
-      select: { webhookSecret: true },
+      select: { webhookUrl: true, webhookSecret: true },
     });
 
     const webhookSecret =
@@ -65,6 +66,17 @@ export async function PUT(request: NextRequest) {
         webhookUrl: parsed.data.webhookUrl,
         webhookSecret,
       },
+    });
+
+    await recordWebhookConfigChange({
+      target: 'agency',
+      agencyId: agency.agencyId,
+      action: existing?.webhookSecret ? 'set' : 'rotate',
+      actor: 'api_v1_agency_webhook',
+      oldUrl: existing?.webhookUrl,
+      newUrl: parsed.data.webhookUrl,
+      oldSecret: existing?.webhookSecret,
+      newSecret: webhookSecret,
     });
 
     return Response.json({
@@ -88,9 +100,25 @@ export async function DELETE(request: NextRequest) {
   try {
     const agency = await requireAgencyKey(request);
 
+    const existing = await prisma.agency.findUnique({
+      where: { id: agency.agencyId },
+      select: { webhookUrl: true, webhookSecret: true },
+    });
+
     await prisma.agency.update({
       where: { id: agency.agencyId },
       data: { webhookUrl: null, webhookSecret: null },
+    });
+
+    await recordWebhookConfigChange({
+      target: 'agency',
+      agencyId: agency.agencyId,
+      action: 'delete',
+      actor: 'api_v1_agency_webhook',
+      oldUrl: existing?.webhookUrl,
+      newUrl: null,
+      oldSecret: existing?.webhookSecret,
+      newSecret: null,
     });
 
     return Response.json({ data: { message: 'Webhook removed' } });

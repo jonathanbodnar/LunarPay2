@@ -1164,3 +1164,60 @@ model ChatMessage {
   @@index([conversationId, createdAt])
   @@map("chat_messages")
 }
+
+// ============================================
+// WEBHOOK OBSERVABILITY
+// ============================================
+
+/// One row per delivery, written after the retry chain resolves — see
+/// `postWithRetry` in src/lib/webhook.ts. Recording is best-effort and never
+/// affects whether a delivery is considered successful.
+///
+/// Exists because a 4xx (e.g. the receiver rejecting our signature) is
+/// non-retryable and was previously dropped with no trace, making a total
+/// outage indistinguishable from a healthy endpoint.
+model WebhookDelivery {
+  id             BigInt    @id @default(autoincrement())
+  target         String    @db.VarChar(20) // organization | agency | payment_link
+  agencyId       Int?      @map("agency_id")
+  organizationId Int?      @map("organization_id")
+  event          String    @db.VarChar(64)
+  url            String    @db.VarChar(500)
+  payload        String    @db.Text
+  status         String    @default("pending") @db.VarChar(20) // delivered | failed
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error") @db.Text
+  deliveredAt    DateTime? @map("delivered_at")
+  replayedAt     DateTime? @map("replayed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([agencyId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("webhook_deliveries")
+}
+
+/// Every change to a webhook URL or signing secret. Answers "who repointed
+/// this endpoint and when" without a forensic reconstruction.
+///
+/// Secrets are never stored — only a last-4 hint, which is enough to tell two
+/// secrets apart when reconciling against what a merchant has deployed.
+model WebhookConfigAudit {
+  id             BigInt    @id @default(autoincrement())
+  target         String    @db.VarChar(20) // organization | agency
+  organizationId Int?      @map("organization_id")
+  agencyId       Int?      @map("agency_id")
+  action         String    @db.VarChar(20) // set | rotate | delete
+  actor          String    @db.VarChar(50)
+  oldUrl         String?   @map("old_url") @db.VarChar(500)
+  newUrl         String?   @map("new_url") @db.VarChar(500)
+  secretChanged  Boolean   @default(false) @map("secret_changed")
+  oldSecretHint  String?   @map("old_secret_hint") @db.VarChar(20)
+  newSecretHint  String?   @map("new_secret_hint") @db.VarChar(20)
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([agencyId, createdAt(sort: Desc)])
+  @@map("webhook_config_audit")
+}
