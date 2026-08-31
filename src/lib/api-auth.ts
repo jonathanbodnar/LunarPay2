@@ -117,6 +117,8 @@ async function resolveKey(key: string, type: 'secret' | 'publishable', opts?: { 
 export interface AgencyAuthResult {
   agencyId: number;
   agencyName: string;
+  /** Agency-wide Fortis MPA template — used when the merchant's org has none. */
+  fortisTemplate: string | null;
 }
 
 export async function requireAgencyKey(request: NextRequest): Promise<AgencyAuthResult> {
@@ -136,6 +138,7 @@ export async function requireAgencyKey(request: NextRequest): Promise<AgencyAuth
   return {
     agencyId: agency.id,
     agencyName: agency.name,
+    fortisTemplate: agency.fortisTemplate ?? null,
   };
 }
 
