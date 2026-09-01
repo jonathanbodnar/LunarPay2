@@ -6,6 +6,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { resolveFortisTemplate } from '@/lib/fortis/template';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
@@ -111,9 +112,11 @@ export async function POST(
 
     const fortisEnv = process.env.fortis_environment;
     const isTest = fortisEnv !== 'prd';
-    const templateCode = isTest
-      ? 'Testing1234'
-      : (org.fortisTemplate || agency.fortisTemplate || 'lunarpayfr');
+    const templateCode = resolveFortisTemplate({
+      isTest,
+      orgTemplate: org.fortisTemplate,
+      agencyTemplate: agency.fortisTemplate,
+    });
 
     const cleanedPhone = cleanPhoneForFortis(data.phone);
 

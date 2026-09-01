@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { resolveFortisTemplate } from '@/lib/fortis/template';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
@@ -78,6 +79,9 @@ export async function POST(request: Request) {
       },
       include: {
         fortisOnboarding: true,
+        // The owning user's agency supplies the default MPA template, which is
+        // what places the merchant under that agency's Fortis agent.
+        user: { select: { agency: { select: { fortisTemplate: true } } } },
       },
     });
 
@@ -122,7 +126,11 @@ export async function POST(request: Request) {
     // Determine test mode (fortis_environment: 'dev' or 'prd')
     const fortisEnv = process.env.fortis_environment;
     const isTest = fortisEnv !== 'prd';
-    const templateCode = isTest ? 'Testing1234' : (organization.fortisTemplate || 'lunarpayfr');
+    const templateCode = resolveFortisTemplate({
+      isTest,
+      orgTemplate: organization.fortisTemplate,
+      agencyTemplate: organization.user?.agency?.fortisTemplate,
+    });
     
     console.log('[Fortis Onboard] Environment:', fortisEnv, 'isTest:', isTest, 'templateCode:', templateCode);
     console.log('[Fortis Onboard] Bank info received - routing:', routingNumber?.slice(-4), 'account:', accountNumber?.slice(-4));
