@@ -182,7 +182,8 @@ export async function POST(request: Request) {
         postal_code: onboarding.merchantPostalCode || '',
         phone_number: onboarding.signPhoneNumber || '',
       },
-      app_delivery: 'link_iframe',
+      // link_full_page, never link_iframe: Safari blocks third-party cookies in cross-site iframes and Fortis's ClearApp MPA is a cookie-session app, so the MPA must be opened top-level (new tab).
+      app_delivery: 'link_full_page',
       bank_account: {
         routing_number: validatedData.achRoutingNumber,
         account_number: validatedData.achAccountNumber,

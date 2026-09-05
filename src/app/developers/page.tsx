@@ -1312,30 +1312,52 @@ elements.eventBus.on("error", (err) => {
             }} />
 
             <div className="text-xs text-gray-500 mt-2 mb-6 space-y-1">
-              <p>Status values: <code className="bg-gray-100 px-1 rounded">PENDING</code> → <code className="bg-gray-100 px-1 rounded">BANK_INFORMATION_SENT</code> → <code className="bg-gray-100 px-1 rounded">PENDING_REVIEW</code> → <code className="bg-gray-100 px-1 rounded">ACTIVE</code></p>
-              <p><code className="bg-gray-100 px-1 rounded">isActive: true</code> means the merchant can process payments.</p>
+              <p>Status values: <code className="bg-gray-100 px-1 rounded">PENDING</code> → <code className="bg-gray-100 px-1 rounded">BANK_INFORMATION_SENT</code> → <code className="bg-gray-100 px-1 rounded">PENDING_REVIEW</code> → <code className="bg-gray-100 px-1 rounded">APPROVED</code> → <code className="bg-gray-100 px-1 rounded">ACTIVE</code> (or <code className="bg-gray-100 px-1 rounded">DENIED</code>)</p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                <li><code className="bg-gray-100 px-1 rounded">BANK_INFORMATION_SENT</code> — the application exists at Fortis; the merchant still has to open and sign it.</li>
+                <li><code className="bg-gray-100 px-1 rounded">PENDING_REVIEW</code> — the merchant (or you) confirmed the application is signed; Fortis underwriting is in progress (24–48h). Fortis exposes no API for this transition, so it is driven by the confirmation endpoints below.</li>
+                <li><code className="bg-gray-100 px-1 rounded">APPROVED</code> — Fortis has provisioned the merchant account but LunarPay is still waiting for the credentials it delivers by webhook. Payments are not enabled yet; this resolves automatically.</li>
+                <li><code className="bg-gray-100 px-1 rounded">ACTIVE</code> — credentials are on file. <code className="bg-gray-100 px-1 rounded">isActive: true</code> means the merchant can process payments.</li>
+              </ul>
+              <p>LunarPay reconciles every non-final application with Fortis on a schedule, so approvals propagate even if the Fortis webhook is delayed.</p>
             </div>
 
-            <SubSection id="onboarding-mpa" title="MPA Embed Page">
+            <SubSection id="onboarding-mpa" title="Hosted MPA Page">
               <p className="text-sm text-gray-600 mb-3">
-                The Fortis Merchant Processing Agreement form must be served from <code className="bg-gray-100 px-1 rounded text-xs">app.lunarpay.com</code> (iframe domain restriction). Use the <code className="bg-gray-100 px-1 rounded text-xs">mpaEmbedUrl</code> from the status endpoint, or construct it directly:
+                Send merchants to the hosted page at <code className="bg-gray-100 px-1 rounded text-xs">mpaEmbedUrl</code> (from the status endpoint, or construct it directly). It opens the Fortis Merchant Processing Application <strong>in a new tab, top-level</strong>, tells the merchant to expect an email verification code from Fortis, and lets them confirm once they have signed — which moves the status to <code className="bg-gray-100 px-1 rounded text-xs">PENDING_REVIEW</code>.
               </p>
               <Code>{`https://app.lunarpay.com/onboarding/{org_token}`}</Code>
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                <strong>Never put the Fortis <code className="bg-amber-100 px-1 rounded">mpaLink</code> in an iframe.</strong> The Fortis application is a cookie-session app; Safari (and other browsers with third-party cookie blocking) renders it blank inside a cross-site frame and the final step 404s. Link to it or open it in a new tab. You may link to or embed the hosted page above — it always opens Fortis top-level.
+              </div>
             </SubSection>
 
-            <SubSection id="onboarding-mpa-api" title="MPA Embed API (Public)">
+            <SubSection id="onboarding-mpa-api" title="MPA API (Public, by org token)">
               <p className="text-sm text-gray-600 mb-3">
-                No authentication required — the org token acts as the identifier.
+                No authentication required — the org token acts as the identifier. Use these if you build your own onboarding screen instead of linking to the hosted page.
               </p>
               <Code>{`GET ${BASE}/api/onboarding/mpa-embed?token={org_token}
 
 // Response:
 {
   "status": "BANK_INFORMATION_SENT",
-  "mpaLink": "https://fortis.example.com/...",
+  "appStatus": "BANK_INFORMATION_SENT",
+  "mpaLink": "https://mpa.epicpay.com/clearapp/go/...",   // open in a new tab, never in an iframe
   "organizationName": "Acme Corp",
   "organizationLogo": "..."
-}`}</Code>
+}
+
+// The merchant confirmed they signed and submitted the application:
+POST ${BASE}/api/onboarding/mark-submitted
+Content-Type: application/json
+{ "token": "{org_token}" }
+// → { "status": true, "appStatus": "PENDING_REVIEW", "previousStatus": "BANK_INFORMATION_SENT", "changed": true, "message": "...", "mpaLink": "..." }
+
+// Re-check the application against Fortis right now:
+POST ${BASE}/api/onboarding/sync-status
+Content-Type: application/json
+{ "token": "{org_token}" }
+// → same shape; appStatus becomes APPROVED / ACTIVE / DENIED as Fortis progresses`}</Code>
             </SubSection>
           </Section>
 
@@ -1402,8 +1424,9 @@ Content-Type: application/json
   "ecHighTicket": 3000
 }
 
-// Response includes mpaEmbedUrl — redirect the merchant there
-// to complete the Fortis MPA form.`}</Code>
+// Response includes mpaLink (the Fortis application) and mpaEmbedUrl
+// (LunarPay's hosted page). Send the merchant to mpaEmbedUrl, or link
+// mpaLink directly — in a new tab, never inside an iframe (Safari blocks it).`}</Code>
               <div className="mt-4 overflow-x-auto">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Volume Range Values</p>
                 <table className="w-full text-sm border-collapse">
@@ -1450,6 +1473,35 @@ Authorization: Bearer lp_agency_your_key
 // Returns all merchants registered under your agency`}</Code>
             </SubSection>
 
+            <SubSection id="agency-onboarding-status" title="3b. Confirm Signature / Sync Status">
+              <p className="text-sm text-gray-600 mb-3">
+                Fortis has no API that reports whether an application has been signed, so tell LunarPay when your merchant confirms they submitted it. Both endpoints return the merchant&apos;s current onboarding state and also reconcile it with Fortis (picking up approvals or declines immediately).
+              </p>
+              <Code>{`# The merchant told you they signed and submitted the Fortis application
+POST ${BASE}/api/v1/agency/merchants/{merchantId}/onboarding/submitted
+Authorization: Bearer lp_agency_your_key
+# → BANK_INFORMATION_SENT becomes PENDING_REVIEW (no-op otherwise)
+
+# Re-check the application against Fortis now (safe to call any time)
+POST ${BASE}/api/v1/agency/merchants/{merchantId}/onboarding/sync
+Authorization: Bearer lp_agency_your_key
+
+// Response (both):
+{
+  "data": {
+    "merchantId": 123,
+    "organizationId": 42,
+    "status": "PENDING_REVIEW",
+    "isActive": false,
+    "previousStatus": "BANK_INFORMATION_SENT",
+    "changed": true,
+    "message": "Application marked as signed; Fortis underwriting in progress",
+    "mpaLink": "https://mpa.epicpay.com/clearapp/go/...",
+    "mpaEmbedUrl": "https://app.lunarpay.com/onboarding/abc123"
+  }
+}`}</Code>
+            </SubSection>
+
             <SubSection id="agency-webhooks" title="4. Configure Webhooks">
               <p className="text-sm text-gray-600 mb-3">
                 Register a webhook to be notified when a merchant&apos;s Fortis application is approved or denied.
@@ -1472,10 +1524,11 @@ Content-Type: application/json
             </SubSection>
 
             <SubSection id="agency-webhook-payload" title="Webhook Events">
-              <p className="text-sm text-gray-700 mb-2"><strong>merchant.approved / merchant.denied</strong></p>
+              <p className="text-sm text-gray-700 mb-2"><strong>merchant.application_submitted / merchant.approved / merchant.denied</strong></p>
+              <p className="text-xs text-gray-500 mb-2"><code className="bg-gray-100 px-1 rounded">merchant.application_submitted</code> fires when the merchant (or you) confirms the Fortis application is signed — <code className="bg-gray-100 px-1 rounded">onboarding.status</code> is <code className="bg-gray-100 px-1 rounded">PENDING_REVIEW</code> and no <code className="bg-gray-100 px-1 rounded">keys</code> are included. <code className="bg-gray-100 px-1 rounded">merchant.approved</code> fires once credentials are on file and the merchant can process.</p>
               <Code>{`// POST to your webhook URL
 {
-  "event": "merchant.approved",   // or "merchant.denied"
+  "event": "merchant.approved",   // or "merchant.denied", "merchant.application_submitted"
   "merchant": {
     "id": 123,
     "email": "venue@example.com",
@@ -1588,11 +1641,15 @@ Authorization: Bearer lp_agency_your_key`}</Code>
                 { method: 'GET',  path: '/api/v1/checkout/sessions/:id', desc: 'Get checkout session status', auth: 'secret' },
                 { method: 'POST', path: '/api/v1/intentions', desc: 'Create a payment intention (Elements)', auth: 'publishable' },
                 { method: 'GET',  path: '/api/v1/onboarding/status', desc: 'Get merchant onboarding status', auth: 'secret' },
-                { method: 'GET',  path: '/api/onboarding/mpa-embed?token=:token', desc: 'Get Fortis MPA embed link', auth: 'public' },
+                { method: 'GET',  path: '/api/onboarding/mpa-embed?token=:token', desc: 'Get Fortis MPA link + onboarding status (open the link top-level, never in an iframe)', auth: 'public' },
+                { method: 'POST', path: '/api/onboarding/mark-submitted', desc: 'Merchant confirms the MPA is signed (→ PENDING_REVIEW)', auth: 'public' },
+                { method: 'POST', path: '/api/onboarding/sync-status', desc: 'Reconcile onboarding status with Fortis now', auth: 'public' },
                 { method: 'POST', path: '/api/v1/agency/merchants', desc: 'Register a new merchant', auth: 'agency' },
                 { method: 'GET',  path: '/api/v1/agency/merchants', desc: 'List agency merchants', auth: 'agency' },
                 { method: 'GET',  path: '/api/v1/agency/merchants/:id', desc: 'Get merchant details + keys', auth: 'agency' },
                 { method: 'POST', path: '/api/v1/agency/merchants/:id/onboard', desc: 'Submit merchant onboarding', auth: 'agency' },
+                { method: 'POST', path: '/api/v1/agency/merchants/:id/onboarding/submitted', desc: 'Confirm the merchant signed the MPA (→ PENDING_REVIEW)', auth: 'agency' },
+                { method: 'POST', path: '/api/v1/agency/merchants/:id/onboarding/sync', desc: 'Reconcile merchant onboarding status with Fortis now', auth: 'agency' },
                 { method: 'GET',  path: '/api/v1/agency/webhook', desc: 'Get webhook configuration', auth: 'agency' },
                 { method: 'PUT',  path: '/api/v1/agency/webhook', desc: 'Set or update webhook URL', auth: 'agency' },
                 { method: 'DELETE', path: '/api/v1/agency/webhook', desc: 'Remove webhook', auth: 'agency' },

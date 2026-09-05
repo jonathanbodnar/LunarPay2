@@ -26,7 +26,7 @@ export interface MerchantOnboardingData {
     city?: string;
     state_province?: string;
     postal_code?: string;
-    // NOTE: email, country, SSN are collected by Fortis in their secure MPA iframe
+    // NOTE: email, country, SSN are collected by Fortis in their secure MPA form
   };
   
   // Business contact email
@@ -66,7 +66,9 @@ export interface MerchantOnboardingData {
     phone_number: string;
   };
   
-  // Application delivery method
+  // Application delivery method. Always 'link_full_page': Fortis's ClearApp MPA is a
+  // cookie-session app and Safari blocks third-party cookies in cross-site iframes, so
+  // 'link_iframe' renders blank there. Open the returned app_link top-level (new tab).
   app_delivery: 'link_iframe' | 'link_full_page';
   
   // Bank accounts - primary for deposits, alt for fees/adjustments

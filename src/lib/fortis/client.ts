@@ -16,6 +16,19 @@ import {
   FORTIS_REASON_CODES,
 } from '@/types/fortis';
 
+/** A user record as returned by GET /v1/users (API key intentionally omitted — Fortis masks it). */
+export interface FortisUserRecord {
+  id: string;
+  username: string;
+  email: string;
+  primaryLocationId: string | null;
+  userTypeCode: number | null;
+  /** 1 = active, 0 = deleted/disabled */
+  statusCode: number | null;
+  /** Unix seconds */
+  createdTs: number | null;
+}
+
 export class FortisClient {
   private client: AxiosInstance;
   private developerId: string;
@@ -870,6 +883,76 @@ export class FortisClient {
         status: false,
         message: this.formatError(error),
       };
+    }
+  }
+
+  /**
+   * 8. LIST USERS
+   * GET /v1/users
+   *
+   * The office-level onboarding user can read every user under its hierarchy,
+   * including the `api.<LegalName>@<domain>` user Fortis provisions for a
+   * merchant on approval. This is the only API-readable approval signal:
+   * there is no onboarding-status endpoint (GET /v1/onboarding/{id} is
+   * "Route not found") and /v1/locations is 403 for this user.
+   *
+   * `user_api_key` is masked in this response ("3...6"), so it cannot be used
+   * to recover merchant credentials — those only ever arrive in the
+   * onboarding webhook.
+   */
+  async listUsers(options?: { pageSize?: number; maxPages?: number }): Promise<{
+    status: boolean;
+    users?: FortisUserRecord[];
+    message?: string;
+  }> {
+    const pageSize = options?.pageSize ?? 500;
+    const maxPages = options?.maxPages ?? 20;
+    const users: FortisUserRecord[] = [];
+
+    try {
+      for (let page = 1; page <= maxPages; page++) {
+        const response = await this.client.get('users', {
+          params: { 'page[size]': pageSize, 'page[number]': page },
+          // Short per-call budget: this runs inside request handlers and a
+          // 60s cron; a hung Fortis must not consume the whole function.
+          timeout: 15000,
+        });
+
+        const list = response.data?.list;
+        if (!Array.isArray(list)) {
+          if (page === 1) return { status: false, message: 'No user list returned from Fortis' };
+          break;
+        }
+
+        for (const u of list as Record<string, unknown>[]) {
+          users.push({
+            id: String(u.id),
+            username: String(u.username || ''),
+            email: String(u.email || ''),
+            primaryLocationId: u.primary_location_id ? String(u.primary_location_id) : null,
+            userTypeCode: typeof u.user_type_code === 'number' ? u.user_type_code : null,
+            statusCode: typeof u.status_code === 'number' ? u.status_code : null,
+            createdTs: typeof u.created_ts === 'number' ? u.created_ts : null,
+          });
+        }
+
+        const pagination = response.data?.pagination as
+          | { page_count?: number; total_count?: number }
+          | undefined;
+        const pageCount = typeof pagination?.page_count === 'number' ? pagination.page_count : null;
+        if (list.length < pageSize) break;
+        if (pageCount !== null && page >= pageCount) break;
+        if (page === maxPages) {
+          return {
+            status: false,
+            message: `Fortis users list exceeds ${maxPages * pageSize} users; refusing to reason on a partial list`,
+          };
+        }
+      }
+
+      return { status: true, users };
+    } catch (error) {
+      return { status: false, message: this.formatError(error) };
     }
   }
 

@@ -4,9 +4,15 @@ import { prisma } from '@/lib/prisma';
 /**
  * GET /api/onboarding/mpa-embed?token=<org_token>
  *
- * Public API — returns the Fortis MPA embed URL for a given organization token.
- * Used by the standalone onboarding page at app.lunarpay.com/onboarding/[token]
- * which must be served from that domain for Fortis iframe whitelisting.
+ * Public API — returns the Fortis MPA link and onboarding status for a given
+ * organization token. Used by the standalone onboarding page at
+ * app.lunarpay.com/onboarding/[token], which opens the MPA top-level in a new
+ * tab (Fortis's ClearApp is a cookie-session app; Safari blocks it in a
+ * cross-site iframe).
+ *
+ * `appStatus` is always present (raw church_onboard_fortis.app_status or null).
+ * `mpaLink` is returned whenever it exists — including PENDING_REVIEW /
+ * APPROVED / DENIED — so the page can offer "open the application again".
  */
 export async function GET(request: Request) {
   try {
@@ -36,6 +42,7 @@ export async function GET(request: Request) {
                 logo: true,
                 primaryColor: true,
                 hoverColor: true,
+                email: true,
               },
             },
           },
@@ -67,14 +74,17 @@ export async function GET(request: Request) {
     const agency = organization.user?.agency || null;
 
     const agencyData = agency
-      ? { name: agency.name, logo: agency.logo, primaryColor: agency.primaryColor, hoverColor: agency.hoverColor }
+      ? { name: agency.name, logo: agency.logo, primaryColor: agency.primaryColor, hoverColor: agency.hoverColor, email: agency.email || null }
       : null;
 
     if (appStatus === 'ACTIVE') {
       return NextResponse.json({
         status: 'active',
+        appStatus,
+        mpaLink: mpaLink || null,
         message: 'Merchant account is already active',
         organizationName: organization.name,
+        organizationLogo: organization.logo,
         agency: agencyData,
       });
     }
@@ -82,14 +92,18 @@ export async function GET(request: Request) {
     if (!mpaLink) {
       return NextResponse.json({
         status: appStatus || 'pending',
+        appStatus: appStatus || null,
+        mpaLink: null,
         message: 'MPA link is not available yet. Please complete Steps 1 and 2 first.',
         organizationName: organization.name,
+        organizationLogo: organization.logo,
         agency: agencyData,
       });
     }
 
     return NextResponse.json({
       status: appStatus,
+      appStatus,
       mpaLink,
       organizationName: organization.name,
       organizationLogo: organization.logo,

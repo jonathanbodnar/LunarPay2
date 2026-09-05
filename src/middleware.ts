@@ -70,6 +70,8 @@ const publicApiRoutes = [
   '/api/webhooks', // External webhooks (SendGrid Inbound Parse, etc.)
   '/api/v1', // Public merchant API (uses API key auth, not session cookies)
   '/api/onboarding/mpa-embed', // Public MPA embed endpoint (uses org token, not session)
+  '/api/onboarding/mark-submitted', // Merchant reports the MPA is signed (org token or session; auth in route)
+  '/api/onboarding/sync-status', // Reconcile onboarding status with Fortis (org token or session; auth in route)
   '/api/checkout', // Checkout session internal API (secured by session token)
   '/api/admin', // All admin APIs use admin cookie (requireAdmin); middleware must not require merchant token
 ];

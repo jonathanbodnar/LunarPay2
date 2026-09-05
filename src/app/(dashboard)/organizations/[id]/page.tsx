@@ -6,6 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Edit, ExternalLink, RefreshCw, Clock } from 'lucide-react';
 
+// Application is at Fortis; nothing to fill in here, only to wait / refresh.
+const IN_PROGRESS_STATUSES = ['BANK_INFORMATION_SENT', 'PENDING_REVIEW', 'APPROVED'];
+
 export default function OrganizationDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -65,10 +68,19 @@ export default function OrganizationDetailPage() {
       return <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">Pending Setup</span>;
     }
     if (status === 'BANK_INFORMATION_SENT') {
-      return <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">Application Submitted</span>;
+      return <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">Awaiting Signature</span>;
+    }
+    if (status === 'PENDING_REVIEW') {
+      return <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">Under Review</span>;
+    }
+    if (status === 'APPROVED') {
+      return <span className="px-2 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-800">Approved – Finalizing</span>;
     }
     if (status === 'ACTIVE') {
       return <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">Active</span>;
+    }
+    if (status === 'DENIED') {
+      return <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">Declined</span>;
     }
     return <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">{status}</span>;
   };
@@ -141,7 +153,7 @@ export default function OrganizationDetailPage() {
               {getStatusBadge(organization.fortisOnboarding?.appStatus)}
             </div>
 
-            {organization.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' && (
+            {IN_PROGRESS_STATUSES.includes(organization.fortisOnboarding?.appStatus || '') && (
               <div className="space-y-3">
                 <div className="flex items-center gap-1 text-sm text-gray-500">
                   <Clock className="h-4 w-4" />

@@ -28,6 +28,10 @@
     {
       "path": "/api/cron/chat-followup",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/sync-onboarding-status",
+      "schedule": "30 6 * * *"
     }
   ]
 }

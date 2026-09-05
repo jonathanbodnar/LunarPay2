@@ -48,6 +48,27 @@ interface Organization {
   };
 }
 
+// church_onboard_fortis.app_status → human label (see lib/fortis/onboarding-sync.ts)
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: 'In Progress',
+  BANK_INFORMATION_SENT: 'Awaiting Signature',
+  PENDING_REVIEW: 'Under Review',
+  APPROVED: 'Approved – Finalizing',
+  ACTIVE: 'Active',
+  DENIED: 'Declined',
+  FORM_ERROR: 'Error',
+};
+
+const getStatusLabel = (status: string | null | undefined) =>
+  (status && STATUS_LABELS[status]) || status || 'Not Started';
+
+// Once the MPA exists at Fortis, everything happens on step 3.
+const STEP_3_STATUSES = ['BANK_INFORMATION_SENT', 'PENDING_REVIEW', 'APPROVED', 'ACTIVE', 'DENIED'];
+
+// Same look as the default <Button> variant, for links that must be real anchors.
+const PRIMARY_LINK_CLASS =
+  'inline-flex h-10 items-center justify-center rounded-lg bg-foreground px-5 py-2 text-sm font-medium text-background transition-all hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.98]';
+
 export default function PaymentSetupPage() {
   const router = useRouter();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -57,7 +78,7 @@ export default function PaymentSetupPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
-  const [mpaSubmitted, setMpaSubmitted] = useState(false);
+  const [submittingApplication, setSubmittingApplication] = useState(false);
   const [refreshingStatus, setRefreshingStatus] = useState(false);
 
   // Step 1: Merchant Info
@@ -146,11 +167,16 @@ export default function PaymentSetupPage() {
         });
         if (fortisRes.ok) {
           const fortisData = await fortisRes.json();
-          if (fortisData.appStatus === 'ACTIVE') {
+          if (fortisData.status === false) {
+            // Fortis could not be reached; the stored status below is still current
+            console.error('[Payment Setup] Fortis status check failed:', fortisData.message);
+            setError('We could not check your status with Fortis right now. Please try again later.');
+          } else if (fortisData.appStatus === 'ACTIVE') {
             setSuccess('Your application has been approved!');
-          } else if (fortisData.fortisStatus) {
-            // Show Fortis status if available
-            setSuccess(`Status: ${fortisData.fortisStatus}${fortisData.statusMessage ? ` - ${fortisData.statusMessage}` : ''}`);
+          } else if (fortisData.appStatus || fortisData.message) {
+            setSuccess(
+              `Status: ${getStatusLabel(fortisData.appStatus)}${fortisData.message ? ` — ${fortisData.message}` : ''}`
+            );
           }
         }
       }
@@ -172,6 +198,49 @@ export default function PaymentSetupPage() {
       setError('Failed to check status. Please try again.');
     } finally {
       setRefreshingStatus(false);
+    }
+  };
+
+  const markApplicationSubmitted = async () => {
+    if (!selectedOrg?.id) return;
+    setSubmittingApplication(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch('/api/onboarding/mark-submitted', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ organizationId: selectedOrg.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.status === false) {
+        setError(data.error || data.message || 'Failed to confirm your application. Please try again.');
+        return;
+      }
+
+      if (data.appStatus === 'ACTIVE') {
+        setSuccess('Your application has been approved!');
+      } else if (data.changed && data.message) {
+        setSuccess(data.message);
+      }
+
+      // Re-fetch so the under-review UI is driven by the stored status, not local state
+      const orgRes = await fetch('/api/organizations', { credentials: 'include' });
+      if (orgRes.ok) {
+        const orgData = await orgRes.json();
+        if (orgData.organizations?.length > 0) {
+          setOrganizations(orgData.organizations);
+          const org = orgData.organizations.find((o: Organization) => o.id === selectedOrg.id) || orgData.organizations[0];
+          setSelectedOrg(org);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to confirm application:', err);
+      setError('Failed to confirm your application. Please try again.');
+    } finally {
+      setSubmittingApplication(false);
     }
   };
 
@@ -223,8 +292,8 @@ export default function PaymentSetupPage() {
     });
 
     // Set current step based on progress
-    if (org.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' || 
-        org.fortisOnboarding?.appStatus === 'ACTIVE') {
+    const appStatus = org.fortisOnboarding?.appStatus;
+    if (appStatus && STEP_3_STATUSES.includes(appStatus)) {
       setCurrentStep(3);
     } else if (org.fortisOnboarding?.stepCompleted && org.fortisOnboarding.stepCompleted >= 1) {
       setCurrentStep(2);
@@ -374,8 +443,14 @@ export default function PaymentSetupPage() {
     switch (status) {
       case 'ACTIVE':
         return <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Active</span>;
+      case 'APPROVED':
+        return <span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-medium">Approved – Finalizing</span>;
+      case 'PENDING_REVIEW':
+        return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Under Review</span>;
       case 'BANK_INFORMATION_SENT':
-        return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Pending Review</span>;
+        return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">Awaiting Signature</span>;
+      case 'DENIED':
+        return <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">Declined</span>;
       case 'FORM_ERROR':
         return <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">Error</span>;
       case 'PENDING':
@@ -487,6 +562,10 @@ export default function PaymentSetupPage() {
       </div>
     );
   }
+
+  const appStatus = selectedOrg?.fortisOnboarding?.appStatus || null;
+  const mpaLink = selectedOrg?.fortisOnboarding?.mpaLink || null;
+  const contactEmail = selectedOrg?.fortisOnboarding?.email || merchantInfo.email || '';
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -1011,7 +1090,7 @@ export default function PaymentSetupPage() {
       {currentStep === 3 && (
         <Card>
           <CardContent className="py-6">
-            {selectedOrg?.fortisOnboarding?.appStatus === 'ACTIVE' ? (
+            {appStatus === 'ACTIVE' ? (
               <div className="text-center">
                 <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
                 <h2 className="text-2xl font-semibold mb-2">Payment Processing Active!</h2>
@@ -1022,133 +1101,203 @@ export default function PaymentSetupPage() {
                   Go to Dashboard
                 </Button>
               </div>
-            ) : selectedOrg?.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' && selectedOrg?.fortisOnboarding?.mpaLink ? (
-              mpaSubmitted ? (
-                // Thank you message after submitting MPA
-                <div className="text-center py-8">
-                  <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Mail className="h-10 w-10 text-green-600" />
+            ) : appStatus === 'BANK_INFORMATION_SENT' && mpaLink ? (
+              // Sign the MPA at Fortis. It is a cookie-session app, so it is opened
+              // top-level in a new tab and never framed (Safari blocks it in an iframe).
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <h2 className="text-xl font-semibold mb-2">Complete Merchant Processing Agreement</h2>
+                  <p className="text-muted-foreground text-sm max-w-2xl mx-auto">
+                    Review and sign your application with our banking partner, Fortis, to finalize your merchant account setup.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  <div className="lg:col-span-3">
+                    <div className="border rounded-lg bg-white p-6 space-y-6">
+                      <ol className="space-y-5">
+                        <li className="flex items-start gap-3">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-semibold">1</span>
+                          <div>
+                            <p className="font-medium">Open the application in a new tab</p>
+                            <p className="text-sm text-muted-foreground">
+                              The Fortis application opens on its own page. The details you entered in steps 1 and 2 are already filled in.
+                            </p>
+                          </div>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-semibold">2</span>
+                          <div>
+                            <p className="font-medium">Enter the verification code from Fortis and sign</p>
+                            <p className="text-sm text-muted-foreground">
+                              Fortis emails a verification code to{' '}
+                              {contactEmail ? <strong>{contactEmail}</strong> : 'the email address on your application'}.
+                              Enter it to unlock the form, review each section, fill in anything missing, and sign.
+                            </p>
+                          </div>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-semibold">3</span>
+                          <div>
+                            <p className="font-medium">Come back here and confirm</p>
+                            <p className="text-sm text-muted-foreground">
+                              Once you have signed and submitted the application, return to this page and click
+                              &quot;I&apos;ve Completed the Application&quot; so we can track your approval.
+                            </p>
+                          </div>
+                        </li>
+                      </ol>
+                      <div className="flex flex-col items-start gap-2">
+                        <a
+                          href={mpaLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={PRIMARY_LINK_CLASS}
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Open the merchant application
+                        </a>
+                        <p className="text-xs text-muted-foreground">
+                          The application must be opened directly in its own tab. It cannot be displayed inside this page;
+                          browsers such as Safari block it when framed.
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <h2 className="text-2xl font-semibold mb-4">Thank you!</h2>
-                  <p className="text-muted-foreground mb-2 max-w-md mx-auto">
-                    We'll email you as soon as your application is approved. You may receive communication from Fortis (our banking partner) with additional questions.
-                  </p>
-                  <p className="text-sm text-muted-foreground mb-8 flex items-center justify-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    This can take 24 to 48 hours.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <Button 
-                      variant="outline" 
-                      onClick={refreshApplicationStatus}
-                      disabled={refreshingStatus}
-                    >
-                      {refreshingStatus ? (
+
+                  {/* Tips Panel - Takes 1 column */}
+                  <div className="lg:col-span-1 space-y-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Who is Fortis?
+                      </h3>
+                      <p className="text-sm text-blue-800">
+                        They&apos;re our banking partner that completes all underwriting.
+                      </p>
+                    </div>
+
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <h3 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Approval Process
+                      </h3>
+                      <p className="text-sm text-green-800">
+                        This application approval will only take 24-48 hours, and once approved, you&apos;re ready to process payments.
+                      </p>
+                    </div>
+
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                      <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Why So Thorough?
+                      </h3>
+                      <p className="text-sm text-purple-800">
+                        Most processors let you process immediately, then when they get around to underwriting you will hold your funds until you complete the exact same process. We like to be upfront and transparent!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:justify-end items-center gap-3 pt-4">
+                  <Button variant="outline" onClick={markApplicationSubmitted} disabled={submittingApplication}>
+                    {submittingApplication ? (
+                      <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                      )}
-                      Refresh Status
-                    </Button>
-                    <Button onClick={() => router.push('/dashboard')}>
-                      Go to Dashboard
-                    </Button>
-                  </div>
-                  <button 
-                    onClick={() => setMpaSubmitted(false)}
-                    className="mt-6 text-sm text-muted-foreground hover:text-foreground underline"
-                  >
-                    Need to make changes? View application again
-                  </button>
+                        Confirming...
+                      </>
+                    ) : (
+                      <>
+                        I&apos;ve Completed the Application
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </>
+                    )}
+                  </Button>
                 </div>
-              ) : (
-                // Show MPA iframe with tips
-                <div className="space-y-4">
-                  <div className="text-center mb-4">
-                    <h2 className="text-xl font-semibold mb-2">Complete Merchant Processing Agreement</h2>
-                    <p className="text-muted-foreground text-sm">
-                      Please review your application below and fill in any missing information, to finalize your merchant account setup with our partner, Fortis.{' '}
-                      <strong>A verification code will be sent to your email from Fortis to access the form.</strong>
+              </div>
+            ) : appStatus === 'PENDING_REVIEW' || appStatus === 'APPROVED' ? (
+              // Signed. PENDING_REVIEW: Fortis underwriting. APPROVED: account provisioned,
+              // LunarPay still waiting for the credentials webhook.
+              <div className="text-center py-8">
+                <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  {appStatus === 'APPROVED' ? (
+                    <CheckCircle className="h-10 w-10 text-green-600" />
+                  ) : (
+                    <Mail className="h-10 w-10 text-green-600" />
+                  )}
+                </div>
+                {appStatus === 'APPROVED' ? (
+                  <>
+                    <h2 className="text-2xl font-semibold mb-4">Approved by Fortis — finalizing your account</h2>
+                    <p className="text-muted-foreground mb-2 max-w-md mx-auto">
+                      Fortis has approved your application and set up your merchant account. LunarPay is now waiting for Fortis to deliver your API credentials.
                     </p>
-                  </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    {/* MPA Iframe - Takes 3 columns */}
-                    <div className="lg:col-span-3">
-                      <div className="border rounded-lg overflow-hidden bg-white">
-                        <iframe
-                          src={selectedOrg.fortisOnboarding.mpaLink}
-                          className="w-full"
-                          style={{ height: '700px', border: 'none' }}
-                          title="Fortis MPA Form"
-                          allow="payment"
-                        />
-                      </div>
-                    </div>
-                    
-                    {/* Tips Panel - Takes 1 column */}
-                    <div className="lg:col-span-1 space-y-4">
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Who is Fortis?
-                        </h3>
-                        <p className="text-sm text-blue-800">
-                          They're our banking partner that completes all underwriting.
-                        </p>
-                      </div>
-                      
-                      <div className="bg-amber-50 border border-amber-300 rounded-lg p-4">
-                        <h3 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
-                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                          </svg>
-                          Volume Fields
-                        </h3>
-                        <p className="text-sm text-amber-800">
-                          Your high transaction amount cannot exceed the amount you enter in monthly volume or echeck fields.
-                        </p>
-                      </div>
-                      
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                        <h3 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
-                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Approval Process
-                        </h3>
-                        <p className="text-sm text-green-800">
-                          This application approval will only take 24-48 hours, but once approved, you're in and can process without fear of political persecution!
-                        </p>
-                      </div>
-                      
-                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                        <h3 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
-                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Why So Thorough?
-                        </h3>
-                        <p className="text-sm text-purple-800">
-                          Most processors let you process immediately, then when they get around to underwriting you will hold your funds until you complete the exact same process. We like to be upfront and transparent!
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center pt-4">
-                    <Button variant="outline" onClick={() => window.open(selectedOrg.fortisOnboarding!.mpaLink!, '_blank')}>
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      Open in New Tab
-                    </Button>
-                    <Button onClick={() => setMpaSubmitted(true)}>
-                      I've Completed the Application
-                      <ArrowRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  </div>
+                    <p className="text-sm text-muted-foreground mb-8 flex items-center justify-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Payments will be enabled automatically as soon as they arrive. No action is needed on your part.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-2xl font-semibold mb-4">Thank you!</h2>
+                    <p className="text-muted-foreground mb-2 max-w-md mx-auto">
+                      We&apos;ll email you as soon as your application is approved. You may receive communication from Fortis (our banking partner) with additional questions.
+                    </p>
+                    <p className="text-sm text-muted-foreground mb-8 flex items-center justify-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      This can take 24 to 48 hours.
+                    </p>
+                  </>
+                )}
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Button
+                    variant="outline"
+                    onClick={refreshApplicationStatus}
+                    disabled={refreshingStatus}
+                  >
+                    {refreshingStatus ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    Refresh Status
+                  </Button>
+                  <Button onClick={() => router.push('/dashboard')}>
+                    Go to Dashboard
+                  </Button>
                 </div>
-              )
-            ) : selectedOrg?.fortisOnboarding?.appStatus === 'BANK_INFORMATION_SENT' ? (
+                {mpaLink && (
+                  <a
+                    href={mpaLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground underline"
+                  >
+                    Need to reopen the application?
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            ) : appStatus === 'DENIED' ? (
+              <div className="text-center py-8">
+                <div className="h-20 w-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <AlertCircle className="h-10 w-10 text-red-600" />
+                </div>
+                <h2 className="text-2xl font-semibold mb-4">Application not approved</h2>
+                <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                  Fortis was unable to approve this application. Please contact us at{' '}
+                  <a href="mailto:support@lunarpay.com" className="underline hover:text-foreground">support@lunarpay.com</a>{' '}
+                  and we will review what happened and go over your options.
+                </p>
+                <Button onClick={() => router.push('/dashboard')}>
+                  Go to Dashboard
+                </Button>
+              </div>
+            ) : appStatus === 'BANK_INFORMATION_SENT' ? (
               // Fallback for BANK_INFORMATION_SENT without mpaLink
               <div className="text-center py-8">
                 <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -1156,7 +1305,7 @@ export default function PaymentSetupPage() {
                 </div>
                 <h2 className="text-2xl font-semibold mb-4">Thank you!</h2>
                 <p className="text-muted-foreground mb-2 max-w-md mx-auto">
-                  We'll email you as soon as your application is approved. You may receive communication from Fortis (our banking partner) with additional questions.
+                  We&apos;ll email you as soon as your application is approved. You may receive communication from Fortis (our banking partner) with additional questions.
                 </p>
                 <p className="text-sm text-muted-foreground mb-8 flex items-center justify-center gap-2">
                   <Clock className="h-4 w-4" />
@@ -1178,7 +1327,7 @@ export default function PaymentSetupPage() {
             ) : (
               <div className="text-center">
                 <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h2 className="text-2xl font-semibold mb-2">Status: {getStatusBadge(selectedOrg?.fortisOnboarding?.appStatus)}</h2>
+                <h2 className="text-2xl font-semibold mb-2">Status: {getStatusBadge(appStatus)}</h2>
                 <p className="text-muted-foreground mb-6">
                   Please contact support if you need assistance.
                 </p>
@@ -1190,4 +1339,3 @@ export default function PaymentSetupPage() {
     </div>
   );
 }
-

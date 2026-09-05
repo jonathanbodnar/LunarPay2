@@ -3,12 +3,13 @@ import { prisma } from '@/lib/prisma';
 import { postWithRetry } from '@/lib/webhook';
 
 export type AgencyWebhookEvent =
+  | 'merchant.application_submitted'
   | 'merchant.approved'
   | 'merchant.denied'
   | 'checkout.session.completed';
 
 interface MerchantApprovalPayload {
-  event: 'merchant.approved' | 'merchant.denied';
+  event: 'merchant.application_submitted' | 'merchant.approved' | 'merchant.denied';
   merchant: {
     id: number;
     email: string;
@@ -167,6 +168,13 @@ export async function sendAgencyWebhook(
   }
 }
 
+const STATUS_EVENTS: Record<'ACTIVE' | 'DENIED' | 'PENDING_REVIEW', MerchantApprovalPayload['event']> = {
+  ACTIVE: 'merchant.approved',
+  DENIED: 'merchant.denied',
+  // The merchant (or agency) confirmed the MPA is signed; Fortis is underwriting.
+  PENDING_REVIEW: 'merchant.application_submitted',
+};
+
 /**
  * Look up the merchant's agency and fire the webhook if one is configured.
  * `userId` is the merchant's User.id.
@@ -174,7 +182,7 @@ export async function sendAgencyWebhook(
 export async function notifyAgencyOfStatusChange(
   userId: number,
   organizationId: number,
-  newStatus: 'ACTIVE' | 'DENIED',
+  newStatus: 'ACTIVE' | 'DENIED' | 'PENDING_REVIEW',
   previousStatus: string | null
 ): Promise<void> {
   try {
@@ -203,7 +211,7 @@ export async function notifyAgencyOfStatusChange(
     >`SELECT publishable_key, secret_key FROM users WHERE id = ${userId}`;
 
     const payload: AgencyWebhookPayload = {
-      event: newStatus === 'ACTIVE' ? 'merchant.approved' : 'merchant.denied',
+      event: STATUS_EVENTS[newStatus],
       merchant: {
         id: user.id,
         email: user.email,

@@ -60,6 +60,17 @@ if [ -n "$CHAT_FOLLOWUP_URL" ]; then
   echo "$body" | head -c 1000
 fi
 
+# Job 6: Sync Fortis onboarding status (webhook replay + approval detection)
+if [ -n "$ONBOARDING_STATUS_URL" ]; then
+  echo ""
+  echo "--- Syncing Fortis Onboarding Status ---"
+  response=$(curl -s -w "\n%{http_code}" "$ONBOARDING_STATUS_URL")
+  http_code=$(echo "$response" | tail -n1)
+  body=$(echo "$response" | sed '$d')
+  echo "Response (HTTP $http_code):"
+  echo "$body" | head -c 1000
+fi
+
 echo ""
 echo "=========================================="
 echo "Completed at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
