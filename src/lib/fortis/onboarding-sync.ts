@@ -968,14 +968,30 @@ export async function activateWithCredentials(
     };
   }
   if (org.fortisOnboarding.appStatus === 'ACTIVE') {
+    // Already live: this is a credential rotation (e.g. someone pressed
+    // "New Key" in the Fortis portal). Replace the credentials in place; no
+    // status change and no agency webhook.
+    const onboarding = org.fortisOnboarding;
+    await prisma.fortisOnboarding.update({
+      where: { id: onboarding.id },
+      data: {
+        authUserId: creds.authUserId,
+        authUserApiKey: creds.authUserApiKey,
+        locationId: creds.locationId ?? onboarding.locationId,
+        productTransactionId: creds.productTransactionId ?? onboarding.productTransactionId,
+        achProductTransactionId: creds.achProductTransactionId ?? onboarding.achProductTransactionId,
+        updatedAt: new Date(),
+      },
+    });
+    console.log(`[Onboarding Sync] Org ${organizationId}: credentials rotated on an ACTIVE record`);
     return {
       organizationId,
       previousStatus: 'ACTIVE',
       status: 'ACTIVE',
-      changed: false,
-      source: 'already_terminal',
-      message: 'Already ACTIVE',
-      locationId: org.fortisOnboarding.locationId,
+      changed: true,
+      source: 'manual_credentials',
+      message: 'Credentials replaced on an already ACTIVE record',
+      locationId: creds.locationId ?? onboarding.locationId,
       hasCredentials: true,
     };
   }
