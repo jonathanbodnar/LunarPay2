@@ -377,6 +377,20 @@ export async function POST(request: NextRequest) {
     // ────────────────────────────────────────────────────────────────────────
     // REGULAR FLOW: charge the card AND save it
     // ────────────────────────────────────────────────────────────────────────
+    // A regular checkout is a ticket sale; an account-vault id alone can't be
+    // charged here. Fail loudly instead of sending Fortis an empty ticket_id.
+    if (!ticketId) {
+      await logPaymentEvent({
+        eventType: 'payment.failed',
+        organizationId,
+        metadata: { type: 'checkout_session', referenceId: session.id, error: 'No ticket id for a non-trial checkout (got tokenizeId only)' },
+      });
+      return NextResponse.json(
+        { success: false, error: 'Payment could not be started. Please refresh the page and try again.' },
+        { status: 400 }
+      );
+    }
+
     const amountInCents = amount || Math.round(Number(session.amount) * 100);
     const result = isAch
       ? await fortisClient.processACHTicketSale({

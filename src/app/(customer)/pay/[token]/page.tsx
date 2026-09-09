@@ -224,23 +224,26 @@ export default function HostedCheckoutPage() {
     setPaymentError('');
 
     try {
-      // For tokenization flow (trials): Fortis fires tokenize_success with account_vault id.
-      // For ticket flow (regular): Fortis fires ticket_success with ticket id.
-      const ticketId =
+      // Fortis Elements reports both flows with the same envelope:
+      //   { "@type": "done", data: { "@action": "ticket" | "tokenize", id: "..." } }
+      // so `data.id` is the TICKET id on a regular (sale / ticket-intention)
+      // checkout and the ACCOUNT VAULT id on a trial (tokenization intention).
+      // Which one it is depends on which intention this page requested, not on
+      // the payload shape — treating `data.id` as a vault id on a regular
+      // checkout made the server charge with no ticket ("ticket_id" is required).
+      const trial = isTrialSubscription(session);
+      const explicitTicketId =
         fortisResponse?.ticket?.id ||
         fortisResponse?.ticket_id ||
         fortisResponse?.ticketId ||
         fortisResponse?.data?.ticket?.id ||
         fortisResponse?.data?.ticket_id;
+      const explicitVaultId =
+        fortisResponse?.account_vault_id || fortisResponse?.data?.account_vault_id;
+      const genericId = fortisResponse?.data?.id || fortisResponse?.id;
 
-      // Account vault ID from tokenization flow (trial subscriptions)
-      const tokenizeId =
-        !ticketId
-          ? (fortisResponse?.data?.id ||
-             fortisResponse?.id ||
-             fortisResponse?.account_vault_id ||
-             fortisResponse?.data?.account_vault_id)
-          : undefined;
+      const ticketId = explicitTicketId || (!trial ? genericId : undefined);
+      const tokenizeId = !ticketId ? (explicitVaultId || genericId) : undefined;
 
       // Fortis tells us which tab the customer used: 'cc' or 'ach'.
       const paymentMethod =
