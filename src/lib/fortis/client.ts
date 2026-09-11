@@ -838,7 +838,7 @@ export class FortisClient {
    */
   async getLocation(
     locationId: string,
-    options?: { expand?: string[] }
+    options?: { expand?: string[]; timeout?: number }
   ): Promise<{
     status: boolean;
     location?: {
@@ -860,7 +860,10 @@ export class FortisClient {
       if (options?.expand?.length) {
         params.expand = options.expand.join(',');
       }
-      const response = await this.client.get(`locations/${locationId}`, { params });
+      const response = await this.client.get(`locations/${locationId}`, {
+        params,
+        ...(options?.timeout ? { timeout: options.timeout } : {}),
+      });
       
       if (response.data?.data) {
         const loc = response.data.data;
@@ -951,6 +954,34 @@ export class FortisClient {
       }
 
       return { status: true, users };
+    } catch (error) {
+      return { status: false, message: this.formatError(error) };
+    }
+  }
+
+  /**
+   * 9. ISSUE A NEW API KEY FOR A USER
+   * POST /v1/users/{user_id}/api-key
+   *
+   * The office-level onboarding user may do this for any user under its
+   * hierarchy, including the api.* user Fortis provisions for a merchant on
+   * approval. This is the ONLY way to obtain a merchant's key in plain text
+   * outside the onboarding webhook. It rotates the key: whatever key existed
+   * before stops working the moment this returns, so the caller must persist
+   * the result immediately.
+   */
+  async createUserApiKey(userId: string): Promise<{
+    status: boolean;
+    apiKey?: string;
+    message?: string;
+  }> {
+    try {
+      const response = await this.client.post(`users/${userId}/api-key`, {}, { timeout: 15000 });
+      const key = response.data?.data?.user_api_key;
+      if (typeof key === 'string' && key.trim()) {
+        return { status: true, apiKey: key.trim() };
+      }
+      return { status: false, message: 'Fortis did not return a user_api_key' };
     } catch (error) {
       return { status: false, message: this.formatError(error) };
     }

@@ -82,6 +82,7 @@ export interface SyncResult {
     | 'not_submitted'
     | 'stored_webhook'
     | 'fortis_users'
+    | 'auto_provisioned'
     | 'manual_credentials'
     | 'no_change'
     | 'fortis_error';
@@ -367,7 +368,7 @@ async function loadOnboarding(organizationId: number) {
       legalName: true,
       email: true,
       fortisOnboarding: true,
-      user: { select: { email: true, agencyId: true } },
+      user: { select: { email: true, agencyId: true, agency: { select: { name: true } } } },
     },
   });
 }
@@ -384,24 +385,101 @@ async function activate(
   const onboarding = org.fortisOnboarding!;
   const previousStatus = onboarding.appStatus;
 
-  await prisma.fortisOnboarding.update({
-    where: { id: onboarding.id },
-    data: {
-      authUserId: creds.authUserId,
-      authUserApiKey: creds.authUserApiKey,
-      locationId: creds.locationId ?? onboarding.locationId,
-      productTransactionId: creds.productTransactionId ?? onboarding.productTransactionId,
-      achProductTransactionId: creds.achProductTransactionId ?? onboarding.achProductTransactionId,
-      appStatus: 'ACTIVE',
-      ...(processorResponse ? { processorResponse } : {}),
-      updatedAt: new Date(),
-    },
+  const data = {
+    authUserId: creds.authUserId,
+    authUserApiKey: creds.authUserApiKey,
+    locationId: creds.locationId ?? onboarding.locationId,
+    productTransactionId: creds.productTransactionId ?? onboarding.productTransactionId,
+    achProductTransactionId: creds.achProductTransactionId ?? onboarding.achProductTransactionId,
+    ...(processorResponse ? { processorResponse } : {}),
+    updatedAt: new Date(),
+  };
+
+  // Who may write the key column?
+  //  - a run that just minted, or an operator pasting a key from the Fortis
+  //    portal: theirs is by definition the newest key → unconditional;
+  //  - a webhook replay: only when the column holds nothing or this very key
+  //    (any other real key was minted after the webhook's key was issued; a
+  //    claim token means a mint is in flight and this key may be dead).
+  const keyIsNewest = source === 'auto_provisioned' || source === 'manual_credentials';
+  const keyIsReplaceable = keyIsNewest
+    ? {}
+    : { OR: [{ authUserApiKey: null }, { authUserApiKey: creds.authUserApiKey }] };
+  const noClaimInFlight = { NOT: { authUserApiKey: { startsWith: PROVISIONING_CLAIM_PREFIX } } };
+  const { authUserId, authUserApiKey, ...nonCredentialData } = data;
+
+  // 1. Flip to ACTIVE with our credentials, if the row is still open and the
+  //    key is ours to write.
+  let flipped = await prisma.fortisOnboarding.updateMany({
+    where: { id: onboarding.id, appStatus: { notIn: ['ACTIVE', 'DENIED'] }, ...keyIsReplaceable },
+    data: { ...data, appStatus: 'ACTIVE' },
   });
+  // 2. Otherwise flip around a newer REAL key, if the row is still open.
+  if (flipped.count === 0) {
+    flipped = await prisma.fortisOnboarding.updateMany({
+      where: { id: onboarding.id, appStatus: { notIn: ['ACTIVE', 'DENIED'] }, ...noClaimInFlight },
+      data: { ...nonCredentialData, appStatus: 'ACTIVE' },
+    });
+  }
+  // 3. Nothing flipped: the row is terminal, or a mint is in flight. Never
+  //    regress, never notify twice.
+  if (flipped.count === 0) {
+    const fresh = await prisma.fortisOnboarding.findUnique({
+      where: { id: onboarding.id },
+      select: { appStatus: true, authUserApiKey: true },
+    });
+    if (fresh && fresh.appStatus !== 'ACTIVE' && fresh.appStatus !== 'DENIED') {
+      // A claim landed between our read and our write: record what we know
+      // and let the minting run finish.
+      await prisma.fortisOnboarding.updateMany({
+        where: { id: onboarding.id, appStatus: { notIn: ['ACTIVE', 'DENIED'] } },
+        data: nonCredentialData,
+      });
+      console.log(`[Onboarding Sync] Org ${org.id}: key mint in flight; ${source} recorded details only`);
+      return {
+        organizationId: org.id,
+        previousStatus,
+        status: fresh.appStatus,
+        changed: false,
+        source,
+        message: 'Approved at Fortis; finishing activation',
+        locationId: data.locationId,
+        hasCredentials: false,
+      };
+    }
+    if (fresh?.appStatus === 'DENIED') {
+      console.warn(`[Onboarding Sync] Org ${org.id} is DENIED; ignoring ${source} credentials`);
+      return {
+        organizationId: org.id,
+        previousStatus: 'DENIED',
+        status: 'DENIED',
+        changed: false,
+        source,
+        message: 'Application was declined; credentials ignored',
+      };
+    }
+    await prisma.fortisOnboarding.updateMany({
+      where: { id: onboarding.id, ...keyIsReplaceable },
+      data: { authUserId, authUserApiKey, updatedAt: data.updatedAt },
+    });
+    await prisma.fortisOnboarding.update({ where: { id: onboarding.id }, data: nonCredentialData });
+    console.log(`[Onboarding Sync] Org ${org.id} was already ACTIVE; refreshed via ${source}`);
+    return {
+      organizationId: org.id,
+      previousStatus: 'ACTIVE',
+      status: 'ACTIVE',
+      changed: false,
+      source,
+      message: 'Already ACTIVE; credentials refreshed',
+      locationId: data.locationId,
+      hasCredentials: true,
+    };
+  }
 
   console.log(`[Onboarding Sync] Org ${org.id} → ACTIVE via ${source}`);
 
-  // The approval signal agencies depend on. Deferred (or awaited by the cron)
-  // so the retry backoff survives the caller's response.
+  // The approval signal agencies depend on. Deferred (or awaited) so the retry
+  // backoff survives the caller's response.
   await deliverAgencyNotification(notify, () =>
     notifyAgencyOfStatusChange(org.userId, org.id, 'ACTIVE', previousStatus)
   );
@@ -413,7 +491,7 @@ async function activate(
     changed: true,
     source,
     message: 'Merchant credentials applied; status is ACTIVE',
-    locationId: creds.locationId ?? onboarding.locationId,
+    locationId: data.locationId,
     hasCredentials: true,
   };
 }
@@ -476,12 +554,37 @@ async function replayStoredWebhook(org: LoadedOrg, notify: NotifyMode): Promise<
       return deny(org, 'stored_webhook', notify, row.eventJson);
     }
     if (creds.userId && creds.userApiKey) {
+      // A real key already on file was minted by us AFTER this webhook's key
+      // was issued, which invalidated the webhook's key. Keep ours; take the
+      // location/products from the webhook and finish activation.
+      const stored = org.fortisOnboarding!;
+      // A claim token means a mint is in flight (or died mid-way, in which
+      // case it is re-minted within minutes) and this webhook's key may be
+      // dead: mirror the live handler — record the location/products only.
+      if (stored.authUserApiKey && stored.authUserApiKey.startsWith(PROVISIONING_CLAIM_PREFIX)) {
+        await prisma.fortisOnboarding.updateMany({
+          where: { id: stored.id, appStatus: { notIn: ['ACTIVE', 'DENIED'] } },
+          data: {
+            locationId: creds.locationId ?? stored.locationId,
+            productTransactionId: creds.ccProductTransactionId || creds.achProductTransactionId || stored.productTransactionId,
+            achProductTransactionId: creds.achProductTransactionId ?? stored.achProductTransactionId,
+            updatedAt: new Date(),
+          },
+        });
+        return null;
+      }
+      // A stored key for the SAME user is newer than the webhook's (minting
+      // invalidated the webhook's). A stored key for another user is worthless.
+      const keepStored =
+        isRealApiKey(stored.authUserApiKey) &&
+        stored.authUserId === creds.userId &&
+        stored.authUserApiKey !== creds.userApiKey;
       return activate(
         org,
         {
-          authUserId: creds.userId,
-          authUserApiKey: creds.userApiKey,
-          locationId: creds.locationId,
+          authUserId: keepStored ? stored.authUserId || creds.userId : creds.userId,
+          authUserApiKey: keepStored ? (stored.authUserApiKey as string) : creds.userApiKey,
+          locationId: creds.locationId ?? stored.locationId,
           productTransactionId: creds.ccProductTransactionId || creds.achProductTransactionId,
           achProductTransactionId: creds.achProductTransactionId,
         },
@@ -516,22 +619,310 @@ async function domainSharedWithOtherRecords(domain: string, org: LoadedOrg): Pro
 }
 
 /**
- * 2. Detect approval through GET /v1/users.
+ * Self-provisioning: when Fortis's approval webhook does not deliver the
+ * merchant's credentials, mint them ourselves.
  *
- * Only a name+domain match is allowed to change the record. A domain-only
- * match (private domain, unique in our database, but the legal name on the
- * Fortis user doesn't line up) is reported to ops as a hint and NOT written —
- * mis-assigning another merchant's location is far worse than a delayed
- * approval, which the webhook resolves anyway.
+ * Disabled by setting ONBOARDING_AUTO_PROVISION=false once Fortis has
+ * registered the postback for every agent. The toggle gates only the MINT: a
+ * record that already holds a minted key always finishes activation.
+ */
+function autoProvisionEnabled(): boolean {
+  const raw = (process.env.ONBOARDING_AUTO_PROVISION || '').trim().toLowerCase();
+  return !(raw === 'false' || raw === '0' || raw === 'off' || raw === 'no');
+}
+
+/**
+ * How long after Fortis provisions the api.* user we give the approval webhook
+ * before rotating the key ourselves. Fortis posts at approval time and retries
+ * for a few minutes; a postback that has not arrived after this is not coming.
+ */
+const WEBHOOK_GRACE_MS = 10 * 60 * 1000;
+
+/**
+ * While a run is minting, the key column holds a claim token instead of a
+ * key, so no second run can mint concurrently. A claim older than this is
+ * assumed to belong to a run that died and may be taken over.
+ */
+export const PROVISIONING_CLAIM_PREFIX = 'PROVISIONING:';
+const CLAIM_STALE_MS = 5 * 60 * 1000;
+
+/** A usable Fortis API key on file (not empty, not an in-flight claim). */
+export function isRealApiKey(key: string | null | undefined): key is string {
+  return !!key && !key.startsWith(PROVISIONING_CLAIM_PREFIX);
+}
+
+/** Each provisioning is mint + location read + activation + agency webhook; cap per cron run. */
+const MAX_PROVISIONS_PER_RUN = 3;
+
+export interface ProvisionBudget {
+  remaining: number;
+}
+
+/** Is this Fortis user a valid API identity for the given location? */
+function isUsableApiUser(u: FortisUserRecord | undefined, locationId: string): u is FortisUserRecord {
+  if (!u) return false;
+  if (u.statusCode !== null && u.statusCode !== 1) return false;
+  if (/^DELETE-/i.test(u.username)) return false;
+  if (!u.username.toLowerCase().startsWith('api.')) return false;
+  return u.primaryLocationId === locationId;
+}
+
+function approvedResult(
+  org: LoadedOrg,
+  previousStatus: string | null,
+  locationId: string,
+  message: string,
+  extra: Partial<SyncResult> = {}
+): SyncResult {
+  return {
+    organizationId: org.id,
+    previousStatus,
+    status: 'APPROVED',
+    changed: previousStatus !== 'APPROVED',
+    source: 'fortis_users',
+    message,
+    locationId,
+    hasCredentials: isRealApiKey(org.fortisOnboarding?.authUserApiKey),
+    ...extra,
+  };
+}
+
+/**
+ * Mint the merchant's API key, read the location's products, and activate.
+ *
+ * Ordering is the whole point:
+ *   1. CLAIM the row atomically (conditional update that only succeeds when no
+ *      key and no live claim is on it), so two overlapping runs cannot both
+ *      mint — the second mint would silently kill the first key.
+ *   2. POST /v1/users/{id}/api-key rotates the key — the previous one (the one
+ *      a late webhook would carry) is dead from this moment.
+ *   3. The new key is persisted IMMEDIATELY and unconditionally (it is the only
+ *      valid key now), without ever lowering an ACTIVE status.
+ *   4. Products are read with the merchant's own credentials (the office user
+ *      is 403 on /v1/locations), then the record goes ACTIVE and the agency is
+ *      told — unless another path already activated it, in which case only the
+ *      credentials are refreshed and no second merchant.approved is sent.
+ *      If the location read fails the record stays APPROVED with the key
+ *      stored and the next run resumes from step 4 without minting again.
+ *
+ * Mutual exclusion with the webhook path (see webhook-handler.ts and
+ * replayStoredWebhook): a real key on file always wins over the key in a
+ * webhook, because any key we hold was minted after the webhook's key was
+ * issued and therefore invalidated it.
+ */
+async function provisionCredentials(
+  org: LoadedOrg,
+  apiUser: FortisUserRecord,
+  locationId: string,
+  notify: NotifyMode,
+  opts: { budget?: ProvisionBudget; alertOnFailure?: boolean }
+): Promise<SyncResult> {
+  const onboarding = org.fortisOnboarding!;
+  const statusBefore = onboarding.appStatus;
+  const apiUserId = apiUser.id;
+
+  const fail = async (detail: string, message: string = FORTIS_UNAVAILABLE_MESSAGE): Promise<SyncResult> => {
+    console.error(`[Onboarding Sync] Org ${org.id}: provisioning failed — ${detail}`);
+    // Alert once per distinct failure, not on every 15-minute retry.
+    if (opts.alertOnFailure && lastProvisionFailure.get(org.id) !== detail) {
+      lastProvisionFailure.set(org.id, detail);
+      await sendOpsAlert(org, { mode: 'provision_failed', user: apiUser, locationId, detail });
+    }
+    return approvedResult(org, statusBefore, locationId, message, {
+      source: 'fortis_error',
+      detail,
+      hasCredentials: isRealApiKey(apiKey),
+    });
+  };
+
+  // Step 1–3: mint, unless a previous run already stored a key for this user.
+  let mintedThisRun = false;
+  let apiKey: string | null =
+    isRealApiKey(onboarding.authUserApiKey) && onboarding.authUserId === apiUserId
+      ? onboarding.authUserApiKey
+      : null;
+
+  if (!apiKey) {
+    if (!autoProvisionEnabled()) {
+      return approvedResult(org, statusBefore, locationId, 'Approved at Fortis; waiting for the credentials webhook (self-provisioning is off)');
+    }
+    if (opts.budget && opts.budget.remaining <= 0) {
+      return approvedResult(org, statusBefore, locationId, 'Approved at Fortis; provisioning deferred to the next run (per-run cap reached)');
+    }
+
+    const now = new Date();
+    const claimToken = `${PROVISIONING_CLAIM_PREFIX}${now.getTime()}`;
+
+    // What may we overwrite? An empty column; a claim whose own timestamp says
+    // the run that made it died (never judged by updatedAt, which unrelated
+    // writers bump); or a real key that belongs to a different, now-invalid
+    // user id. Matching the exact current value keeps the claim atomic.
+    const current = onboarding.authUserApiKey;
+    let replaceable: string | null = null;
+    if (current && current.startsWith(PROVISIONING_CLAIM_PREFIX)) {
+      const stamped = Number(current.slice(PROVISIONING_CLAIM_PREFIX.length));
+      if (!Number.isFinite(stamped) || now.getTime() - stamped > CLAIM_STALE_MS) replaceable = current;
+    } else if (isRealApiKey(current) && onboarding.authUserId !== apiUserId) {
+      replaceable = current;
+    }
+
+    const claimed = await prisma.fortisOnboarding.updateMany({
+      where: {
+        id: onboarding.id,
+        appStatus: { notIn: ['ACTIVE', 'DENIED'] },
+        OR: [{ authUserApiKey: null }, ...(replaceable ? [{ authUserApiKey: replaceable }] : [])],
+      },
+      data: {
+        authUserApiKey: claimToken,
+        authUserId: apiUserId,
+        locationId,
+        appStatus: 'APPROVED',
+        updatedAt: now,
+      },
+    });
+    if (claimed.count === 0) {
+      return approvedResult(org, statusBefore, locationId, 'Approved at Fortis; another run is finishing provisioning');
+    }
+    if (opts.budget) opts.budget.remaining -= 1;
+
+    // The claim is deliberately NOT released on failure: a timed-out mint may
+    // still have rotated the key at Fortis, so any key a webhook delivers from
+    // here on may be dead. The stale-claim takeover re-mints on a later run.
+    let officeClient: FortisClient;
+    try {
+      officeClient = createFortisClient();
+    } catch (err) {
+      return fail(`Fortis client unavailable: ${(err as Error).message}`);
+    }
+
+    const minted = await officeClient.createUserApiKey(apiUserId);
+    if (!minted.status || !minted.apiKey) {
+      return fail(`could not mint an API key for user ${apiUser.username}: ${minted.message || 'unknown error'}`);
+    }
+    apiKey = minted.apiKey;
+    mintedThisRun = true;
+
+    // The minted key is now the only valid one: persist it with ONE
+    // unconditional write, whatever landed on the row meanwhile. The status
+    // bump is separate and never lowers a terminal status.
+    await prisma.fortisOnboarding.update({
+      where: { id: onboarding.id },
+      data: { authUserId: apiUserId, authUserApiKey: apiKey, updatedAt: new Date() },
+    });
+    await prisma.fortisOnboarding.updateMany({
+      where: { id: onboarding.id, appStatus: { notIn: ['ACTIVE', 'DENIED'] } },
+      data: { appStatus: 'APPROVED', locationId, updatedAt: new Date() },
+    });
+    console.warn(
+      `[Onboarding Sync] Org ${org.id}: minted a new Fortis API key for ${apiUser.username} (the approval webhook never delivered one)`
+    );
+  }
+
+  // Step 4: products, then activate.
+  let merchantClient: FortisClient;
+  try {
+    merchantClient = createFortisClient(undefined, apiUserId, apiKey);
+  } catch (err) {
+    return fail(`merchant client unavailable: ${(err as Error).message}`);
+  }
+  const location = await merchantClient.getLocation(locationId, {
+    expand: ['product_transactions'],
+    timeout: 15000,
+  });
+  if (!location.status || !location.location) {
+    return fail(`key stored, but reading location ${locationId} with it failed: ${location.message || 'unknown error'}`);
+  }
+
+  let cc: string | null = null;
+  let ach: string | null = null;
+  for (const pt of location.location.product_transactions || []) {
+    if (!pt?.id) continue;
+    if (pt.active !== undefined && pt.active !== 1 && pt.active !== true) continue;
+    const method = String(pt.payment_method || '').toLowerCase();
+    if (method === 'cc' && !cc) cc = pt.id;
+    if (method === 'ach' && !ach) ach = pt.id;
+  }
+  if (!cc && !ach) {
+    return fail(
+      `location ${locationId} has no active card or ACH product yet`,
+      'Approved at Fortis; the merchant account is still being set up'
+    );
+  }
+
+  const result = await activate(
+    org,
+    {
+      authUserId: apiUserId,
+      authUserApiKey: apiKey,
+      locationId,
+      productTransactionId: cc || ach,
+      achProductTransactionId: ach,
+    },
+    'auto_provisioned',
+    notify
+  );
+
+  // The mint itself is the evidence that the webhook never came — alert on it
+  // even if another run happened to perform the final flip.
+  if (mintedThisRun && result.status === 'ACTIVE') {
+    lastProvisionFailure.delete(org.id);
+    await sendOpsAlert(org, { mode: 'auto_activated', user: apiUser, locationId });
+  }
+
+  return {
+    ...result,
+    message:
+      mintedThisRun && result.changed
+        ? 'Approved at Fortis; credentials minted automatically because no webhook arrived — merchant is ACTIVE'
+        : result.message,
+  };
+}
+
+/**
+ * 2. Detect approval through GET /v1/users, then self-provision.
+ *
+ * Only a name+domain match on the api.* user is allowed to change the record.
+ * A domain-only match (private domain, unique in our database, but the legal
+ * name on the Fortis user doesn't line up) is reported to ops as a hint and
+ * NOT written — mis-assigning another merchant's location is far worse than a
+ * delayed approval.
  */
 async function detectApprovalViaUsers(
   org: LoadedOrg,
   users: FortisUserRecord[],
-  knownLocationIds: Set<string>
+  knownLocationIds: Set<string>,
+  notify: NotifyMode,
+  opts: { budget?: ProvisionBudget; alertOnFailure?: boolean }
 ): Promise<SyncResult | null> {
   const onboarding = org.fortisOnboarding!;
+
+  // Resume: the location was detected on a previous run. Never trust the
+  // stored user id blindly — find a usable api.* user on that location in the
+  // live list (the stored one if it still qualifies, else whatever Fortis has
+  // now), then finish provisioning once the webhook's grace period has passed.
+  // No re-detection and no re-alerting for a location we already know.
   if (onboarding.appStatus === 'APPROVED' && onboarding.locationId) {
-    return null; // already detected; still waiting for the webhook
+    const locationId = onboarding.locationId;
+    const stored = users.find((u) => u.id === onboarding.authUserId);
+    const apiUser = isUsableApiUser(stored, locationId) ? stored : users.find((u) => isUsableApiUser(u, locationId));
+    if (!apiUser) return null; // Fortis has not (re)created the api.* user yet; wait.
+
+    const sameUser = apiUser.id === onboarding.authUserId;
+    const hasKey = sameUser && isRealApiKey(onboarding.authUserApiKey);
+    const provisionedAt = apiUser.createdTs ? apiUser.createdTs * 1000 : onboarding.updatedAt?.getTime() ?? 0;
+    if (!hasKey && Date.now() - provisionedAt < WEBHOOK_GRACE_MS) return null;
+
+    if (!sameUser && isRealApiKey(onboarding.authUserApiKey)) {
+      // The user we minted for is gone; that key is worthless. Drop it so the
+      // claim can proceed for the replacement user. Conditional on the exact
+      // value so a concurrent mint is never clobbered.
+      await prisma.fortisOnboarding.updateMany({
+        where: { id: onboarding.id, authUserApiKey: onboarding.authUserApiKey, appStatus: { notIn: ['ACTIVE', 'DENIED'] } },
+        data: { authUserApiKey: null, authUserId: apiUser.id, updatedAt: new Date() },
+      });
+      org = { ...org, fortisOnboarding: { ...onboarding, authUserApiKey: null, authUserId: apiUser.id } };
+    }
+    return provisionCredentials(org, apiUser, locationId, notify, opts);
   }
 
   const emails = [onboarding.email, org.email, org.user?.email];
@@ -556,78 +947,148 @@ async function detectApprovalViaUsers(
     console.warn(
       `[Onboarding Sync] Org ${org.id}: possible approval at Fortis (user ${match.user.username}, location ${match.locationId}, match=${match.confidence}) — not applied, needs a human look`
     );
-    await sendOpsAlert(org, match);
+    await sendOpsAlert(org, { mode: 'hint', user: match.user, locationId: match.locationId });
     return null;
   }
 
+  // Prefer the api.* user on that location even if the matcher surfaced admin.*
+  const apiUser = isUsableApiUser(match.user, match.locationId)
+    ? match.user
+    : users.find((u) => isUsableApiUser(u, match.locationId));
+
   const previousStatus = onboarding.appStatus;
-  await prisma.fortisOnboarding.update({
-    where: { id: onboarding.id },
+  // Only an api.* identity is ever stored as the merchant's API user, and a
+  // key on file for some other user is worthless — drop it with the same write.
+  const keepKey = !!apiUser && apiUser.id === onboarding.authUserId && isRealApiKey(onboarding.authUserApiKey);
+  const detected = await prisma.fortisOnboarding.updateMany({
+    // Conditional: a webhook may have activated (or Fortis declined) this row
+    // while we were talking to Fortis. Never lower a terminal status.
+    where: { id: onboarding.id, appStatus: { notIn: ['ACTIVE', 'DENIED'] } },
     data: {
       appStatus: 'APPROVED',
       locationId: match.locationId,
-      authUserId: match.user.id,
+      authUserId: apiUser ? apiUser.id : null,
       updatedAt: new Date(),
     },
   });
+  knownLocationIds.add(match.locationId);
+  if (detected.count === 0) return null; // became terminal meanwhile; nothing for us to do
+
+  // A real key we saw that belongs to some other user is worthless — drop it,
+  // but only if it is still exactly the value we saw (never a live claim or a
+  // key another run minted since).
+  if (!keepKey && isRealApiKey(onboarding.authUserApiKey)) {
+    await prisma.fortisOnboarding.updateMany({
+      where: { id: onboarding.id, authUserApiKey: onboarding.authUserApiKey, appStatus: { notIn: ['ACTIVE', 'DENIED'] } },
+      data: { authUserApiKey: null, updatedAt: new Date() },
+    });
+  }
 
   console.warn(
-    `[Onboarding Sync] Org ${org.id} approved at Fortis (user ${match.user.username}, location ${match.locationId}, match=${match.confidence}) but no credentials webhook has arrived`
+    `[Onboarding Sync] Org ${org.id} approved at Fortis (user ${match.user.username}, location ${match.locationId}) but no credentials webhook has arrived`
   );
 
-  await sendOpsAlert(org, match);
+  if (!apiUser) {
+    await sendOpsAlert(org, { mode: 'detected', user: match.user, locationId: match.locationId, detail: 'No active api.* user exists on this location yet, so nothing can be minted.' });
+    return approvedResult(org, previousStatus, match.locationId, `Fortis provisioned location ${match.locationId}; no API user to mint a key for yet`);
+  }
 
-  return {
-    organizationId: org.id,
-    previousStatus,
-    status: 'APPROVED',
-    changed: true,
-    source: 'fortis_users',
-    message: `Fortis provisioned location ${match.locationId} (API user ${match.user.username}); awaiting credentials webhook`,
-    locationId: match.locationId,
-    hasCredentials: false,
+  const provisionedAt = apiUser.createdTs ? apiUser.createdTs * 1000 : Date.now();
+  const graceOver = Date.now() - provisionedAt >= WEBHOOK_GRACE_MS;
+  if (!autoProvisionEnabled() || !graceOver) {
+    await sendOpsAlert(org, { mode: 'detected', user: apiUser, locationId: match.locationId });
+    return approvedResult(org, previousStatus, match.locationId, `Fortis provisioned location ${match.locationId} (API user ${apiUser.username}); awaiting credentials webhook`);
+  }
+
+  const org2: LoadedOrg = {
+    ...org,
+    fortisOnboarding: {
+      ...onboarding,
+      appStatus: 'APPROVED',
+      locationId: match.locationId,
+      authUserId: apiUser.id,
+      authUserApiKey: keepKey ? onboarding.authUserApiKey : null,
+    },
   };
+  const provisioned = await provisionCredentials(org2, apiUser, match.locationId, notify, opts);
+  return { ...provisioned, previousStatus, changed: provisioned.changed || previousStatus !== provisioned.status };
 }
 
-async function sendOpsAlert(org: LoadedOrg, match: ApprovalMatch): Promise<void> {
+interface OpsAlert {
+  mode: 'detected' | 'hint' | 'auto_activated' | 'provision_failed';
+  user: FortisUserRecord;
+  locationId: string;
+  detail?: string;
+}
+
+async function sendOpsAlert(org: LoadedOrg, alert: OpsAlert): Promise<void> {
   const to = process.env.ADMIN_EMAIL || process.env.ONBOARDING_ALERT_EMAIL;
   if (!to) return;
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://app.lunarpay.com';
-    const confirmed = match.confidence === 'name+domain';
-    const headline = confirmed
-      ? `Fortis has provisioned a merchant account for organization ${org.id} (${org.name}); the record is now APPROVED.`
-      : `A Fortis user on organization ${org.id} (${org.name})'s email domain appeared, but its name does not match the legal/DBA name, so NOTHING was written. Please verify in the Fortis portal that this location really belongs to this merchant.`;
-    const curl = `curl -X POST "${appUrl}/api/admin/recover-status?admin_key=$CRON_ADMIN_KEY" -H "Content-Type: application/json" -d '{"organizationId": ${org.id}, "authUserId": "${match.user.id}", "locationId": "${match.locationId}", "authUserApiKey": "<key from the Fortis portal>"}'`;
+    const agent = org.user?.agency?.name ? `the "${org.user.agency.name}" agent` : 'this agent';
+    const who = `organization ${org.id} (${org.name})`;
+    const postback = `${appUrl}/fortiswebhooks/merchant_account_status_listener`;
+    const curl = `curl -X POST "${appUrl}/api/admin/recover-status?admin_key=$CRON_ADMIN_KEY" -H "Content-Type: application/json" -d '{"organizationId": ${org.id}, "authUserId": "${alert.user.id}", "locationId": "${alert.locationId}", "authUserApiKey": "<key from the Fortis portal>"}'`;
+
+    let subject: string;
+    let lines: string[];
+    switch (alert.mode) {
+      case 'auto_activated':
+        subject = `[LunarPay] ${org.name} (org ${org.id}) activated automatically — Fortis webhook still missing for ${agent}`;
+        lines = [
+          `Fortis approved ${who} but never sent the approval webhook. LunarPay minted the merchant's API key itself; the record is ACTIVE and the merchant can process.`,
+          '',
+          'Nothing to do for this merchant. Do NOT press "New Key" on this user in the Fortis portal — that would invalidate the key LunarPay stored.',
+          '',
+          `Still open: ask Fortis to register the onboarding postback for ${agent} at ${postback}, so future merchants activate without minting.`,
+        ];
+        break;
+      case 'provision_failed':
+        subject = `[LunarPay] ${org.name} (org ${org.id}) approved at Fortis but automatic activation failed`;
+        lines = [
+          `Fortis approved ${who}; the approval webhook never arrived and LunarPay could not finish activating it automatically.`,
+          `Reason: ${alert.detail || 'unknown'}`,
+          '',
+          'The reconciliation will retry every 15 minutes. If it keeps failing, finish it by hand from the Fortis portal',
+          '(auth: ?admin_key=$CRON_ADMIN_KEY or Authorization: Bearer $CRON_SECRET):',
+          curl,
+          '',
+          `And ask Fortis to register the onboarding postback for ${agent} at ${postback}.`,
+        ];
+        break;
+      case 'hint':
+        subject = `[LunarPay] Possible Fortis approval for ${org.name} (org ${org.id}) — needs a human look`;
+        lines = [
+          `A Fortis user on ${who}'s email domain appeared, but its name does not match the legal/DBA name, so NOTHING was written. Verify in the Fortis portal that this location really belongs to this merchant before completing it by hand:`,
+          curl,
+        ];
+        break;
+      default:
+        subject = `[LunarPay] Fortis approved ${org.name} (org ${org.id}) but no credentials webhook arrived`;
+        lines = [
+          `Fortis has provisioned a merchant account for ${who}; the record is APPROVED and the merchant cannot process yet.`,
+          alert.detail ? alert.detail : 'LunarPay will mint the credentials itself on its next run if the webhook still has not arrived.',
+          '',
+          `Ask Fortis to register the onboarding postback for ${agent} at ${postback} and to resend the approval for client_app_id ${org.id}.`,
+          'To finish by hand instead (auth: ?admin_key=$CRON_ADMIN_KEY or Authorization: Bearer $CRON_SECRET):',
+          curl,
+        ];
+    }
+
+    const facts = [
+      `Fortis API user: ${alert.user.username} (${alert.user.id})`,
+      `Fortis location: ${alert.locationId}`,
+    ];
+
     await sendEmail({
       to,
-      subject: confirmed
-        ? `[LunarPay] Fortis approved org ${org.id} (${org.name}) but no credentials webhook arrived`
-        : `[LunarPay] Possible Fortis approval for org ${org.id} (${org.name}) — needs a human look`,
+      subject,
       category: 'transactional',
-      text: [
-        headline,
-        `Fortis API user: ${match.user.username} (${match.user.id})`,
-        `Fortis location: ${match.locationId}`,
-        `Match confidence: ${match.confidence}`,
-        '',
-        'The onboarding webhook that carries the user_api_key has not reached LunarPay,',
-        'so the merchant cannot process yet.',
-        '',
-        'Fix: confirm the onboarding postback URL for this agent/template in the Fortis portal',
-        `(${appUrl}/fortiswebhooks/merchant_account_status_listener) and ask Fortis to resend it,`,
-        "or copy the API user's key from the Fortis portal and complete the record manually",
-        '(auth: ?admin_key=$CRON_ADMIN_KEY or Authorization: Bearer $CRON_SECRET):',
-        curl,
-      ].join('\n'),
+      text: [...lines, '', ...facts].join('\n'),
       html: [
-        `<p>${escapeHtml(headline)}</p>`,
-        `<ul><li>Fortis API user: <code>${escapeHtml(match.user.username)}</code> (${match.user.id})</li>`,
-        `<li>Fortis location: <code>${match.locationId}</code></li>`,
-        `<li>Match confidence: ${match.confidence}</li></ul>`,
-        `<p>The onboarding webhook that carries the <code>user_api_key</code> has not reached LunarPay, so the merchant cannot process yet.</p>`,
-        `<p>Fix: confirm the onboarding postback URL for this agent/template in the Fortis portal (<code>${appUrl}/fortiswebhooks/merchant_account_status_listener</code>) and ask Fortis to resend it, or copy the API user's key from the Fortis portal and complete the record manually (auth: <code>?admin_key=$CRON_ADMIN_KEY</code> or <code>Authorization: Bearer $CRON_SECRET</code>):</p>`,
-        `<pre>${escapeHtml(curl)}</pre>`,
+        ...lines.filter(Boolean).map((l) => (l.startsWith('curl ') ? `<pre>${escapeHtml(l)}</pre>` : `<p>${escapeHtml(l)}</p>`)),
+        `<ul>${facts.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}</ul>`,
       ].join(''),
     });
   } catch (err) {
@@ -678,13 +1139,20 @@ export interface SyncOptions {
   /**
    * How to deliver the agency webhook on a status change. 'after' (default)
    * hands it to next/server's after() so the request can respond while the
-   * retry backoff runs; the cron passes 'await'.
+   * retry backoff runs.
    */
   notify?: NotifyMode;
+  /** Shared across a cron run: how many self-provisionings may still happen. */
+  provisionBudget?: ProvisionBudget;
+  /** Email ops when self-provisioning fails (the cron sets this; request paths don't). */
+  alertOnFailure?: boolean;
 }
 
 /** Per-instance memory of the last Fortis users lookup per organization. */
 const lastFortisCheckAt = new Map<number, number>();
+
+/** Per-instance memory of the last provisioning failure detail per organization (alert dedupe). */
+const lastProvisionFailure = new Map<number, string>();
 
 const FORTIS_UNAVAILABLE_MESSAGE = 'Could not reach Fortis right now. Please try again in a few minutes.';
 
@@ -733,7 +1201,7 @@ export async function syncOnboardingStatus(
       source: 'already_terminal',
       message: `Already ${status}`,
       locationId: onboarding.locationId,
-      hasCredentials: !!onboarding.authUserApiKey,
+      hasCredentials: isRealApiKey(onboarding.authUserApiKey),
     };
   }
 
@@ -771,10 +1239,10 @@ export async function syncOnboardingStatus(
         source: 'no_change',
         message:
           status === 'APPROVED'
-            ? 'Approved at Fortis; still waiting for the credentials webhook'
+            ? (isRealApiKey(onboarding.authUserApiKey) ? 'Approved at Fortis; finishing activation' : 'Approved at Fortis; still waiting for the credentials webhook')
             : 'Checked with Fortis a moment ago — no update yet',
         locationId: onboarding.locationId,
-        hasCredentials: !!onboarding.authUserApiKey,
+        hasCredentials: isRealApiKey(onboarding.authUserApiKey),
       };
     }
 
@@ -793,7 +1261,10 @@ export async function syncOnboardingStatus(
   }
 
   const known = opts.knownLocationIds || (await knownMerchantLocationIds(organizationId));
-  const approved = await detectApprovalViaUsers(org, users, known);
+  const approved = await detectApprovalViaUsers(org, users, known, notify, {
+    budget: opts.provisionBudget,
+    alertOnFailure: opts.alertOnFailure,
+  });
   if (approved) return approved;
 
   return {
@@ -804,10 +1275,10 @@ export async function syncOnboardingStatus(
     source: 'no_change',
     message:
       status === 'APPROVED'
-        ? 'Approved at Fortis; still waiting for the credentials webhook'
+        ? (isRealApiKey(onboarding.authUserApiKey) ? 'Approved at Fortis; finishing activation' : 'Approved at Fortis; still waiting for the credentials webhook')
         : 'No approval visible at Fortis yet',
     locationId: onboarding.locationId,
-    hasCredentials: !!onboarding.authUserApiKey,
+    hasCredentials: isRealApiKey(onboarding.authUserApiKey),
   };
 }
 
@@ -861,6 +1332,7 @@ export async function syncAllPendingOnboardings(opts: {
   if (usersUnavailable) console.error('[Onboarding Sync]', usersUnavailable);
 
   const known = await knownMerchantLocationIds();
+  const provisionBudget: ProvisionBudget = { remaining: MAX_PROVISIONS_PER_RUN };
 
   for (const row of pending) {
     try {
@@ -868,7 +1340,10 @@ export async function syncAllPendingOnboardings(opts: {
         users,
         usersUnavailable,
         knownLocationIds: known,
-        notify: 'await',
+        // after(): agency delivery retries must not eat the function's time budget.
+        notify: 'after',
+        provisionBudget,
+        alertOnFailure: true,
       });
       results.push(result);
       if (result.locationId) known.add(result.locationId);

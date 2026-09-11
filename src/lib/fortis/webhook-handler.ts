@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { FortisWebhookPayload } from '@/types/fortis';
 import { logWebhookReceived, logPaymentStatusUpdated } from '@/lib/payment-logger';
 import { notifyAgencyOfStatusChange } from '@/lib/agency-webhook';
+import { PROVISIONING_CLAIM_PREFIX } from '@/lib/fortis/onboarding-sync';
 
 /**
  * Route an incoming Fortis webhook to the correct handler.
@@ -116,8 +117,9 @@ async function handleMerchantOnboardingWebhook(payload: FortisWebhookPayload, ra
   // --- PENDED ---
   if (responseCode === 'pended') {
     console.log('[Fortis Webhook] Merchant PENDED for org:', organizationId);
-    await prisma.fortisOnboarding.update({
-      where: { id: organization.fortisOnboarding.id },
+    // A late "pended" must never pull a live (or declined) merchant back.
+    await prisma.fortisOnboarding.updateMany({
+      where: { id: organization.fortisOnboarding.id, appStatus: { notIn: ['ACTIVE', 'DENIED'] } },
       data: {
         appStatus: 'PENDING_REVIEW',
         processorResponse: JSON.stringify(rawBody),
@@ -131,7 +133,10 @@ async function handleMerchantOnboardingWebhook(payload: FortisWebhookPayload, ra
   if (users && users.length > 0) {
     const merchantUser = users[0];
 
-    // Guard against duplicate processing
+    // Guard against duplicate processing — and against overwriting credentials
+    // the reconciliation minted itself (lib/fortis/onboarding-sync.ts): once we
+    // rotate the key, the one in a late webhook is dead, so an ACTIVE record is
+    // never touched by a webhook.
     if (previousStatus === 'ACTIVE') {
       console.log('[Fortis Webhook] Merchant already ACTIVE for org:', organizationId, '- skipping');
       return NextResponse.json({ status: true, message: 'Merchant already active, no changes made' });
@@ -203,19 +208,84 @@ async function handleMerchantOnboardingWebhook(payload: FortisWebhookPayload, ra
       achProductTransactionId,
     });
 
-    await prisma.fortisOnboarding.update({
-      where: { id: organization.fortisOnboarding.id },
-      data: {
-        authUserId: merchantUser.user_id,
-        authUserApiKey: merchantUser.user_api_key,
-        locationId,
-        productTransactionId,
-        achProductTransactionId,
-        appStatus: 'ACTIVE',
-        processorResponse: JSON.stringify(rawBody),
-        updatedAt: new Date(),
+    // A real key already on file was minted by the reconciliation AFTER this
+    // webhook's key was issued — which invalidated the webhook's key. Never
+    // replace a stored key with the webhook's; take the location/products and
+    // ACTIVE from the webhook and keep our credentials. The write is
+    // conditional so a mint landing between our read and this write is also
+    // safe: it only replaces the key when the column still holds nothing, an
+    // in-flight claim, or this very key.
+    const details = {
+      locationId,
+      productTransactionId,
+      achProductTransactionId,
+      processorResponse: JSON.stringify(rawBody),
+      updatedAt: new Date(),
+    };
+
+    // A claim token means the reconciliation is minting a key right now (or
+    // died trying, in which case it re-mints within minutes). Either way the
+    // key in this webhook may already be dead, so do not store it and do not
+    // activate: record the location/products and let provisioning finish.
+    const storedKey = organization.fortisOnboarding.authUserApiKey;
+    if (storedKey && storedKey.startsWith(PROVISIONING_CLAIM_PREFIX)) {
+      await prisma.fortisOnboarding.updateMany({
+        where: { id: organization.fortisOnboarding.id, appStatus: { notIn: ['ACTIVE', 'DENIED'] } },
+        data: details,
+      });
+      console.warn(`[Fortis Webhook] Org ${organizationId}: key mint in progress; recorded location/products, left activation to the reconciliation`);
+      return NextResponse.json({ status: true, message: 'Provisioning in progress; webhook details recorded' });
+    }
+
+    // Flip to ACTIVE with the webhook's credentials only while the row is
+    // still open and the key column holds nothing, this very key, or a key
+    // that belongs to some other (replaced) user. Never over a claim token.
+    let flipped = await prisma.fortisOnboarding.updateMany({
+      where: {
+        id: organization.fortisOnboarding.id,
+        appStatus: { notIn: ['ACTIVE', 'DENIED'] },
+        NOT: { authUserApiKey: { startsWith: PROVISIONING_CLAIM_PREFIX } },
+        OR: [
+          { authUserApiKey: null },
+          { authUserApiKey: merchantUser.user_api_key },
+          { authUserId: { not: merchantUser.user_id } },
+        ],
       },
+      data: { ...details, appStatus: 'ACTIVE', authUserId: merchantUser.user_id, authUserApiKey: merchantUser.user_api_key },
     });
+    if (flipped.count === 0) {
+      // A newer key for this same user was minted by LunarPay meanwhile: keep
+      // it, activate around it. Still never over a claim token.
+      flipped = await prisma.fortisOnboarding.updateMany({
+        where: {
+          id: organization.fortisOnboarding.id,
+          appStatus: { notIn: ['ACTIVE', 'DENIED'] },
+          NOT: { authUserApiKey: { startsWith: PROVISIONING_CLAIM_PREFIX } },
+        },
+        data: { ...details, appStatus: 'ACTIVE' },
+      });
+      if (flipped.count > 0) {
+        console.warn(`[Fortis Webhook] Org ${organizationId} already holds a key minted by LunarPay; kept it and activated around it`);
+      }
+    }
+    if (flipped.count === 0) {
+      const fresh = await prisma.fortisOnboarding.findUnique({
+        where: { id: organization.fortisOnboarding.id },
+        select: { appStatus: true },
+      });
+      if (fresh && fresh.appStatus !== 'ACTIVE' && fresh.appStatus !== 'DENIED') {
+        // A claim landed between our read and our write: record details only.
+        await prisma.fortisOnboarding.updateMany({
+          where: { id: organization.fortisOnboarding.id, appStatus: { notIn: ['ACTIVE', 'DENIED'] } },
+          data: details,
+        });
+        console.warn(`[Fortis Webhook] Org ${organizationId}: key mint in progress; recorded location/products, left activation to the reconciliation`);
+        return NextResponse.json({ status: true, message: 'Provisioning in progress; webhook details recorded' });
+      }
+      // Became ACTIVE or DENIED while this webhook was in flight: nothing to do.
+      console.log('[Fortis Webhook] Merchant already terminal for org:', organizationId, '- skipping');
+      return NextResponse.json({ status: true, message: 'Merchant already finalized, no changes made' });
+    }
 
     if (!locationId) {
       console.warn('[Fortis Webhook] WARNING: location_id not found in webhook for org:', organizationId);
