@@ -120,6 +120,10 @@ export interface TransactionIntentionData {
   action: 'sale' | 'avsonly' | 'authonly' | 'tokenization' | 'refund' | null;
   amount?: number; // in cents, required for 'sale'
   save_account?: boolean; // Whether to save the payment method for future use
+  // Which rails Elements offers. Omitted: every product on the location (Elements
+  // then defaults to the card tab). One entry: only that rail. See
+  // lib/fortis/intention-methods.ts for the source.
+  methods?: Array<{ type: 'cc' | 'ach'; product_transaction_id: string }>;
 }
 
 export interface TransactionIntentionResponse {

@@ -23,12 +23,18 @@
  *   paymentMethod   'cc' | 'ach' | 'any'   — equivalent to the array form above
  *
  * If both are provided, paymentMethods (plural array) wins.
+ *
+ * With action:'tokenization', a single rail (['cc'] or ['ach']) is enforced by
+ * Fortis itself: the intention carries `methods`, so Elements renders only that
+ * form. The response then includes `methodsEnforced: true` (false only if
+ * Fortis refused the restriction and an unscoped form was issued instead).
  */
 
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
+import { createTokenizationIntention } from '@/lib/fortis/intention-methods';
 import { requirePublishableKey, ApiAuthError, apiError } from '@/lib/api-auth';
 
 const intentionSchema = z.object({
@@ -86,26 +92,32 @@ export async function POST(request: NextRequest) {
     }
 
     // ── TOKENIZATION intention (preferred card-save path — no charge) ──────
-    // Fortis does NOT allow `product_transaction_id` on tokenization actions —
-    // it will respond with `"product_transaction_id" is not allowed`. The
-    // resulting clientToken includes every payment method enabled on the
-    // merchant's location; tab filtering ("cc only" vs "cc+ach") is handled
-    // client-side via Fortis Elements config, not at the intention level.
+    // Fortis does NOT allow a top-level `product_transaction_id` here — it
+    // responds `"product_transaction_id" is not allowed`. A single requested
+    // rail goes in `methods` instead, which is what Elements builds its tabs
+    // from: ['ach'] gets a bank-account-only form, ['cc'] a card-only one
+    // (source in lib/fortis/intention-methods.ts — Elements' create() has no
+    // rail option, so this cannot be done client-side). Both rails, or none
+    // named, sends no `methods`: every product on the location, as before.
     if (action === 'tokenization') {
-      const result = await fortisClient.createTransactionIntention({
-        location_id: locationId,
-        action: 'tokenization',
+      const result = await createTokenizationIntention(fortisClient, {
+        locationId,
+        rail: paymentMethod,
+        products: {
+          ccProductTransactionId: auth.fortisCcProductTransactionId,
+          achProductTransactionId: auth.fortisAchProductTransactionId,
+        },
+        organizationId: auth.organizationId,
       });
-      if (!result.status || !result.clientToken) {
-        return apiError(result.message || 'Failed to create tokenization intention', 400);
-      }
+      if (!result.ok) return apiError(result.error, 400);
       return Response.json({
         clientToken: result.clientToken,
         intentionType: 'tokenization',
         paymentMethod,
         locationId,
-        productTransactionId: null,
+        productTransactionId: result.productTransactionId,
         environment: env,
+        ...(result.methodsEnforced !== undefined ? { methodsEnforced: result.methodsEnforced } : {}),
       });
     }
 
