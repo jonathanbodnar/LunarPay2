@@ -15,6 +15,7 @@ Lightweight container that runs on a schedule to process subscriptions, installm
 | `LEAD_NURTURING_URL` | `https://app.lunarpay.com/api/cron/lead-nurturing?admin_key=YOUR_KEY` |
 | `CHAT_FOLLOWUP_URL` | `https://app.lunarpay.com/api/cron/chat-followup?admin_key=YOUR_KEY` |
 | `ONBOARDING_STATUS_URL` | `https://app.lunarpay.com/api/cron/sync-onboarding-status?admin_key=YOUR_KEY` |
+| `ACH_RECONCILE_URL` | `https://app.lunarpay.com/api/cron/reconcile-ach?admin_key=YOUR_KEY` |
 
 3. **Set Cron Schedule:** `0 * * * *` (runs every hour)
 
@@ -72,6 +73,45 @@ Without `authUserId` + `authUserApiKey`, the same endpoint just runs a status sy
 
 Agencies can drive the same logic for their own merchants via `POST /api/v1/agency/merchants/:id/onboarding/submitted` (merchant has signed the MPA, moves `BANK_INFORMATION_SENT` -> `PENDING_REVIEW`) and `POST /api/v1/agency/merchants/:id/onboarding/sync` (reconcile with Fortis now).
 
+### 7. ACH settlement reconcile (`ACH_RECONCILE_URL`)
+An ACH debit is accepted by Fortis at once and clears — or comes back — days later. Fortis transaction postbacks are not registered for merchants, so without this job a bank-account charge stays pending forever. Each run (`src/app/api/cron/reconcile-ach` → `lib/fortis/ach-settlement.ts`):
+
+- Reads every waiting ACH debit (`src = 'BNK'`, status `U` or `P` with `status_ach` NULL / `W` / `pending`, at least 2 hours old, at most 90 days, not re-checked in the last ~2 hours) back from Fortis — `GET /v1/transactions/{id}` with **that merchant's own** credentials — then settled ones (`P`/`P`) about once a day for 75 days, to catch a late return. Imports (`fortis_import`, `stripe_import`) are never touched.
+- Maps Fortis's ACH lifecycle (`lib/fortis/ach-status.ts`): `131/132/133` still in flight → nothing; `134` settled → `status P`, `status_ach P`, **`charge.succeeded`** (`status: 'paid'`); `331` charged back or a return reason (`2101–2183` = R01–R83) → `status N`, `status_ach F`, **`charge.failed`** with the reason in `error` (e.g. `ACH return R01: Insufficient funds`) and `return_code`; `201` voided → `status V`, `charge.failed`; `301` declined → `status N`, `charge.failed`.
+- Moves the donor's running totals the way each charge path counted them, in the same database transaction as the status change.
+- Every change is a conditional write on the row's previous `(status, status_ach)`, so it lands — and its webhook is sent — exactly once, even with the Fortis transaction webhook (which uses the same code) or an overlapping run racing it.
+- Bounded: at most `limit` Fortis reads (default 100, max 500), 4 at a time, none started after 45 s. Rows checked with no news get `updated_at` bumped, so the queue rotates oldest-checked first.
+
+Optional query params: `?organizationId=123` (one merchant), `?limit=50`, and **`?dryRun=1`** — reads Fortis and reports what would change, but writes and sends nothing.
+
+**Deploy setup.** No migration and no new environment variables (it uses `CRON_SECRET` / `CRON_ADMIN_KEY` and the Fortis keys already set). After deploying:
+
+1. Schedule it in Supabase pg_cron (the scheduler of record) — same shape as the `sync-onboarding-status` job, with the same `CRON_SECRET` bearer:
+
+   ```sql
+   select cron.schedule(
+     'reconcile-ach-hourly',
+     '20 * * * *',
+     $$
+     SELECT net.http_post(
+       url := 'https://app.lunarpay.com/api/cron/reconcile-ach',
+       headers := jsonb_build_object(
+         'Content-Type', 'application/json',
+         'Authorization', 'Bearer <CRON_SECRET>'
+       ),
+       body := '{}'::jsonb,
+       timeout_milliseconds := 60000
+     ) as request_id;
+     $$
+   );
+   ```
+2. Optional backstop: set `ACH_RECONCILE_URL` on the Railway cron service.
+3. Verify once with a dry run: `curl "https://app.lunarpay.com/api/cron/reconcile-ach?dryRun=1&admin_key=${CRON_ADMIN_KEY}"`.
+
+Stop it with `select cron.unschedule('reconcile-ach-hourly');`.
+
+**Fortis postbacks (optional).** If a transaction postback is ever registered for a merchant (`POST /v1/webhooks/transaction` with `on_update`, pointing at `/fortiswebhooks/merchant_account_status_listener`), ACH updates take effect within seconds instead of on the next run. The handler accepts Fortis's form-encoded postback format and treats it only as "check this transaction now" — the status is always re-read from Fortis — so a postback and this job can never disagree or double-send.
+
 > **Note:** Email categories `cron`, `subscription`, and `agency` are currently disabled via `EMAILS_DISABLED_CATEGORIES` while SendGrid is being resolved. Set `EMAILS_DISABLED_CATEGORIES=` (empty) on Railway to re-enable once fixed.
 
 ## Schedule Examples
@@ -98,6 +138,7 @@ curl "https://app.lunarpay.com/api/cron/process-subscriptions?admin_key=${CRON_A
 curl "https://app.lunarpay.com/api/cron/process-scheduled-payments?admin_key=${CRON_ADMIN_KEY}"
 curl "https://app.lunarpay.com/api/cron/onboarding-emails?admin_key=${CRON_ADMIN_KEY}"
 curl "https://app.lunarpay.com/api/cron/sync-onboarding-status?admin_key=${CRON_ADMIN_KEY}"
+curl "https://app.lunarpay.com/api/cron/reconcile-ach?admin_key=${CRON_ADMIN_KEY}"
 ```
 
 **Security Note:** Never commit actual admin keys to version control. Use environment variables.

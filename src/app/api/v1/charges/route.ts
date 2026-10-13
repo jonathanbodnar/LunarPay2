@@ -309,6 +309,10 @@ export async function POST(request: NextRequest) {
         phone: customer.phone || null,
         source: isAch ? 'BNK' : 'CC',
         status,
+        // W = waiting to clear. The ACH reconcile (lib/fortis/ach-settlement.ts)
+        // moves it to P (settled → charge.succeeded) or F (returned/voided →
+        // charge.failed).
+        ...(isAch ? { statusAch: 'W' } : {}),
         givingSource: 'api',
         transactionType: !capture ? 'authonly' : undefined,
         fortisTransactionId,
@@ -365,7 +369,7 @@ export async function POST(request: NextRequest) {
         description: description || null,
         createdAt: transaction.createdAt,
         ...(isAch
-          ? { note: 'ACH transactions take 3–5 business days to clear. Final status is delivered via webhook.' }
+          ? { note: 'ACH transactions take 3–5 business days to clear. Final status is delivered via webhook: charge.succeeded (status paid) when it settles, charge.failed (with the return reason in error) if it is returned, voided or declined.' }
           : !capture
             ? { note: 'Hold placed. Capture within your authorization window (typically 7 days) via POST /api/v1/charges/:id/capture, or release the hold via POST /api/v1/charges/:id/void.' }
             : {}),

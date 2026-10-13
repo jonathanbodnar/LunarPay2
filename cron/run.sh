@@ -71,6 +71,17 @@ if [ -n "$ONBOARDING_STATUS_URL" ]; then
   echo "$body" | head -c 1000
 fi
 
+# Job 7: Reconcile ACH debits with Fortis (settled / returned → charge.* webhooks)
+if [ -n "$ACH_RECONCILE_URL" ]; then
+  echo ""
+  echo "--- Reconciling ACH Debits ---"
+  response=$(curl -s -w "\n%{http_code}" "$ACH_RECONCILE_URL")
+  http_code=$(echo "$response" | tail -n1)
+  body=$(echo "$response" | sed '$d')
+  echo "Response (HTTP $http_code):"
+  echo "$body" | head -c 1000
+fi
+
 echo ""
 echo "=========================================="
 echo "Completed at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"

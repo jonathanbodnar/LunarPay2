@@ -988,6 +988,46 @@ export class FortisClient {
   }
 
   /**
+   * 10. GET A TRANSACTION
+   * GET /v1/transactions/{transaction_id}
+   *
+   * Reads one transaction back with the merchant's own credentials. This is
+   * the authoritative view of an ACH debit's progress — status_code 131
+   * pending origination → 132 originating → 133 originated → 134 settled, or
+   * 201 voided / 301 declined / 331 charged back, with the return reason in
+   * reason_code_id (21xx = R01…) — see lib/fortis/ach-status.ts. Returns the
+   * record verbatim; callers decide what to keep or log.
+   */
+  async getTransaction(
+    transactionId: string,
+    options?: { timeout?: number }
+  ): Promise<{
+    status: boolean;
+    transaction?: Record<string, unknown>;
+    httpStatus?: number;
+    message?: string;
+  }> {
+    try {
+      const response = await this.client.get(`transactions/${encodeURIComponent(transactionId)}`, {
+        // Short per-call budget: this runs inside a bounded cron and a webhook
+        // response; a hung Fortis must not consume either.
+        timeout: options?.timeout ?? 15000,
+      });
+      const data = response.data?.data;
+      if (data && typeof data === 'object') {
+        return { status: true, transaction: data as Record<string, unknown> };
+      }
+      return { status: false, httpStatus: response.status, message: 'No transaction returned from Fortis' };
+    } catch (error) {
+      return {
+        status: false,
+        httpStatus: axios.isAxiosError(error) ? error.response?.status : undefined,
+        message: this.formatError(error),
+      };
+    }
+  }
+
+  /**
    * Format error for user-friendly message
    */
   private formatError(error: unknown): string {
