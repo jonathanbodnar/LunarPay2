@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { routeWebhook } from '@/lib/fortis/webhook-handler';
-import { parseFortisWebhookBody } from '@/lib/fortis/webhook-body';
+import { routeWebhook, handleAchTransactionPostback } from '@/lib/fortis/webhook-handler';
+import { parseTransactionPostback } from '@/lib/fortis/webhook-body';
 import crypto from 'crypto';
 
 const WEBHOOK_SECRET = process.env.FORTIS_WEBHOOK_SECRET;
@@ -45,10 +45,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: false, message: 'Invalid signature' }, { status: 401 });
     }
 
-    // JSON (onboarding) or form-encoded (Fortis transaction postbacks).
-    const body = parseFortisWebhookBody(rawBody, request.headers.get('content-type'));
-    if (!body) {
-      return NextResponse.json({ status: false, message: 'Unreadable webhook body' }, { status: 400 });
+    // JSON exactly as before; a non-JSON body is only used if it is a
+    // form-encoded Fortis transaction postback naming an ACH debit.
+    let body;
+    try {
+      body = JSON.parse(rawBody);
+    } catch (notJson) {
+      const record = parseTransactionPostback(rawBody);
+      const handled = record ? await handleAchTransactionPostback(record) : null;
+      if (handled) return handled;
+      throw notJson;
     }
 
     await prisma.fortisWebhook.create({
