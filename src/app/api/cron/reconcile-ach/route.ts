@@ -15,12 +15,14 @@
  *   limit           max Fortis reads this run (default 100, max 500)
  *   organizationId  only this merchant
  *   dryRun=1        read Fortis and report what WOULD change — each transition
- *                   says whether the merchant would be told (`announced`);
- *                   writes and sends nothing. Run it before scheduling.
+ *                   lists the webhooks it would queue (`events`) and whether a
+ *                   subscription would be cancelled; writes nothing, not even
+ *                   the run lock. Run it before scheduling.
  *
- * Merchants are told (charge.succeeded / charge.failed, subscription.cancelled)
- * only about debits created through POST /api/v1/charges or a renewal at or
- * after ACH_CHARGE_EVENTS_SINCE; everything else is reconciled silently.
+ * charge.succeeded / charge.failed go only to debits created through POST
+ * /api/v1/charges or a renewal at or after ACH_CHARGE_EVENTS_SINCE; everything
+ * else is reconciled without them. A subscription cancelled by a return is
+ * always announced (subscription.cancelled) to a merchant with a webhook URL.
  *
  * Auth: `Authorization: Bearer <CRON_SECRET>`, `x-cron-secret: <CRON_SECRET>`,
  * or `?admin_key=<CRON_ADMIN_KEY>` for manual triggering.
@@ -100,7 +102,7 @@ export async function GET(request: NextRequest) {
         (organizationId ? ` organizationId=${organizationId}` : '') +
         (summary.transitioned.length
           ? ` (${summary.transitioned
-              .map((r) => `${r.organizationId}:${r.transactionId} ${r.from?.status}/${r.from?.statusAch ?? '-'}→${r.to?.status}/${r.to?.statusAch} ${r.event}${r.announced ? '' : ' (silent)'}${r.returnCode ? ` ${r.returnCode}` : ''}${r.subscriptionCancelled ? ' +subscription cancelled' : ''}`)
+              .map((r) => `${r.organizationId}:${r.transactionId} ${r.from?.status}/${r.from?.statusAch ?? '-'}→${r.to?.status}/${r.to?.statusAch}${r.returnCode ? ` ${r.returnCode}` : ''}${r.subscriptionCancelled ? ' +subscription cancelled' : ''} → ${r.events?.length ? r.events.join(' + ') : 'not announced'}`)
               .join(', ')})`
           : '')
     );

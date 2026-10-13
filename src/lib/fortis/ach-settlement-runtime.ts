@@ -19,7 +19,8 @@ import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { deliverWebhook } from '@/lib/webhook';
 import { logPaymentStatusUpdated } from '@/lib/payment-logger';
-import { deliverOutboxEntries, type OutboxDeps } from '@/lib/webhook-outbox';
+import { sendEmail } from '@/lib/email';
+import { deliverOutboxEntries, type OutboxDeps, type OutboxGiveUp } from '@/lib/webhook-outbox';
 import { parseChargeEventsSince, type AchReconcileDeps } from '@/lib/fortis/ach-settlement';
 
 function fortisEnvironment(): 'sandbox' | 'production' {
@@ -27,11 +28,37 @@ function fortisEnvironment(): 'sandbox' | 'production' {
   return fortisEnv === 'prd' ? 'production' : 'sandbox';
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+}
+
+/** Same channel as the onboarding reconciliation's ops alerts. */
+async function alertOpsOfGiveUp(entry: OutboxGiveUp): Promise<void> {
+  const to = process.env.ADMIN_EMAIL || process.env.ONBOARDING_ALERT_EMAIL;
+  if (!to) return;
+  const lines = [
+    `LunarPay could not deliver ${entry.event} to organization ${entry.organizationId}'s webhook after ${entry.attempts} attempts and has stopped trying.`,
+    ...(entry.transactionId != null ? [`Transaction: ${entry.transactionId}`] : []),
+    `Last error: ${(entry.lastError ?? 'unknown').slice(0, 500)}`,
+    '',
+    'The merchant does not know about this event. Every attempt is in webhook_deliveries. Once their endpoint is fixed, re-queue it with:',
+    `update webhook_outbox set status = 'pending', attempts = 0, next_attempt_at = now() where id = ${entry.id};`,
+  ];
+  await sendEmail({
+    to,
+    subject: `[LunarPay] ${entry.event} undelivered to organization ${entry.organizationId} after ${entry.attempts} attempts`,
+    category: 'transactional',
+    text: lines.join('\n'),
+    html: lines.filter(Boolean).map((line) => `<p>${escapeHtml(line)}</p>`).join(''),
+  });
+}
+
 export function outboxDeps(): OutboxDeps {
   return {
     db: prisma,
     send: (webhookUrl, webhookSecret, event, organizationId, data) =>
       deliverWebhook(webhookUrl, webhookSecret, event, organizationId, data),
+    onGiveUp: alertOpsOfGiveUp,
   };
 }
 

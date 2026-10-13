@@ -23,11 +23,13 @@
  * webhook_outbox (lib/webhook-outbox.ts), which is re-sent until a 2xx.
  * Anyone racing it (cron vs webhook, two runs) sees zero rows updated.
  *
- * Who is told: only debits created through POST /api/v1/charges or a
- * subscription renewal, at or after ACH_CHARGE_EVENTS_SINCE (set at deploy).
- * Everything else — older rows, hosted checkout, payment links, dashboard
- * charges — has its status reconciled silently: those merchants never
- * received charge.* for those paths and do not start now.
+ * Who is told: charge.* only for debits created through POST /api/v1/charges
+ * or a subscription renewal, at or after ACH_CHARGE_EVENTS_SINCE (set at
+ * deploy). Everything else — older rows, hosted checkout, payment links,
+ * dashboard charges — has its status reconciled without charge.*: those
+ * merchants never received it for those paths and do not start now. A
+ * subscription this module cancels is always announced (subscription.cancelled)
+ * to a merchant with a webhook URL — the renewal cron already sends that event.
  *
  * Events use the same sender, envelope, signing and data keys as POST
  * /api/v1/charges (lib/webhook.ts deliverWebhook → the organization's URL):
@@ -79,6 +81,10 @@ export const ACH_OUTBOX_PER_RUN = 25;
 export const ACH_RUN_LOCK = 'reconcile-ach';
 export const ACH_RUN_LOCK_TTL_MS = 5 * 60 * 1000;
 
+/** An ACH debit still recorded as pending this long after it was created is
+ *  taken to have cleared when judging a subscription's failure streak (Fortis
+ *  settled the production debits we observed in ~3 business days). */
+export const ACH_SETTLEMENT_WINDOW_MS = 10 * 24 * 60 * 60 * 1000;
 /** Same threshold as the renewal cron (process-subscriptions). */
 export const MAX_CONSECUTIVE_FAILURES = 4;
 /**
@@ -426,10 +432,11 @@ export function chargeEventPayload(
 
 type TxClient = Parameters<Parameters<AchDb['$transaction']>[0]>[0];
 
-export interface RenewalFailure {
+export interface RenewalPlan {
   subscriptionId: number;
   consecutiveFailures: number;
-  cancelled: boolean;
+  /** The subscription is active and this return ends it. */
+  wouldCancel: boolean;
   /** Cancelled because the return code forbids another debit. */
   immediate: boolean;
   returnCode: string | null;
@@ -437,55 +444,125 @@ export interface RenewalFailure {
   email: string;
 }
 
+export interface RenewalFailure extends Omit<RenewalPlan, 'wouldCancel'> {
+  cancelled: boolean;
+}
+
+type RenewalReader = Pick<AchDb, 'subscription' | 'transaction'>;
+
 /**
- * A renewal that came back is a failed renewal: count it against the
- * subscription the way process-subscriptions counts a decline, and cancel at
- * MAX_CONSECUTIVE_FAILURES — or at once for a return that forbids another
- * debit. The renewal cron resets its counter whenever the bank merely
- * ACCEPTS a debit, which an ACH return arrives days after, so the streak is
- * also read from the subscription's own recent charges (newest first,
- * skipping debits whose outcome is still unknown).
+ * What a returned renewal does to its subscription — read-only, so the dry
+ * run can show it and the commit can apply exactly the same decision.
+ *
+ * It counts as a failed renewal, the way process-subscriptions counts a
+ * decline, and cancels at MAX_CONSECUTIVE_FAILURES — or at once for a return
+ * that forbids another debit. The renewal cron resets its own counter
+ * whenever the bank merely ACCEPTS a debit, which a return arrives days
+ * after, so the streak is also read from the subscription's recent charges,
+ * newest first:
+ *   - a failure (N), and the returning debit itself, count;
+ *   - a debit whose outcome is genuinely unknown is skipped: a pending row
+ *     NEWER than the returning one, or one still inside the settlement window;
+ *   - anything else is a success and ends the streak — including an older
+ *     row still recorded as pending (renewals are written P/NULL and only
+ *     become P/P if a reconcile reaches them, so an old P/NULL cleared).
+ * A success NEWER than the returning debit means the subscription has been
+ * charged fine since: the return is counted (fail_trxns) but cannot cancel it.
+ *
+ * Known limit (not changed here, it would touch the card renewal path): the
+ * renewal cron writes consecutive_failures from a read taken at the start of
+ * its loop, without a condition, so a decline it records can overwrite the
+ * count written here; and a subscription cancelled here between the cron's
+ * claim (status 'A') and its charge is still charged once. Cancellation itself
+ * is never undone — the cron only ever writes status 'D'.
  */
-async function recordRenewalFailure(t: TxClient, tx: AchTxRow, change: AchStateChange, now: Date): Promise<RenewalFailure | null> {
+export async function planRenewalFailure(
+  reader: RenewalReader,
+  tx: AchTxRow,
+  change: AchStateChange,
+  now: Date
+): Promise<RenewalPlan | null> {
   if (tx.subscriptionId == null) return null;
-  const sub = await t.subscription.findUnique({
+  const sub = await reader.subscription.findUnique({
     where: { id: tx.subscriptionId },
     select: { id: true, status: true, consecutiveFailures: true, donorId: true, email: true },
   });
   if (!sub) return null;
 
-  const history = await t.transaction.findMany({
+  const history = await reader.transaction.findMany({
     where: { subscriptionId: sub.id },
     orderBy: { createdAt: 'desc' },
-    take: 12,
-    select: { id: true, status: true, statusAch: true, source: true, fortisTransactionId: true, givingSource: true },
+    take: 24,
+    select: { id: true, status: true, statusAch: true, source: true, fortisTransactionId: true, givingSource: true, createdAt: true },
   });
   let streak = 0;
+  let sawReturning = false;
+  let newerSuccess = false;
   for (const row of history) {
-    if (row.status === 'N') {
+    const returning = String(row.id) === String(tx.id);
+    if (returning || row.status === 'N') {
       streak++;
+      if (returning) sawReturning = true;
       continue;
     }
-    if (achWatchPhase(row) === 'pending') continue; // outcome not known yet
-    break; // a charge that went through ends the streak
+    if (achWatchPhase(row) === 'pending') {
+      const newer = row.createdAt.getTime() > tx.createdAt.getTime();
+      const inWindow = now.getTime() - row.createdAt.getTime() < ACH_SETTLEMENT_WINDOW_MS;
+      if (newer || inWindow) continue; // outcome genuinely unknown
+    }
+    newerSuccess = !sawReturning && row.createdAt.getTime() > tx.createdAt.getTime();
+    break; // a success ends the streak
   }
-  const consecutiveFailures = Math.max((sub.consecutiveFailures ?? 0) + 1, streak);
-  const returnCode = change.outcome.kind === 'failed' ? change.outcome.returnCode : null;
-  const immediate = !!returnCode && IMMEDIATE_CANCEL_RETURN_CODES.has(returnCode);
 
+  const returnCode = change.outcome.kind === 'failed' ? change.outcome.returnCode : null;
+  if (newerSuccess) {
+    // Charged successfully since: count the return, change nothing else.
+    return {
+      subscriptionId: sub.id,
+      consecutiveFailures: Math.max(sub.consecutiveFailures ?? 0, streak),
+      wouldCancel: false,
+      immediate: false,
+      returnCode,
+      donorId: sub.donorId,
+      email: sub.email,
+    };
+  }
+  if (!sawReturning) streak++; // more newer rows than the window read
+  const consecutiveFailures = Math.max((sub.consecutiveFailures ?? 0) + 1, streak);
+  const immediate = !!returnCode && IMMEDIATE_CANCEL_RETURN_CODES.has(returnCode);
+  return {
+    subscriptionId: sub.id,
+    consecutiveFailures,
+    wouldCancel: sub.status === 'A' && (immediate || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES),
+    immediate,
+    returnCode,
+    donorId: sub.donorId,
+    email: sub.email,
+  };
+}
+
+async function applyRenewalFailure(t: TxClient, plan: RenewalPlan, now: Date): Promise<RenewalFailure> {
   await t.subscription.updateMany({
-    where: { id: sub.id },
-    data: { failTrxns: { increment: 1 }, consecutiveFailures },
+    where: { id: plan.subscriptionId },
+    data: { failTrxns: { increment: 1 }, consecutiveFailures: plan.consecutiveFailures },
   });
   let cancelled = false;
-  if (immediate || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+  if (plan.wouldCancel) {
     const flipped = await t.subscription.updateMany({
-      where: { id: sub.id, status: 'A' },
+      where: { id: plan.subscriptionId, status: 'A' },
       data: { status: 'D', cancelledAt: now },
     });
     cancelled = flipped.count === 1;
   }
-  return { subscriptionId: sub.id, consecutiveFailures, cancelled, immediate, returnCode, donorId: sub.donorId, email: sub.email };
+  return {
+    subscriptionId: plan.subscriptionId,
+    consecutiveFailures: plan.consecutiveFailures,
+    immediate: plan.immediate,
+    returnCode: plan.returnCode,
+    donorId: plan.donorId,
+    email: plan.email,
+    cancelled,
+  };
 }
 
 /** The renewal cron's subscription.cancelled payload, for a return. */
@@ -550,7 +627,8 @@ export async function commitAchTransition(
       }
     }
 
-    const renewal = change.kind === 'fail' ? await recordRenewalFailure(t, tx, change, now) : null;
+    const plan = change.kind === 'fail' ? await planRenewalFailure(t, tx, change, now) : null;
+    const renewal = plan ? await applyRenewalFailure(t, plan, now) : null;
 
     const entries = [...announce.events];
     if (renewal?.cancelled && announce.subscriptionCancelled) {
@@ -614,10 +692,13 @@ export interface AchReconcileResult {
   from?: { status: string; statusAch: string | null };
   to?: { status: string; statusAch: string };
   event?: ChargeEventName;
-  /** Whether the merchant is (or, in a dry run, would be) told. */
+  /** Whether the merchant is (or, in a dry run, would be) told about the charge. */
   announced?: boolean;
   returnCode?: string | null;
+  /** A returned renewal cancelled (dry run: would cancel) its subscription. */
   subscriptionCancelled?: boolean;
+  /** Every webhook queued (dry run: that would be queued) for this transition. */
+  events?: string[];
   message?: string;
 }
 
@@ -731,7 +812,25 @@ export async function reconcileAchTransaction(
     ...(outcome.kind === 'failed' ? { message: outcome.message } : {}),
   };
 
-  if (opts.dryRun) return { ...base, outcome: 'would_transition', ...summary };
+  // A cancelled subscription is always announced to a merchant with a webhook
+  // URL: the renewal cron already sends subscription.cancelled to every such
+  // merchant, whatever ACH_CHARGE_EVENTS_SINCE says.
+  const announceCancellation = !!org.webhookUrl;
+
+  if (opts.dryRun) {
+    const plan = transition.kind === 'fail' ? await planRenewalFailure(deps.db, tx, transition, now) : null;
+    const wouldCancel = !!plan?.wouldCancel;
+    return {
+      ...base,
+      outcome: 'would_transition',
+      ...summary,
+      ...(plan ? { subscriptionCancelled: wouldCancel } : {}),
+      events: [
+        ...(announced ? [transition.event] : []),
+        ...(wouldCancel && announceCancellation ? ['subscription.cancelled'] : []),
+      ],
+    };
+  }
 
   const events: OutboxEntryInput[] = [];
   if (announced) {
@@ -744,7 +843,7 @@ export async function reconcileAchTransaction(
 
   const committed = await commitAchTransition(deps.db, tx, transition, record, now, {
     events,
-    subscriptionCancelled: announced,
+    subscriptionCancelled: announceCancellation,
   });
   if (!committed.won) return { ...base, outcome: 'lost_race', ...summary };
 
@@ -763,11 +862,16 @@ export async function reconcileAchTransaction(
       /* audit is best-effort */
     }
   }
+  const cancelled = !!committed.renewal?.cancelled;
   return {
     ...base,
     outcome: 'transitioned',
     ...summary,
-    ...(committed.renewal ? { subscriptionCancelled: committed.renewal.cancelled } : {}),
+    ...(committed.renewal ? { subscriptionCancelled: cancelled } : {}),
+    events: [
+      ...(announced ? [transition.event] : []),
+      ...(cancelled && announceCancellation ? ['subscription.cancelled'] : []),
+    ],
   };
 }
 
@@ -836,7 +940,8 @@ function newRunId(): string {
 
 /**
  * One bounded reconcile pass, under a run lock (so pg_cron and the Railway
- * backstop can never overlap): re-send undelivered announcements, then check
+ * backstop can never overlap; a dry run takes no lock and writes nothing):
+ * re-send undelivered announcements, then check
  * waiting debits first and settled debits still inside the return window,
  * at most `limit` Fortis reads in total, never starting a read after the time
  * budget. Idempotent — a second pass over the same Fortis state changes
@@ -860,8 +965,9 @@ export async function runAchReconcile(
     errors: [],
   };
 
+  // A dry run writes nothing at all — not even the run lease.
   const holder = deps.runId ? deps.runId() : newRunId();
-  if (!(await acquireJobLock(deps.db, ACH_RUN_LOCK, holder, ACH_RUN_LOCK_TTL_MS, now))) return summary;
+  if (!opts.dryRun && !(await acquireJobLock(deps.db, ACH_RUN_LOCK, holder, ACH_RUN_LOCK_TTL_MS, now))) return summary;
   summary.ran = true;
 
   try {
@@ -927,10 +1033,12 @@ export async function runAchReconcile(
     summary.deferred = queue.length - summary.checked;
     return summary;
   } finally {
-    try {
-      await releaseJobLock(deps.db, ACH_RUN_LOCK, holder);
-    } catch (err) {
-      console.error('[ACH] Could not release the run lock (it expires on its own):', err);
+    if (!opts.dryRun) {
+      try {
+        await releaseJobLock(deps.db, ACH_RUN_LOCK, holder);
+      } catch (err) {
+        console.error('[ACH] Could not release the run lock (it expires on its own):', err);
+      }
     }
   }
 }

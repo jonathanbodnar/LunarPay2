@@ -218,6 +218,53 @@ test('an R02 on a renewal: charge.failed + subscription cancelled + subscription
   assert.equal(h.dispatched[0].length, 2);
 });
 
+test('a pre-cutoff renewal that a return cancels: no charge.failed, but subscription.cancelled is always queued', async () => {
+  const old = ago(30 * DAY); // before ACH_CHARGE_EVENTS_SINCE
+  const renewal = row(41, { status: 'P', statusAch: null, subscriptionId: 5, fee: '0.88', subTotalAmount: '49.12', createdAt: old, updatedAt: old });
+  const sub = { id: 5, status: 'A', consecutiveFailures: 0, failTrxns: 0, donorId: 77, email: 'd@example.org' };
+
+  // the dry run shows it, and writes nothing
+  const dry = harness({ rows: [renewal], fortis: { [fid(41)]: returnedR02 }, subscriptions: [sub] });
+  const preview = await runAchReconcile(dry.deps, { dryRun: true });
+  assert.equal(preview.transitioned[0].announced, false);
+  assert.equal(preview.transitioned[0].subscriptionCancelled, true);
+  assert.deepEqual(preview.transitioned[0].events, ['subscription.cancelled']);
+  assert.equal(dry.fake.subscription(5).status, 'A');
+  assert.equal(dry.fake.outbox().length, 0);
+
+  // the real run does exactly that
+  const h = harness({ rows: [renewal], fortis: { [fid(41)]: returnedR02 }, subscriptions: [sub] });
+  const summary = await runAchReconcile(h.deps);
+  assert.deepEqual(summary.transitioned[0].events, ['subscription.cancelled']);
+  assert.equal(h.fake.subscription(5).status, 'D');
+  assert.deepEqual(h.queued().map((q) => q.event), ['subscription.cancelled']);
+  assert.equal(h.queued()[0].data.reason, 'Auto-cancelled after ACH return R02 (Bank account closed)');
+
+  // no webhook URL → still cancelled, nothing queued
+  const quiet = harness({
+    rows: [renewal],
+    fortis: { [fid(41)]: returnedR02 },
+    subscriptions: [sub],
+    orgs: [{ ...ORG_109, webhookUrl: null }],
+  });
+  await runAchReconcile(quiet.deps);
+  assert.equal(quiet.fake.subscription(5).status, 'D');
+  assert.equal(quiet.fake.outbox().length, 0);
+});
+
+test('a dry run is read-only: no run lease written, and it runs even while a real run holds the lease', async () => {
+  const h = harness({ rows: [row(42)], fortis: { [fid(42)]: settledAt } });
+  const preview = await runAchReconcile(h.deps, { dryRun: true });
+  assert.equal(preview.ran, true);
+  assert.equal(h.fake.state.locks.length, 0);
+  assert.equal(h.fake.state.writes.length, 0);
+  assert.equal(await acquireJobLock(h.fake.db, ACH_RUN_LOCK, 'real-run', 5 * 60 * 1000, NOW), true);
+  const during = await runAchReconcile(h.deps, { dryRun: true });
+  assert.equal(during.ran, true);
+  assert.equal(during.transitioned.length, 1);
+  assert.equal(h.fake.state.writes.length, 0);
+});
+
 // ── Durability ───────────────────────────────────────────────────────────────
 
 test('each run first re-dispatches announcements that never got a 2xx', async () => {

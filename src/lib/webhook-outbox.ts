@@ -12,7 +12,8 @@
  *   2. it is delivered straight after commit, and if that fails, re-sent by
  *      the ACH reconcile cron with backoff — 5m, 15m, 1h, 3h, 6h, 12h, 24h —
  *      until the receiver returns a 2xx, at most OUTBOX_MAX_ATTEMPTS times
- *      (~2 days), then left as 'failed' for a human;
+ *      (~2 days), then left as 'failed' — logged at error level and reported
+ *      through `onGiveUp` (the ops alert email in production);
  *   3. each attempt claims the row first (a conditional write that moves
  *      next_attempt_at out by a lease), so two callers never send it at once,
  *      and a sender that dies mid-delivery is retried once the lease lapses.
@@ -52,8 +53,19 @@ export interface OutboxEntryInput {
   dedupeKey: string;
 }
 
+export interface OutboxGiveUp {
+  id: bigint;
+  organizationId: number;
+  transactionId: bigint | null;
+  event: string;
+  attempts: number;
+  lastError: string | null;
+}
+
 export interface OutboxDeps {
   db: OutboxDb;
+  /** Called once when a row is given up (runtime: emails ADMIN_EMAIL). */
+  onGiveUp?(entry: OutboxGiveUp): Promise<void> | void;
   /** Signed delivery with its own short retry (lib/webhook.ts deliverWebhook). */
   send(
     webhookUrl: string,
@@ -138,10 +150,13 @@ export async function deliverOutboxEntry(deps: OutboxDeps, id: bigint): Promise<
     return 'delivered';
   }
   if (!org?.webhookUrl || attempts >= OUTBOX_MAX_ATTEMPTS) {
-    await deps.db.webhookOutbox.updateMany({
+    const ended = await deps.db.webhookOutbox.updateMany({
       where: { id, status: 'pending' },
       data: { status: 'failed', attempts, lastError },
     });
+    if (ended.count === 1) {
+      await reportGiveUp(deps, { id, organizationId: row.organizationId, transactionId: row.transactionId, event: row.event, attempts, lastError });
+    }
     return 'failed';
   }
   const wait = OUTBOX_BACKOFF_MS[Math.min(attempts - 1, OUTBOX_BACKOFF_MS.length - 1)];
@@ -150,6 +165,21 @@ export async function deliverOutboxEntry(deps: OutboxDeps, id: bigint): Promise<
     data: { attempts, nextAttemptAt: new Date(done.getTime() + wait), lastError },
   });
   return 'retry';
+}
+
+/** A merchant will never hear about this event unless someone acts: say so loudly. */
+async function reportGiveUp(deps: OutboxDeps, entry: OutboxGiveUp): Promise<void> {
+  console.error(
+    `[Webhook Outbox] GAVE UP on ${entry.event} for organization ${entry.organizationId}` +
+      `${entry.transactionId != null ? ` (transaction ${entry.transactionId})` : ''} after ${entry.attempts} attempt(s): ` +
+      `${entry.lastError ?? 'unknown error'} — webhook_outbox row ${entry.id} is now 'failed'`
+  );
+  if (!deps.onGiveUp) return;
+  try {
+    await deps.onGiveUp(entry);
+  } catch (err) {
+    console.error('[Webhook Outbox] Give-up alert could not be sent:', err);
+  }
 }
 
 /** Rows whose next attempt is due, oldest first. */
