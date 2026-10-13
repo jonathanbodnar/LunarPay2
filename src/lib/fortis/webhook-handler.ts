@@ -4,6 +4,9 @@ import { FortisWebhookPayload } from '@/types/fortis';
 import { logWebhookReceived, logPaymentStatusUpdated } from '@/lib/payment-logger';
 import { notifyAgencyOfStatusChange } from '@/lib/agency-webhook';
 import { PROVISIONING_CLAIM_PREFIX } from '@/lib/fortis/onboarding-sync';
+import { reconcileAchTransactionById } from '@/lib/fortis/ach-settlement';
+import { achSettlementDeps } from '@/lib/fortis/ach-settlement-runtime';
+import { transactionPostbackRecord } from '@/lib/fortis/webhook-body';
 
 /**
  * Route an incoming Fortis webhook to the correct handler.
@@ -26,6 +29,13 @@ export async function routeWebhook(body: any) {
   // Merchant onboarding webhook: has client_app_id
   if ('client_app_id' in mergedPayload && mergedPayload.client_app_id) {
     return handleMerchantOnboardingWebhook(mergedPayload, body);
+  }
+
+  // Fortis transaction postback (a POST /v1/webhooks/transaction config):
+  // { type, resource: 'transaction', data: { id, status_code, ... } }
+  const postbackRecord = transactionPostbackRecord(body);
+  if (postbackRecord) {
+    return handleTransactionStatusWebhook(postbackRecord, { postback: true });
   }
 
   // Transaction status webhook
@@ -321,8 +331,13 @@ async function handleMerchantOnboardingWebhook(payload: FortisWebhookPayload, ra
 
 /**
  * Handle a transaction status webhook from Fortis.
+ *
+ * `postback` marks Fortis's form-encoded postback format, which used to fail
+ * to parse at all. Those are acted on for ACH only; a card postback is
+ * acknowledged and ignored, so the card branch below stays reachable exactly
+ * as it was (top-level JSON only) — it would read a refund or void as a failure.
  */
-async function handleTransactionStatusWebhook(body: any) {
+async function handleTransactionStatusWebhook(body: any, opts: { postback?: boolean } = {}) {
   const fortisTransactionId = body.transaction_id || body.id;
   const statusCode = body.status_code;
   const reasonCode = body.reason_code_id;
@@ -341,6 +356,26 @@ async function handleTransactionStatusWebhook(body: any) {
   if (!transaction) {
     console.warn(`[Fortis Webhook] Transaction not found for Fortis ID: ${fortisTransactionId}`);
     return NextResponse.json({ status: true, message: 'Webhook received but transaction not found' });
+  }
+
+  // ACH: the codes below are card codes — an ACH debit's own progress
+  // (131–133) and settlement (134) are not 101, and used to be recorded as
+  // failures. The postback only says WHICH transaction to look at: its state is
+  // re-read from Fortis with the merchant's own credentials and applied by the
+  // same mapping and conditional write as the reconcile cron, which also sends
+  // charge.succeeded / charge.failed. So the webhook and the cron can't
+  // disagree or both announce one transition, and an unsigned or forged post
+  // can at most trigger a re-check.
+  if (transaction.source === 'BNK') {
+    const result = await reconcileAchTransactionById(achSettlementDeps(), transaction.id, 'webhook');
+    return NextResponse.json({
+      status: true,
+      message: `ACH transaction ${result ? result.outcome : 'not tracked'}`,
+    });
+  }
+
+  if (opts.postback) {
+    return NextResponse.json({ status: true, message: 'Card transaction postback acknowledged; not processed' });
   }
 
   let newStatus: 'P' | 'N' = transaction.status as 'P' | 'N';

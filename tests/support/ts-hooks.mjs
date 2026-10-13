@@ -31,11 +31,22 @@ export async function resolve(specifier, context, nextResolve) {
     const hit = probe(path.resolve(path.dirname(fileURLToPath(context.parentURL)), specifier));
     if (hit) return { url: pathToFileURL(hit).href, shortCircuit: true };
   }
-  return nextResolve(specifier, context);
+  try {
+    return await nextResolve(specifier, context);
+  } catch (err) {
+    // Package subpaths without an exports map (e.g. `next/server`) resolve the
+    // CommonJS way in the app's bundler; ESM needs the file extension.
+    const bareSubpath = /^(@[^/]+\/)?[^./][^/]*\/.+/.test(specifier) && !/\.[cm]?js$/.test(specifier);
+    if (err?.code === 'ERR_MODULE_NOT_FOUND' && bareSubpath) {
+      return nextResolve(`${specifier}.js`, context);
+    }
+    throw err;
+  }
 }
 
 export async function load(url, context, nextLoad) {
-  if (url.startsWith('file:') && /\.tsx?$/.test(url)) {
+  // Test the path, not the URL: module mocks append a query string.
+  if (url.startsWith('file:') && /\.tsx?$/.test(new URL(url).pathname)) {
     const filename = fileURLToPath(url);
     const source = await readFile(filename, 'utf8');
     const { outputText } = ts.transpileModule(source, {

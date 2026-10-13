@@ -1,15 +1,22 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { routeWebhook } from '@/lib/fortis/webhook-handler';
+import { parseFortisWebhookBody } from '@/lib/fortis/webhook-body';
 
 /**
  * Fortis Webhook Handler - Legacy URL
  * Matches the old PHP endpoint: /fortiswebhooks/merchant_account_status_listener
  * No signature verification (Fortis classic callback).
+ *
+ * Onboarding callbacks are JSON; Fortis transaction postbacks are form-encoded
+ * with the record in a JSON `data` field — both are accepted.
  */
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = parseFortisWebhookBody(await request.text(), request.headers.get('content-type'));
+    if (!body) {
+      return NextResponse.json({ status: false, message: 'Unreadable webhook body' }, { status: 400 });
+    }
 
     console.log('[Fortis Webhook - Legacy URL] Received');
 

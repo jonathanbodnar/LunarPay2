@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { routeWebhook } from '@/lib/fortis/webhook-handler';
+import { parseFortisWebhookBody } from '@/lib/fortis/webhook-body';
 import crypto from 'crypto';
 
 const WEBHOOK_SECRET = process.env.FORTIS_WEBHOOK_SECRET;
@@ -44,7 +45,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: false, message: 'Invalid signature' }, { status: 401 });
     }
 
-    const body = JSON.parse(rawBody);
+    // JSON (onboarding) or form-encoded (Fortis transaction postbacks).
+    const body = parseFortisWebhookBody(rawBody, request.headers.get('content-type'));
+    if (!body) {
+      return NextResponse.json({ status: false, message: 'Unreadable webhook body' }, { status: 400 });
+    }
 
     await prisma.fortisWebhook.create({
       data: {
