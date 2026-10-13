@@ -252,6 +252,21 @@ test('a pre-cutoff renewal that a return cancels: no charge.failed, but subscrip
   assert.equal(quiet.fake.outbox().length, 0);
 });
 
+test("the reviewer's probe: month 1 returned R10 after month 2 settled — cancelled, and the dry run says so", async () => {
+  const month1 = row(43, { status: 'P', statusAch: 'P', subscriptionId: 6, fee: '0.88', subTotalAmount: '49.12', createdAt: ago(55 * DAY), updatedAt: ago(2 * DAY) });
+  const month2 = row(44, { status: 'P', statusAch: 'P', subscriptionId: 6, fee: '0.88', subTotalAmount: '49.12', createdAt: ago(25 * DAY), updatedAt: ago(3 * HOUR) });
+  const sub = { id: 6, status: 'A', consecutiveFailures: 0, failTrxns: 0, donorId: 77, email: 'd@example.org' };
+  const r10 = { status_code: 331, reason_code_id: 2110 };
+  const dry = harness({ rows: [month1, month2], fortis: { [fid(43)]: r10 }, subscriptions: [sub] });
+  const preview = await runAchReconcile(dry.deps, { dryRun: true });
+  assert.equal(preview.transitioned.length, 1);
+  assert.equal(preview.transitioned[0].subscriptionCancelled, true);
+  assert.ok(preview.transitioned[0].events?.includes('subscription.cancelled'));
+  const h = harness({ rows: [month1, month2], fortis: { [fid(43)]: r10 }, subscriptions: [sub] });
+  await runAchReconcile(h.deps);
+  assert.equal(h.fake.subscription(6).status, 'D');
+});
+
 test('a dry run is read-only: no run lease written, and it runs even while a real run holds the lease', async () => {
   const h = harness({ rows: [row(42)], fortis: { [fid(42)]: settledAt } });
   const preview = await runAchReconcile(h.deps, { dryRun: true });

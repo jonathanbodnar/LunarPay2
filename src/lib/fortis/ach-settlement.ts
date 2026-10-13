@@ -82,9 +82,10 @@ export const ACH_RUN_LOCK = 'reconcile-ach';
 export const ACH_RUN_LOCK_TTL_MS = 5 * 60 * 1000;
 
 /** An ACH debit still recorded as pending this long after it was created is
- *  taken to have cleared when judging a subscription's failure streak (Fortis
- *  settled the production debits we observed in ~3 business days). */
-export const ACH_SETTLEMENT_WINDOW_MS = 10 * 24 * 60 * 60 * 1000;
+ *  taken to have cleared when judging a subscription's failure streak. Fortis
+ *  settled the production debits we observed in ~3 business days; 14 days
+ *  covers that plus the 2-banking-day return window across holiday weeks. */
+export const ACH_SETTLEMENT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 /** Same threshold as the renewal cron (process-subscriptions). */
 export const MAX_CONSECUTIVE_FAILURES = 4;
 /**
@@ -455,19 +456,24 @@ type RenewalReader = Pick<AchDb, 'subscription' | 'transaction'>;
  * run can show it and the commit can apply exactly the same decision.
  *
  * It counts as a failed renewal, the way process-subscriptions counts a
- * decline, and cancels at MAX_CONSECUTIVE_FAILURES — or at once for a return
- * that forbids another debit. The renewal cron resets its own counter
+ * decline, and cancels at MAX_CONSECUTIVE_FAILURES — or at once, ALWAYS, for a
+ * return that forbids another debit (R02…R29 above), whatever has happened
+ * since: unauthorized returns (R07/R10/R29) may arrive up to 60 days after
+ * settlement, so a newer renewal having settled meanwhile is the normal case,
+ * and NACHA still forbids debiting again. The renewal cron resets its own counter
  * whenever the bank merely ACCEPTS a debit, which a return arrives days
  * after, so the streak is also read from the subscription's recent charges,
  * newest first:
  *   - a failure (N), and the returning debit itself, count;
  *   - a debit whose outcome is genuinely unknown is skipped: a pending row
  *     NEWER than the returning one, or one still inside the settlement window;
+ *     so is a newer voided (V) or refunded (R) row — neither is a success;
  *   - anything else is a success and ends the streak — including an older
  *     row still recorded as pending (renewals are written P/NULL and only
  *     become P/P if a reconcile reaches them, so an old P/NULL cleared).
  * A success NEWER than the returning debit means the subscription has been
- * charged fine since: the return is counted (fail_trxns) but cannot cancel it.
+ * charged fine since: the return is counted (fail_trxns) but cannot reach the
+ * consecutive-failure threshold — only a hard return code cancels then.
  *
  * Known limit (not changed here, it would touch the card renewal path): the
  * renewal cron writes consecutive_failures from a read taken at the start of
@@ -505,35 +511,28 @@ export async function planRenewalFailure(
       if (returning) sawReturning = true;
       continue;
     }
+    const newer = row.createdAt.getTime() > tx.createdAt.getTime();
     if (achWatchPhase(row) === 'pending') {
-      const newer = row.createdAt.getTime() > tx.createdAt.getTime();
       const inWindow = now.getTime() - row.createdAt.getTime() < ACH_SETTLEMENT_WINDOW_MS;
       if (newer || inWindow) continue; // outcome genuinely unknown
     }
-    newerSuccess = !sawReturning && row.createdAt.getTime() > tx.createdAt.getTime();
+    if (newer && (row.status === 'V' || row.status === 'R')) continue; // voided / refunded: not a success
+    newerSuccess = !sawReturning && newer;
     break; // a success ends the streak
   }
 
   const returnCode = change.outcome.kind === 'failed' ? change.outcome.returnCode : null;
-  if (newerSuccess) {
-    // Charged successfully since: count the return, change nothing else.
-    return {
-      subscriptionId: sub.id,
-      consecutiveFailures: Math.max(sub.consecutiveFailures ?? 0, streak),
-      wouldCancel: false,
-      immediate: false,
-      returnCode,
-      donorId: sub.donorId,
-      email: sub.email,
-    };
-  }
-  if (!sawReturning) streak++; // more newer rows than the window read
-  const consecutiveFailures = Math.max((sub.consecutiveFailures ?? 0) + 1, streak);
   const immediate = !!returnCode && IMMEDIATE_CANCEL_RETURN_CODES.has(returnCode);
+  // Charged successfully since the returning debit: the streak is the failures
+  // after that success, and the return does not extend it.
+  const consecutiveFailures = newerSuccess
+    ? Math.max(sub.consecutiveFailures ?? 0, streak)
+    : Math.max((sub.consecutiveFailures ?? 0) + 1, sawReturning ? streak : streak + 1);
   return {
     subscriptionId: sub.id,
     consecutiveFailures,
-    wouldCancel: sub.status === 'A' && (immediate || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES),
+    wouldCancel:
+      sub.status === 'A' && (immediate || (!newerSuccess && consecutiveFailures >= MAX_CONSECUTIVE_FAILURES)),
     immediate,
     returnCode,
     donorId: sub.donorId,

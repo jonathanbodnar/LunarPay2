@@ -386,17 +386,60 @@ test('regression: a yearly sub — 3 declines, then a success last year — is N
   }
 });
 
-test('charged fine since the returning debit: the return is counted but cannot cancel, even an R02', async () => {
-  // <returning now (older)>, <newer renewal that settled>
-  const w = renewalWorld({ consecutiveFailures: 0 }, [
-    { createdAt: new Date('2026-10-05T00:00:00Z') },
-    { status: 'P', statusAch: 'P', createdAt: new Date('2026-10-12T00:00:00Z') },
+/** Monthly: month 1 (returning now, older) and month 2, which has since settled. */
+function settledSince(extraNewer: Partial<AchTxRow>[] = []) {
+  return renewalWorld({ consecutiveFailures: 0 }, [
+    { createdAt: new Date('2026-08-20T00:00:00Z') },
+    { status: 'P', statusAch: 'P', createdAt: new Date('2026-09-20T00:00:00Z') },
+    ...extraNewer,
   ], 0);
-  const r = await commitAchTransition(w.fake.db, w.latest, asChange(planAchTransition(w.latest, RETURNED_R02)), {}, NOW, { events: [], subscriptionCancelled: true });
+}
+
+test('regression: a hard return code cancels even after a NEWER renewal has settled (R10, R07, R29, R02)', async () => {
+  for (const reason of [2110, 2107, 2129, 2102]) {
+    const w = settledSince();
+    const outcome = classifyAchTransaction({ status_code: 331, reason_code_id: reason });
+    const r = await commitAchTransition(w.fake.db, w.latest, asChange(planAchTransition(w.latest, outcome)), {}, NOW, { events: [], subscriptionCancelled: true });
+    assert.equal(r.renewal?.cancelled, true, `reason ${reason}`);
+    assert.equal(r.renewal?.immediate, true);
+    assert.equal(w.fake.subscription(9).status, 'D');
+    assert.equal(w.fake.outbox().filter((o) => o.event === 'subscription.cancelled').length, 1);
+  }
+});
+
+test('an R01 after a NEWER renewal has settled is counted but does not cancel', async () => {
+  const w = settledSince();
+  const r = await commitAchTransition(w.fake.db, w.latest, asChange(planAchTransition(w.latest, RETURNED_R01)), {}, NOW, { events: [], subscriptionCancelled: true });
   assert.equal(r.renewal?.cancelled, false);
   assert.equal(r.renewal?.consecutiveFailures, 0);
   assert.equal(w.fake.subscription(9).failTrxns, 1);
   assert.equal(w.fake.subscription(9).status, 'A');
+  // even with older failures behind it, the streak stops at the newer success
+  const behind = renewalWorld({ consecutiveFailures: 0 }, [
+    { status: 'N', createdAt: new Date('2026-05-20T00:00:00Z') },
+    { status: 'N', createdAt: new Date('2026-06-20T00:00:00Z') },
+    { status: 'N', createdAt: new Date('2026-07-20T00:00:00Z') },
+    { createdAt: new Date('2026-08-20T00:00:00Z') },
+    { status: 'P', statusAch: 'P', createdAt: new Date('2026-09-20T00:00:00Z') },
+  ], 3);
+  const b = await commitAchTransition(behind.fake.db, behind.latest, asChange(planAchTransition(behind.latest, RETURNED_R01)), {}, NOW);
+  assert.equal(b.renewal?.cancelled, false);
+});
+
+test('a NEWER voided or refunded renewal is not a success: it does not break the streak', async () => {
+  for (const status of ['V', 'R']) {
+    // N, N, N, <returning now>, <newer renewal, voided / refunded>
+    const w = renewalWorld({ consecutiveFailures: 0 }, [
+      { status: 'N', createdAt: new Date('2026-05-20T00:00:00Z') },
+      { status: 'N', createdAt: new Date('2026-06-20T00:00:00Z') },
+      { status: 'N', createdAt: new Date('2026-07-20T00:00:00Z') },
+      { createdAt: new Date('2026-08-20T00:00:00Z') },
+      { status, statusAch: status === 'V' ? 'F' : 'P', createdAt: new Date('2026-09-20T00:00:00Z') },
+    ], 3);
+    const r = await commitAchTransition(w.fake.db, w.latest, asChange(planAchTransition(w.latest, RETURNED_R01)), {}, NOW, { events: [], subscriptionCancelled: true });
+    assert.equal(r.renewal?.consecutiveFailures, 4, `newer ${status}`);
+    assert.equal(r.renewal?.cancelled, true, `newer ${status}`);
+  }
 });
 
 test('an already-cancelled subscription is counted but not cancelled again', async () => {
