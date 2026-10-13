@@ -40,6 +40,20 @@ test('a return reason wins over a settled status — a returned debit is never "
   assert.equal(outcome.kind === 'failed' && outcome.message, 'ACH return R02: Bank account closed');
 });
 
+test('only a real date counts as a return date', () => {
+  for (const notADate of [0, '0', '', '  ', '0000-00-00', '0000-00-00 00:00:00', 'null', 'N/A', 1765195663, '2026-02-30', '1999-12-31']) {
+    assert.equal(
+      classifyAchTransaction({ status_code: 134, reason_code_id: 1000, return_date: notADate, charge_back_date: notADate }).kind,
+      'settled',
+      `return_date ${JSON.stringify(notADate)} must not read as a return`,
+    );
+  }
+  for (const date of ['2026-10-01', '2026-10-01 00:00:00', '2026-10-01T12:30:00Z']) {
+    assert.equal(classifyAchTransaction({ status_code: 134, return_date: date }).kind, 'failed');
+    assert.equal(classifyAchTransaction({ status_code: 134, charge_back_date: date }).kind, 'failed');
+  }
+});
+
 test('a return date alone is treated as a return', () => {
   const outcome = classifyAchTransaction({ status_code: 134, reason_code_id: 1000, return_date: '2026-10-01' });
   assert.equal(outcome.kind, 'failed');

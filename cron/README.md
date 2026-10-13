@@ -76,17 +76,25 @@ Agencies can drive the same logic for their own merchants via `POST /api/v1/agen
 ### 7. ACH settlement reconcile (`ACH_RECONCILE_URL`)
 An ACH debit is accepted by Fortis at once and clears — or comes back — days later. Fortis transaction postbacks are not registered for merchants, so without this job a bank-account charge stays pending forever. Each run (`src/app/api/cron/reconcile-ach` → `lib/fortis/ach-settlement.ts`):
 
-- Reads every waiting ACH debit (`src = 'BNK'`, status `U` or `P` with `status_ach` NULL / `W` / `pending`, at least 2 hours old, at most 90 days, not re-checked in the last ~2 hours) back from Fortis — `GET /v1/transactions/{id}` with **that merchant's own** credentials — then settled ones (`P`/`P`) about once a day for 75 days, to catch a late return. Imports (`fortis_import`, `stripe_import`) are never touched.
-- Maps Fortis's ACH lifecycle (`lib/fortis/ach-status.ts`): `131/132/133` still in flight → nothing; `134` settled → `status P`, `status_ach P`, **`charge.succeeded`** (`status: 'paid'`); `331` charged back or a return reason (`2101–2183` = R01–R83) → `status N`, `status_ach F`, **`charge.failed`** with the reason in `error` (e.g. `ACH return R01: Insufficient funds`) and `return_code`; `201` voided → `status V`, `charge.failed`; `301` declined → `status N`, `charge.failed`.
+- Takes a run lease (`job_locks`), so pg_cron and the Railway backstop can never run it concurrently; a second trigger during a run returns `ran: false` and reads nothing.
+- Re-sends announcements that never got a 2xx (`webhook_outbox`, backoff 5m → 24h, at most 8 attempts, then left `failed` for a human).
+- Reads every waiting ACH debit (`src = 'BNK'`, status `U` or `P` with `status_ach` NULL / `W` / `pending`, at least 2 hours old, at most 90 days, not re-checked in the last ~2 hours) back from Fortis — `GET /v1/transactions/{id}` with **that merchant's own** credentials, in the environment `fortis_environment` selects (exactly as `POST /api/v1/charges` does) — then settled ones (`P`/`P`) about once a day for 75 days, to catch a late return. Imports (`fortis_import`, `stripe_import`) are never touched; rows whose id is not a Fortis id are rotated out of the queue.
+- Maps Fortis's ACH lifecycle (`lib/fortis/ach-status.ts`): `131/132/133` still in flight → nothing; `134` settled → `status P`, `status_ach P`; `331` charged back, a return reason (`2101–2183` = R01–R83) or a real return date → `status N`, `status_ach F`; `201` voided → `status V`; `301` declined → `status N`.
 - Moves the donor's running totals the way each charge path counted them, in the same database transaction as the status change.
-- Every change is a conditional write on the row's previous `(status, status_ach)`, so it lands — and its webhook is sent — exactly once, even with the Fortis transaction webhook (which uses the same code) or an overlapping run racing it.
-- Bounded: at most `limit` Fortis reads (default 100, max 500), 4 at a time, none started after 45 s. Rows checked with no news get `updated_at` bumped, so the queue rotates oldest-checked first.
+- A returned **renewal** counts as a failed renewal (`fail_trxns`, `consecutive_failures`, read from the subscription's own recent charges because the renewal cron resets its counter when the bank merely accepts a debit). The subscription is cancelled at 4 consecutive failures, and at once on R02, R03, R04, R07, R08, R10, R16, R20 or R29 (no further debit allowed). No `payment.failed` is sent for a return.
+- Every change is a conditional write on the row's previous `(status, status_ach)`, so it lands — and is queued for announcement — exactly once, even with the Fortis transaction webhook (which uses the same code) racing it.
+- Bounded: at most `limit` Fortis reads (default 100, max 500), 4 at a time, none started after 45 s.
 
-Optional query params: `?organizationId=123` (one merchant), `?limit=50`, and **`?dryRun=1`** — reads Fortis and reports what would change, but writes and sends nothing.
+**Who is told.** Only debits created through `POST /api/v1/charges` or a subscription renewal **at or after `ACH_CHARGE_EVENTS_SINCE`** — the merchant gets `charge.succeeded` (`status: 'paid'`) when the debit settles, or `charge.failed` (`status: 'returned' | 'voided' | 'failed'`, the reason in `error`, e.g. `ACH return R01: Insufficient funds`, and `return_code`), plus `subscription.cancelled` when a return cancels a subscription — same sender, signing and payload keys as the charge route and the renewal cron. Everything else (older rows; hosted checkout, payment links, dashboard charges, installments) is reconciled **silently**: those merchants never received `charge.*` for those paths and do not start now. With the variable unset, nothing is announced at all.
 
-**Deploy setup.** No migration and no new environment variables (it uses `CRON_SECRET` / `CRON_ADMIN_KEY` and the Fortis keys already set). After deploying:
+Optional query params: `?organizationId=123` (one merchant), `?limit=50`, and **`?dryRun=1`** — reads Fortis and reports what would change (each transition says whether it would be `announced`), but writes and sends nothing.
 
-1. Schedule it in Supabase pg_cron (the scheduler of record) — same shape as the `sync-onboarding-status` job, with the same `CRON_SECRET` bearer:
+**Deploy setup — in this order:**
+
+1. **Apply `scripts/sql/004-ach-settlement.sql`** to production (two new tables, `webhook_outbox` and `job_locks`, and one index). It is additive; nothing else reads them. Until it is applied the schema-drift check fails and this route returns 500 at its lock.
+2. **Deploy** the code, with `ACH_CHARGE_EVENTS_SINCE` set on Railway to the deploy time as an ISO timestamp (e.g. `2026-10-15T00:00:00Z`).
+3. **Review with a dry run** before anything is scheduled: `curl "https://app.lunarpay.com/api/cron/reconcile-ach?dryRun=1&limit=500&admin_key=${CRON_ADMIN_KEY}"`. It lists every status the first run would change (the backfill) and confirms none of the older rows is `announced`. Run it per merchant with `&organizationId=` if the list is long.
+4. **Schedule** it in Supabase pg_cron (the scheduler of record) — same shape as the `sync-onboarding-status` job, with the same `CRON_SECRET` bearer:
 
    ```sql
    select cron.schedule(
@@ -105,12 +113,11 @@ Optional query params: `?organizationId=123` (one merchant), `?limit=50`, and **
      $$
    );
    ```
-2. Optional backstop: set `ACH_RECONCILE_URL` on the Railway cron service.
-3. Verify once with a dry run: `curl "https://app.lunarpay.com/api/cron/reconcile-ach?dryRun=1&admin_key=${CRON_ADMIN_KEY}"`.
+5. Optional backstop: set `ACH_RECONCILE_URL` on the Railway cron service. It cannot double the Fortis read rate: the lease prevents overlap, and rows checked in the last ~2 hours are skipped.
 
-Stop it with `select cron.unschedule('reconcile-ach-hourly');`.
+Stop it with `select cron.unschedule('reconcile-ach-hourly');`. Undelivered announcements: `select id, event, organization_id, attempts, last_error from webhook_outbox where status in ('pending','failed') order by created_at desc;`
 
-**Fortis postbacks (optional).** If a transaction postback is ever registered for a merchant (`POST /v1/webhooks/transaction` with `on_update`, pointing at `/fortiswebhooks/merchant_account_status_listener`), ACH updates take effect within seconds instead of on the next run. The handler accepts Fortis's form-encoded postback format and treats it only as "check this transaction now" — the status is always re-read from Fortis — so a postback and this job can never disagree or double-send.
+**Fortis postbacks (optional).** If a transaction postback is ever registered for a merchant (`POST /v1/webhooks/transaction` with `on_update`, pointing at `/fortiswebhooks/merchant_account_status_listener`), ACH updates take effect within seconds instead of on the next run. Fortis posts these form-encoded; only a postback naming an ACH debit is acted on, and only as "check this transaction now" (at most once a minute per transaction) — the status is always re-read from Fortis. JSON webhooks, and form bodies that name anything else, are handled exactly as before.
 
 > **Note:** Email categories `cron`, `subscription`, and `agency` are currently disabled via `EMAILS_DISABLED_CATEGORIES` while SendGrid is being resolved. Set `EMAILS_DISABLED_CATEGORIES=` (empty) on Railway to re-enable once fixed.
 

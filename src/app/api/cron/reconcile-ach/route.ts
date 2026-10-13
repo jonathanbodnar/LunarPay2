@@ -14,17 +14,25 @@
  * GET|POST /api/cron/reconcile-ach?limit=&organizationId=&dryRun=1
  *   limit           max Fortis reads this run (default 100, max 500)
  *   organizationId  only this merchant
- *   dryRun=1        read Fortis and report what WOULD change; writes and sends nothing
+ *   dryRun=1        read Fortis and report what WOULD change — each transition
+ *                   says whether the merchant would be told (`announced`);
+ *                   writes and sends nothing. Run it before scheduling.
+ *
+ * Merchants are told (charge.succeeded / charge.failed, subscription.cancelled)
+ * only about debits created through POST /api/v1/charges or a renewal at or
+ * after ACH_CHARGE_EVENTS_SINCE; everything else is reconciled silently.
  *
  * Auth: `Authorization: Bearer <CRON_SECRET>`, `x-cron-secret: <CRON_SECRET>`,
  * or `?admin_key=<CRON_ADMIN_KEY>` for manual triggering.
  *
  * Schedule: hourly from Supabase pg_cron (the scheduler of record), with the
  * Railway cron service as a backstop — cron/README.md has the exact setup.
- * Safe to run concurrently or repeatedly: every transition is a conditional
- * write, so it lands and is announced exactly once.
+ * Safe to trigger from both schedulers: a run lease (job_locks) lets only one
+ * run at a time, rows checked within ~2 hours are skipped, and every
+ * transition is a conditional write, so it lands and is queued exactly once.
  */
 
+import { createHash, timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { runAchReconcile } from '@/lib/fortis/ach-settlement';
 import { achSettlementDeps } from '@/lib/fortis/ach-settlement-runtime';
@@ -32,6 +40,14 @@ import { achSettlementDeps } from '@/lib/fortis/ach-settlement-runtime';
 export const maxDuration = 60;
 
 const MAX_LIMIT = 500;
+
+/** Constant-time string comparison (hashing first makes the lengths equal). */
+function secretMatches(provided: string | null, expected: string | undefined): boolean {
+  if (!provided || !expected) return false;
+  const a = createHash('sha256').update(provided).digest();
+  const b = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(a, b);
+}
 
 function isAuthorized(request: NextRequest, searchParams: URLSearchParams): boolean {
   const cronSecret = process.env.CRON_SECRET;
@@ -42,10 +58,10 @@ function isAuthorized(request: NextRequest, searchParams: URLSearchParams): bool
   const queryAdminKey = searchParams.get('admin_key');
 
   if (cronSecret) {
-    if (authHeader === `Bearer ${cronSecret}` || authHeader === cronSecret) return true;
-    if (cronHeader === cronSecret) return true;
+    if (secretMatches(authHeader, `Bearer ${cronSecret}`) || secretMatches(authHeader, cronSecret)) return true;
+    if (secretMatches(cronHeader, cronSecret)) return true;
   }
-  if (adminKey && queryAdminKey === adminKey) return true;
+  if (adminKey && secretMatches(queryAdminKey, adminKey)) return true;
 
   return false;
 }
@@ -72,14 +88,19 @@ export async function GET(request: NextRequest) {
   try {
     const summary = await runAchReconcile(achSettlementDeps(), { limit, organizationId, dryRun });
 
+    if (!summary.ran) {
+      console.log('[RECONCILE_ACH] Another run holds the lock; skipped');
+      return NextResponse.json({ success: true, ...summary, timestamp: new Date().toISOString() });
+    }
+
     console.log(
-      `[RECONCILE_ACH]${dryRun ? ' (dry run)' : ''} selected=${summary.selected} checked=${summary.checked} ` +
+      `[RECONCILE_ACH]${dryRun ? ' (dry run)' : ''} outboxRetried=${summary.outboxRetried} selected=${summary.selected} checked=${summary.checked} ` +
         `transitioned=${summary.transitioned.length} unchanged=${summary.unchanged} skipped=${summary.skipped.length} ` +
         `errors=${summary.errors.length} deferred=${summary.deferred}` +
         (organizationId ? ` organizationId=${organizationId}` : '') +
         (summary.transitioned.length
           ? ` (${summary.transitioned
-              .map((r) => `${r.organizationId}:${r.transactionId} ${r.from?.status}/${r.from?.statusAch ?? '-'}→${r.to?.status}/${r.to?.statusAch} ${r.event}${r.returnCode ? ` ${r.returnCode}` : ''}`)
+              .map((r) => `${r.organizationId}:${r.transactionId} ${r.from?.status}/${r.from?.statusAch ?? '-'}→${r.to?.status}/${r.to?.statusAch} ${r.event}${r.announced ? '' : ' (silent)'}${r.returnCode ? ` ${r.returnCode}` : ''}${r.subscriptionCancelled ? ' +subscription cancelled' : ''}`)
               .join(', ')})`
           : '')
     );

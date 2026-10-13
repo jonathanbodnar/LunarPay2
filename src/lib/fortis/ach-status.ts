@@ -179,8 +179,19 @@ function toInt(value: unknown): number | null {
   return null;
 }
 
-function present(value: unknown): boolean {
-  return value !== null && value !== undefined && String(value).trim() !== '';
+/**
+ * A real calendar date — what Fortis puts in return_date / charge_back_date
+ * once a debit comes back ("YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS"). Empty
+ * values, 0, "0" and zero dates ("0000-00-00") are not dates.
+ */
+export function isRealDate(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.exec(value.trim());
+  if (!match) return false;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  if (year < 2000 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
 }
 
 /**
@@ -206,9 +217,10 @@ export function achReturnDescription(returnCode: string | null): string | null {
  *   131/132/133             → pending  (still in the ACH network; nothing to report)
  *   134                     → settled
  *   331, a return reason
- *   (21xx/23xx), or a
+ *   (21xx/23xx), or a real
  *   return/charge-back date → failed: returned   (wins over 134 — a debit with a
- *                                                return on it is never "settled")
+ *                                                return on it is never "settled";
+ *                                                0 / "" / "0000-00-00" are not dates)
  *   201 or reason 2200      → failed: voided
  *   301                     → failed: declined
  *   anything else           → unknown (callers leave the row alone and retry)
@@ -221,8 +233,8 @@ export function classifyAchTransaction(record: FortisAchRecord): AchOutcome {
   const returned =
     statusCode === FORTIS_ACH_STATUS.CHARGED_BACK ||
     returnCode !== null ||
-    present(record.return_date) ||
-    present(record.charge_back_date);
+    isRealDate(record.return_date) ||
+    isRealDate(record.charge_back_date);
 
   if (returned) {
     const description = achReturnDescription(returnCode);

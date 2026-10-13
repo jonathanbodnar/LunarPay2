@@ -1,8 +1,17 @@
 /**
  * Production wiring for lib/fortis/ach-settlement.ts: the real database, the
- * merchant's own Fortis credentials, and the same webhook sender POST
- * /api/v1/charges uses. Only call from inside a route handler — deliveries are
- * deferred with after().
+ * merchant's own Fortis credentials, the durable webhook outbox and the same
+ * signed sender POST /api/v1/charges uses. Only call from inside a route
+ * handler — deliveries are deferred with after().
+ *
+ * Environment:
+ *   ACH_CHARGE_EVENTS_SINCE  ISO timestamp (set to the deploy time). Debits
+ *                            created at or after it through POST /v1/charges or
+ *                            a subscription renewal are announced; unset, the
+ *                            reconcile updates statuses and announces nothing.
+ *   fortis_environment       'prd' → production, anything else sandbox — read
+ *                            exactly as POST /api/v1/charges reads it, so the
+ *                            debit and its reconcile always hit the same Fortis.
  */
 
 import { after } from 'next/server';
@@ -10,7 +19,21 @@ import { prisma } from '@/lib/prisma';
 import { createFortisClient } from '@/lib/fortis/client';
 import { deliverWebhook } from '@/lib/webhook';
 import { logPaymentStatusUpdated } from '@/lib/payment-logger';
-import type { AchReconcileDeps } from '@/lib/fortis/ach-settlement';
+import { deliverOutboxEntries, type OutboxDeps } from '@/lib/webhook-outbox';
+import { parseChargeEventsSince, type AchReconcileDeps } from '@/lib/fortis/ach-settlement';
+
+function fortisEnvironment(): 'sandbox' | 'production' {
+  const fortisEnv = process.env.fortis_environment || 'dev';
+  return fortisEnv === 'prd' ? 'production' : 'sandbox';
+}
+
+export function outboxDeps(): OutboxDeps {
+  return {
+    db: prisma,
+    send: (webhookUrl, webhookSecret, event, organizationId, data) =>
+      deliverWebhook(webhookUrl, webhookSecret, event, organizationId, data),
+  };
+}
 
 export function achSettlementDeps(): AchReconcileDeps {
   return {
@@ -18,9 +41,7 @@ export function achSettlementDeps(): AchReconcileDeps {
 
     async fetchTransaction(org, fortisTransactionId) {
       try {
-        // Environment comes from FORTIS_ENVIRONMENT / fortis_environment, as for
-        // every other merchant-credential call.
-        const client = createFortisClient(undefined, org.fortisUserId, org.fortisApiKey);
+        const client = createFortisClient(fortisEnvironment(), org.fortisUserId, org.fortisApiKey);
         const res = await client.getTransaction(fortisTransactionId, { timeout: 15000 });
         if (res.status && res.transaction) return { ok: true, transaction: res.transaction };
         return { ok: false, httpStatus: res.httpStatus, message: res.message || 'Fortis transaction read failed' };
@@ -29,13 +50,15 @@ export function achSettlementDeps(): AchReconcileDeps {
       }
     },
 
-    deliver(org, event, data) {
-      // Deferred, as for merchant.approved: delivery retries with backoff
-      // (up to ~36s), which must not eat the cron's time budget or hold a
-      // Fortis postback response open. The transition is already committed, and
-      // GET /api/v1/charges/:id reflects it even if every attempt fails.
-      after(() => deliverWebhook(org.webhookUrl, org.webhookSecret, event, org.organizationId, data));
+    dispatch(outboxIds) {
+      // Deferred: the signed sender retries with backoff (up to ~36s), which
+      // must not eat the cron's time budget or hold a Fortis postback open.
+      // Anything that fails here stays pending in webhook_outbox and is re-sent
+      // by the next reconcile run.
+      after(() => deliverOutboxEntries(outboxDeps(), outboxIds));
     },
+
+    chargeEventsSince: parseChargeEventsSince(process.env.ACH_CHARGE_EVENTS_SINCE),
 
     async logTransition({ tx, transition, origin }) {
       const outcome = transition.outcome;

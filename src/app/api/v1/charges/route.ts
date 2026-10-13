@@ -369,7 +369,7 @@ export async function POST(request: NextRequest) {
         description: description || null,
         createdAt: transaction.createdAt,
         ...(isAch
-          ? { note: 'ACH transactions take 3–5 business days to clear. Final status is delivered via webhook: charge.succeeded (status paid) when it settles, charge.failed (with the return reason in error) if it is returned, voided or declined.' }
+          ? { note: 'ACH transactions take 3–5 business days to clear. Final status is delivered via webhook.' }
           : !capture
             ? { note: 'Hold placed. Capture within your authorization window (typically 7 days) via POST /api/v1/charges/:id/capture, or release the hold via POST /api/v1/charges/:id/void.' }
             : {}),

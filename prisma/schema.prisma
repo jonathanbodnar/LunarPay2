@@ -432,6 +432,8 @@ model Transaction {
   checkoutSessions      CheckoutSession[]
 
   @@unique([organizationId, idempotencyKey], map: "transaction_org_idempotency_key")
+  // The ACH reconcile's queue (src = 'BNK', status U/P, oldest-checked first).
+  @@index([source, status, updatedAt], map: "transactions_src_status_updated_idx")
   @@map("epicpay_customer_transactions")
 }
 
@@ -1221,4 +1223,46 @@ model WebhookConfigAudit {
   @@index([organizationId, createdAt(sort: Desc)])
   @@index([agencyId, createdAt(sort: Desc)])
   @@map("webhook_config_audit")
+}
+
+/// Merchant webhooks that must not be lost (ACH settlement: charge.succeeded,
+/// charge.failed, and subscription.cancelled after a return). Each row is
+/// written in the SAME database transaction as the state change it announces,
+/// then delivered; a failed delivery is retried by the ACH reconcile cron with
+/// backoff until a 2xx, at most a bounded number of attempts — see
+/// src/lib/webhook-outbox.ts. Every attempt is also logged in webhook_deliveries.
+model WebhookOutbox {
+  id             BigInt    @id @default(autoincrement())
+  organizationId Int       @map("organization_id")
+  transactionId  BigInt?   @map("transaction_id")
+  event          String    @db.VarChar(64)
+  /// JSON of the event's `data`
+  payload        String    @db.Text
+  /// One row per announced transition, e.g. charge.failed:<transaction id>
+  dedupeKey      String    @unique @map("dedupe_key") @db.VarChar(128)
+  /// pending | delivered | failed | superseded
+  status         String    @default("pending") @db.VarChar(16)
+  attempts       Int       @default(0)
+  nextAttemptAt  DateTime  @default(now()) @map("next_attempt_at")
+  lastError      String?   @map("last_error") @db.Text
+  deliveredAt    DateTime? @map("delivered_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, nextAttemptAt], map: "webhook_outbox_due_idx")
+  @@index([transactionId], map: "webhook_outbox_transaction_idx")
+  @@map("webhook_outbox")
+}
+
+/// Run leases for scheduled jobs that can be triggered by more than one
+/// scheduler (Supabase pg_cron + the Railway cron service): a run takes the
+/// lease with a conditional write and skips if another run holds it. A crashed
+/// run's lease simply expires.
+model JobLock {
+  name        String   @id @db.VarChar(64)
+  lockedUntil DateTime @map("locked_until")
+  holder      String?  @db.VarChar(64)
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("job_locks")
 }

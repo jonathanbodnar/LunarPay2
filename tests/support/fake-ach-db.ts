@@ -1,10 +1,10 @@
 /**
- * In-memory stand-in for the slice of the Prisma client that
- * lib/fortis/ach-settlement.ts uses. It evaluates the same `where` shapes
- * Prisma would (equality, null, in, not, lte/gte, endsWith, OR, NOT), so
- * tests exercise the real selection predicates and the conditional
- * (compare-and-set) writes rather than canned answers. $transaction snapshots
- * state and restores it if the callback throws.
+ * In-memory stand-in for the slice of the Prisma client that the ACH
+ * settlement, webhook outbox and job lock modules use. It evaluates the same
+ * `where` shapes Prisma would (equality, null, in, not, lt/lte/gt/gte,
+ * endsWith, OR, NOT), so tests exercise the real selection predicates and the
+ * conditional (compare-and-set) writes rather than canned answers.
+ * $transaction snapshots state and restores it if the callback throws.
  */
 import type { AchDb, AchTxRow } from '@/lib/fortis/ach-settlement';
 
@@ -43,16 +43,19 @@ export function matches(row: Row, where: Row | undefined): boolean {
       if (value !== null && value !== undefined) return false;
       continue;
     }
-    if (typeof cond !== 'object' || cond instanceof Date) {
+    if (typeof cond !== 'object' || cond instanceof Date || typeof cond === 'bigint') {
       if (!eq(value, cond)) return false;
       continue;
     }
     const ops = cond as Row;
     if ('in' in ops && !(ops.in as unknown[]).some((x) => eq(value, x))) return false;
+    if ('notIn' in ops && (ops.notIn as unknown[]).some((x) => eq(value, x))) return false;
     if ('not' in ops) {
       if (ops.not === null ? value === null || value === undefined : eq(value, ops.not)) return false;
     }
+    if ('lt' in ops && !(value != null && cmp(value, ops.lt) < 0)) return false;
     if ('lte' in ops && !(value != null && cmp(value, ops.lte) <= 0)) return false;
+    if ('gt' in ops && !(value != null && cmp(value, ops.gt) > 0)) return false;
     if ('gte' in ops && !(value != null && cmp(value, ops.gte) >= 0)) return false;
     if ('endsWith' in ops && !(typeof value === 'string' && value.endsWith(ops.endsWith as string))) return false;
   }
@@ -61,13 +64,27 @@ export function matches(row: Row, where: Row | undefined): boolean {
 
 function applyData(row: Row, data: Row) {
   for (const [key, change] of Object.entries(data)) {
-    if (change && typeof change === 'object' && !(change instanceof Date) && 'increment' in (change as Row)) {
+    if (change && typeof change === 'object' && !(change instanceof Date) && ('increment' in (change as Row) || 'decrement' in (change as Row))) {
       const current = row[key];
-      row[key] = current === null || current === undefined ? null : Math.round((Number(current) + Number((change as Row).increment)) * 100) / 100;
+      const by = 'increment' in (change as Row) ? Number((change as Row).increment) : -Number((change as Row).decrement);
+      row[key] = current === null || current === undefined ? null : Math.round((Number(current) + by) * 100) / 100;
     } else {
       row[key] = change;
     }
   }
+}
+
+function sortRows(rows: Row[], orderBy: Row | undefined): Row[] {
+  if (!orderBy) return rows;
+  const [[key, dir]] = Object.entries(orderBy) as [string, 'asc' | 'desc'][];
+  return [...rows].sort((a, b) => cmp(a[key], b[key]) * (dir === 'asc' ? 1 : -1));
+}
+
+function pick(row: Row, select: Row | undefined): Row {
+  if (!select) return { ...row };
+  const out: Row = {};
+  for (const [k, v] of Object.entries(select)) if (v) out[k] = row[k];
+  return out;
 }
 
 export interface FakeDonor {
@@ -92,54 +109,89 @@ export interface FakeSource {
   fortisWalletId: string;
 }
 
+export interface FakeSubscription {
+  id: number;
+  status: string;
+  consecutiveFailures: number;
+  failTrxns: number | null;
+  donorId: number;
+  email: string;
+  cancelledAt?: Date | null;
+}
+
+export interface FakeOutboxRow {
+  id: bigint;
+  organizationId: number;
+  transactionId: bigint | null;
+  event: string;
+  payload: string;
+  dedupeKey: string;
+  status: string;
+  attempts: number;
+  nextAttemptAt: Date;
+  lastError: string | null;
+  deliveredAt: Date | null;
+}
+
+class UniqueViolation extends Error {
+  code = 'P2002';
+}
+
 export function createFakeAchDb(seed: {
   transactions?: AchTxRow[];
   donors?: FakeDonor[];
   orgs?: FakeOrg[];
   sources?: FakeSource[];
+  subscriptions?: FakeSubscription[];
+  outbox?: FakeOutboxRow[];
 }) {
   const state = {
     transactions: (seed.transactions ?? []).map((t) => ({ ...t })) as Row[],
     donors: (seed.donors ?? []).map((d) => ({ ...d })) as Row[],
     orgs: (seed.orgs ?? []).map((o) => ({ ...o })) as Row[],
     sources: (seed.sources ?? []).map((s) => ({ ...s })) as Row[],
+    subscriptions: (seed.subscriptions ?? []).map((s) => ({ cancelledAt: null, ...s })) as Row[],
+    outbox: (seed.outbox ?? []).map((o) => ({ ...o })) as Row[],
+    locks: [] as Row[],
     writes: [] as Array<{ table: string; where: Row; data: Row; count: number }>,
     findManyCalls: [] as Row[],
+    nextOutboxId: BigInt(1000),
   };
 
-  const snapshot = () => JSON.stringify(
-    { t: state.transactions, d: state.donors },
-    (_k, v) => (typeof v === 'bigint' ? { __bigint: v.toString() } : v),
-  );
+  const tables = ['transactions', 'donors', 'subscriptions', 'outbox', 'locks'] as const;
+  const snapshot = () =>
+    JSON.stringify(
+      Object.fromEntries(tables.map((t) => [t, state[t]])),
+      (_k, v) => (typeof v === 'bigint' ? { __bigint: v.toString() } : v),
+    );
+  const DATE_KEYS = new Set(['createdAt', 'updatedAt', 'firstDate', 'cancelledAt', 'nextAttemptAt', 'deliveredAt', 'lockedUntil']);
   const restore = (snap: string) => {
-    const parsed = JSON.parse(snap, (_k, v) => (v && typeof v === 'object' && '__bigint' in v ? BigInt(v.__bigint) : v));
-    const revive = (rows: Row[]) =>
-      rows.map((r) => {
-        for (const k of ['createdAt', 'updatedAt', 'firstDate']) if (typeof r[k] === 'string') r[k] = new Date(r[k] as string);
-        return r;
-      });
-    state.transactions = revive(parsed.t);
-    state.donors = revive(parsed.d);
+    const parsed = JSON.parse(snap, (k, v) => {
+      if (v && typeof v === 'object' && '__bigint' in v) return BigInt(v.__bigint);
+      if (DATE_KEYS.has(k) && typeof v === 'string') return new Date(v);
+      return v;
+    });
+    for (const t of tables) state[t] = parsed[t];
   };
+
+  const record = (table: string, where: Row, data: Row, count: number) => state.writes.push({ table, where, data, count });
 
   const db = {
     transaction: {
-      async findMany(args: { where?: Row; orderBy?: Row; take?: number }) {
+      async findMany(args: { where?: Row; orderBy?: Row; take?: number; select?: Row }) {
         state.findManyCalls.push(args as Row);
-        let rows = state.transactions.filter((r) => matches(r, args.where));
-        const order = args.orderBy as { updatedAt?: 'asc' | 'desc' } | undefined;
-        if (order?.updatedAt) rows = [...rows].sort((a, b) => cmp(a.updatedAt, b.updatedAt) * (order.updatedAt === 'asc' ? 1 : -1));
+        let rows = sortRows(state.transactions.filter((r) => matches(r, args.where)), args.orderBy);
         if (args.take !== undefined) rows = rows.slice(0, args.take);
-        return rows.map((r) => ({ ...r }));
+        return rows.map((r) => pick(r, args.select));
       },
-      async findUnique(args: { where: Row }) {
+      async findUnique(args: { where: Row; select?: Row }) {
         const row = state.transactions.find((r) => matches(r, args.where));
-        return row ? { ...row } : null;
+        return row ? pick(row, args.select) : null;
       },
       async updateMany(args: { where: Row; data: Row }) {
         const rows = state.transactions.filter((r) => matches(r, args.where));
         rows.forEach((r) => applyData(r, args.data));
-        state.writes.push({ table: 'transaction', where: args.where, data: args.data, count: rows.length });
+        record('transaction', args.where, args.data, rows.length);
         return { count: rows.length };
       },
     },
@@ -147,12 +199,12 @@ export function createFakeAchDb(seed: {
       async updateMany(args: { where: Row; data: Row }) {
         const rows = state.donors.filter((r) => matches(r, args.where));
         rows.forEach((r) => applyData(r, args.data));
-        state.writes.push({ table: 'donor', where: args.where, data: args.data, count: rows.length });
+        record('donor', args.where, args.data, rows.length);
         return { count: rows.length };
       },
     },
     organization: {
-      async findUnique(args: { where: Row }) {
+      async findUnique(args: { where: Row; select?: Row }) {
         const row = state.orgs.find((r) => matches(r, args.where));
         return row ? { ...row } : null;
       },
@@ -161,6 +213,62 @@ export function createFakeAchDb(seed: {
       async findFirst(args: { where: Row }) {
         const row = state.sources.find((r) => matches(r, args.where));
         return row ? { id: row.id } : null;
+      },
+    },
+    subscription: {
+      async findUnique(args: { where: Row; select?: Row }) {
+        const row = state.subscriptions.find((r) => matches(r, args.where));
+        return row ? pick(row, args.select) : null;
+      },
+      async updateMany(args: { where: Row; data: Row }) {
+        const rows = state.subscriptions.filter((r) => matches(r, args.where));
+        rows.forEach((r) => applyData(r, args.data));
+        record('subscription', args.where, args.data, rows.length);
+        return { count: rows.length };
+      },
+    },
+    webhookOutbox: {
+      async createManyAndReturn(args: { data: Row[]; skipDuplicates?: boolean; select?: Row }) {
+        const created: Row[] = [];
+        for (const data of args.data) {
+          if (state.outbox.some((r) => r.dedupeKey === data.dedupeKey)) {
+            if (args.skipDuplicates) continue;
+            throw new UniqueViolation('dedupe_key');
+          }
+          const row = { id: state.nextOutboxId++, lastError: null, deliveredAt: null, ...data };
+          state.outbox.push(row);
+          created.push(row);
+        }
+        record('webhookOutbox', {}, { created: created.length }, created.length);
+        return created.map((r) => pick(r, args.select));
+      },
+      async updateMany(args: { where: Row; data: Row }) {
+        const rows = state.outbox.filter((r) => matches(r, args.where));
+        rows.forEach((r) => applyData(r, args.data));
+        record('webhookOutbox', args.where, args.data, rows.length);
+        return { count: rows.length };
+      },
+      async findUnique(args: { where: Row }) {
+        const row = state.outbox.find((r) => matches(r, args.where));
+        return row ? { ...row } : null;
+      },
+      async findMany(args: { where?: Row; orderBy?: Row; take?: number; select?: Row }) {
+        let rows = sortRows(state.outbox.filter((r) => matches(r, args.where)), args.orderBy);
+        if (args.take !== undefined) rows = rows.slice(0, args.take);
+        return rows.map((r) => pick(r, args.select));
+      },
+    },
+    jobLock: {
+      async updateMany(args: { where: Row; data: Row }) {
+        const rows = state.locks.filter((r) => matches(r, args.where));
+        rows.forEach((r) => applyData(r, args.data));
+        return { count: rows.length };
+      },
+      async create(args: { data: Row }) {
+        if (state.locks.some((r) => r.name === args.data.name)) throw new UniqueViolation('job_locks_pkey');
+        const row = { ...args.data };
+        state.locks.push(row);
+        return { ...row };
       },
     },
     async $transaction<T>(fn: (t: unknown) => Promise<T>): Promise<T> {
@@ -178,10 +286,16 @@ export function createFakeAchDb(seed: {
     db: db as unknown as AchDb,
     state,
     tx(id: number | bigint) {
-      return state.transactions.find((r) => String(r.id) === String(id)) as unknown as AchTxRow;
+      return state.transactions.find((r) => String(r.id) === String(id)) as unknown as AchTxRow & { requestResponse?: string };
     },
     donor(id: number) {
       return state.donors.find((r) => r.id === id) as unknown as FakeDonor;
+    },
+    subscription(id: number) {
+      return state.subscriptions.find((r) => r.id === id) as unknown as FakeSubscription;
+    },
+    outbox() {
+      return state.outbox as unknown as FakeOutboxRow[];
     },
   };
 }
