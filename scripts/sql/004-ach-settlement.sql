@@ -1,6 +1,8 @@
 -- 004 — ACH settlement tracking (branch feat/ach-tracking)
 --
--- STATUS: NOT APPLIED. Apply to production BEFORE deploying the code that
+-- STATUS: APPLIED to production 2026-10-15, in one transaction (index built
+-- without CONCURRENTLY, lock_timeout 5s), together with section 4 below.
+-- Applied BEFORE deploying the code that
 -- uses it. Until it is applied, the schema-drift check fails (it will print
 -- exactly this DDL), /api/cron/reconcile-ach returns 500 at its run lock, and
 -- an ACH webhook re-read that needs to queue an announcement rolls back (the
@@ -67,6 +69,19 @@ CREATE TABLE IF NOT EXISTS "job_locks" (
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "transactions_src_status_updated_idx"
   ON "epicpay_customer_transactions"("src", "status", "updated_at");
+
+-- ── 4. Keep both tables off the public Supabase API ─────────────────────────
+-- Supabase's default privileges give anon/authenticated full rights on every
+-- new table in public, and PostgREST serves public to the anon key. With RLS
+-- off, anyone holding that key could insert an outbox row that LunarPay would
+-- sign and deliver as a merchant webhook, or hold job_locks forever. This
+-- matches the RLS-on posture of the other app tables; the app connects as the
+-- table owner (postgres), which RLS does not restrict.
+
+ALTER TABLE "webhook_outbox" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "job_locks" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE "webhook_outbox", "job_locks" FROM anon, authenticated;
+REVOKE ALL ON SEQUENCE "webhook_outbox_id_seq" FROM anon, authenticated;
 
 -- Verify:
 --   SELECT to_regclass('public.webhook_outbox'), to_regclass('public.job_locks'),
