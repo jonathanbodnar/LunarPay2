@@ -7,6 +7,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { randomInt } from 'crypto';
 import { prisma } from '@/lib/prisma';
 
 export interface ApiAuthResult {
@@ -47,16 +48,10 @@ export async function requirePublishableKey(request: NextRequest): Promise<ApiAu
 
 async function resolveKey(key: string, type: 'secret' | 'publishable', opts?: { requireActive?: boolean }): Promise<ApiAuthResult> {
   const requireActive = opts?.requireActive ?? true;
-  // Use raw query because publishable_key/secret_key columns were added after Prisma client generation
-  const col = type === 'secret' ? 'secret_key' : 'publishable_key';
-  const userRows = await prisma.$queryRawUnsafe<{ id: number }[]>(
-    `SELECT id FROM users WHERE ${col} = $1 AND active = true LIMIT 1`,
-    key
-  );
-  if (!userRows.length) {
+  const userId = await findUserIdForKey(key, type);
+  if (userId === null) {
     throw new ApiAuthError('API key not found.', 401);
   }
-  const userId = userRows[0].id;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -114,6 +109,57 @@ async function resolveKey(key: string, type: 'secret' | 'publishable', opts?: { 
   };
 }
 
+/**
+ * The active user a key belongs to, or null.
+ *
+ * A key replaced during a rotation keeps authenticating from the previous_*
+ * columns until it is revoked by setting them back to NULL, so the platform
+ * holding it can switch to the new key without an outage
+ * (scripts/sql/005-api-key-rotation.sql).
+ */
+async function findUserIdForKey(key: string, type: 'secret' | 'publishable'): Promise<number | null> {
+  // Raw queries because publishable_key/secret_key columns were added after Prisma client generation
+  const col = type === 'secret' ? 'secret_key' : 'publishable_key';
+  const current = await prisma.$queryRawUnsafe<{ id: number }[]>(
+    `SELECT id FROM users WHERE ${col} = $1 AND active = true LIMIT 1`,
+    key
+  );
+  if (current.length) return current[0].id;
+
+  let previous: { id: number }[];
+  try {
+    previous = await prisma.$queryRawUnsafe<{ id: number }[]>(
+      `SELECT id FROM users WHERE previous_${col} = $1 AND active = true LIMIT 1`,
+      key
+    );
+  } catch (e) {
+    // Never let the rotation path turn a plain "key not found" into a 500.
+    console.error('[API_AUTH] previous-key lookup failed:', e);
+    return null;
+  }
+  if (!previous.length) return null;
+  await notePreviousKeyUse('users', previous[0].id, `user ${previous[0].id} (${type} key)`);
+  return previous[0].id;
+}
+
+/**
+ * Stamps previous_key_last_used_at, at most once a minute per row, so we can
+ * see when a platform has stopped using its old key. Never throws.
+ */
+async function notePreviousKeyUse(table: 'users' | 'agencies', id: number, label: string): Promise<void> {
+  try {
+    const stamped = await prisma.$executeRawUnsafe(
+      `UPDATE ${table} SET previous_key_last_used_at = now()
+        WHERE id = $1
+          AND (previous_key_last_used_at IS NULL OR previous_key_last_used_at < now() - interval '1 minute')`,
+      id
+    );
+    if (stamped) console.log(`[API_AUTH] ${label} authenticated with its previous key`);
+  } catch (e) {
+    console.error('[API_AUTH] could not record use of a previous key:', e);
+  }
+}
+
 export interface AgencyAuthResult {
   agencyId: number;
   agencyName: string;
@@ -127,9 +173,10 @@ export async function requireAgencyKey(request: NextRequest): Promise<AgencyAuth
     throw new ApiAuthError('Invalid or missing agency API key. Use your lp_agency_... key.', 401);
   }
 
-  const agency = await prisma.agency.findFirst({
-    where: { apiKey: key, isActive: true },
-  });
+  const agency =
+    (await prisma.agency.findFirst({
+      where: { apiKey: key, isActive: true },
+    })) ?? (await findAgencyByPreviousKey(key));
 
   if (!agency) {
     throw new ApiAuthError('Agency API key not found or inactive.', 401);
@@ -142,6 +189,31 @@ export async function requireAgencyKey(request: NextRequest): Promise<AgencyAuth
   };
 }
 
+/**
+ * An agency's replaced key, which keeps working until agencies.previous_api_key
+ * is set back to NULL (scripts/sql/005-api-key-rotation.sql). Raw SQL because
+ * the column is not in the generated Prisma client. A failing lookup counts as
+ * "not found".
+ */
+async function findAgencyByPreviousKey(
+  key: string
+): Promise<{ id: number; name: string; fortisTemplate: string | null } | null> {
+  let rows: { id: number; name: string; fortisTemplate: string | null }[];
+  try {
+    rows = await prisma.$queryRawUnsafe<{ id: number; name: string; fortisTemplate: string | null }[]>(
+      `SELECT id, name, fortis_template AS "fortisTemplate" FROM agencies
+        WHERE previous_api_key = $1 AND is_active = true LIMIT 1`,
+      key
+    );
+  } catch (e) {
+    console.error('[API_AUTH] previous agency key lookup failed:', e);
+    return null;
+  }
+  if (!rows.length) return null;
+  await notePreviousKeyUse('agencies', rows[0].id, `agency ${rows[0].id}`);
+  return rows[0];
+}
+
 export class ApiAuthError extends Error {
   constructor(
     public override message: string,
@@ -152,12 +224,16 @@ export class ApiAuthError extends Error {
   }
 }
 
-/** Generate a random API key with a given prefix */
+/**
+ * Generate a random API key with a given prefix: 48 characters from
+ * [A-Za-z0-9], each drawn with crypto.randomInt (uniform, cryptographically
+ * secure). Math.random is predictable and must never mint credentials.
+ */
 export function generateApiKey(prefix: 'lp_sk_' | 'lp_pk_' | 'lp_agency_'): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let result = prefix;
   for (let i = 0; i < 48; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(randomInt(chars.length));
   }
   return result;
 }
